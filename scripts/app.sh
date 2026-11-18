@@ -110,9 +110,18 @@ bundle() {
 }
 
 # Local development signature. Distribution requires Developer ID + notarization.
+# An ad-hoc signature ("-") is new on every build, so macOS asks for the Keychain password again after each build.
+# A certificate that stays the same keeps "Always Allow" working: create a local code-signing certificate named
+# "AppForge Dev" in Keychain Access (Certificate Assistant > Create a Certificate > Code Signing), or name another
+# one in APPFORGE_SIGN_IDENTITY.
 sign() {
-  local output
-  output="$(codesign --force --sign - "$app_dir" 2>&1)" || fail "$output"
+  local output identity="${APPFORGE_SIGN_IDENTITY:-AppForge Dev}"
+  if ! security find-identity -p codesigning 2>/dev/null | grep -qF "\"$identity\""; then
+    [[ -z "${APPFORGE_SIGN_IDENTITY:-}" ]] || fail "No code-signing certificate named \"$identity\" was found in your keychains."
+    echo "No \"$identity\" certificate found: signing ad hoc, so the Keychain asks for its password after every build." >&2
+    identity="-"
+  fi
+  output="$(codesign --force --sign "$identity" "$app_dir" 2>&1)" || fail "$output"
 }
 
 build_app() {

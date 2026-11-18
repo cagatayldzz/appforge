@@ -15,12 +15,28 @@ mod welcome;
 mod widgets;
 mod workspace;
 
-use gpui_kit::*;
+use gpui_kit::{component::Theme, *};
 use std::borrow::Cow;
 
 pub use workspace::Workspace;
 
 actions!(appforge, [Quit]);
+
+/// The Geist typeface (SIL Open Font License, see `assets/fonts/OFL.txt`).
+const GEIST: [&[u8]; 4] = [
+  include_bytes!("../assets/fonts/Geist-Regular.ttf"),
+  include_bytes!("../assets/fonts/Geist-Medium.ttf"),
+  include_bytes!("../assets/fonts/Geist-SemiBold.ttf"),
+  include_bytes!("../assets/fonts/Geist-Bold.ttf"),
+];
+
+/// Makes Geist the interface font. Without it the system font stays, so a failure is only logged.
+pub fn install_fonts(cx: &mut App) {
+  match cx.text_system().add_fonts(GEIST.iter().map(|font| Cow::Borrowed(*font)).collect()) {
+    Ok(()) => Theme::update(cx, |theme| theme.font_family = "Geist".into()),
+    Err(error) => eprintln!("Could not load the Geist font: {error}"),
+  }
+}
 
 pub struct Assets;
 

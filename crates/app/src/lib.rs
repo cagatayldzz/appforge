@@ -1,4 +1,4 @@
-use appforge_ui::{Assets, Quit, Workspace};
+use appforge_ui::{install_fonts, Assets, Quit, Workspace};
 use gpui_kit::{component::TitleBar, *};
 
 pub fn run() {
@@ -11,6 +11,7 @@ pub fn run() {
   });
   app.run(|cx| {
     gpui_kit::init(cx);
+    install_fonts(cx);
     cx.activate(true);
     cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
     cx.set_menus(vec![Menu::new("AppForge").items([MenuItem::action("Quit AppForge", Quit)])]);

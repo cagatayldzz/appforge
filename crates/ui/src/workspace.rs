@@ -7,9 +7,14 @@ use crate::{
 use appforge_ai::Provider;
 use appforge_appstore::{App as StoreApp, AppInfoLocalization, AppSnapshot, Client, Credentials, ReviewDetail, VersionLocalization};
 use appforge_compliance::{analyze_with_ai, check, AiReview, Playbook, Report};
-use appforge_storage::{AppleAccount, Keychain, PrivacyDeclaration, SecretKey, SecretStore, Settings};
+use appforge_storage::{AppleAccount, Keychain, Language, PrivacyDeclaration, SecretKey, SecretStore, Settings};
 use gpui_kit::{
-  component::{input::InputState, notification::Notification, WindowExt as _},
+  component::{
+    input::InputState,
+    notification::Notification,
+    select::{SelectEvent, SelectState},
+    IndexPath, WindowExt as _,
+  },
   *,
 };
 use std::{
@@ -68,6 +73,10 @@ pub struct LoginForm {
   pub issuer: Entity<InputState>,
   pub key_id: Entity<InputState>,
   pub key: Option<LoginKey>,
+  /// The name field of the drawing of Apple's Generate API Key window.
+  pub apple_name: Entity<InputState>,
+  /// Which of the sub-steps of the first guide step the user has ticked off.
+  pub done: [bool; crate::guide_art::KEY_STEP_COUNT],
   pub busy: bool,
   pub error: Option<SharedString>,
 }
@@ -116,6 +125,9 @@ pub struct Workspace {
   pub show_settings: bool,
   pub saving: bool,
   pub login: LoginForm,
+  /// The language menu shared by the welcome screen, the sign-in guide and Settings. Add a language to `Language::ALL` and it shows up here.
+  pub language_select: Entity<SelectState<Vec<SharedString>>>,
+  _subscriptions: Vec<Subscription>,
   pub forms: Forms,
   pub settings_form: SettingsForm,
   tasks: Tasks,
@@ -155,6 +167,12 @@ impl Workspace {
       issuer: cx.new(|cx| InputState::new(window, cx).placeholder("00000000-0000-0000-0000-000000000000")),
       key_id: cx.new(|cx| InputState::new(window, cx).placeholder("ABC123DEFG")),
       key: None,
+      apple_name: cx.new(|cx| {
+        let mut state = InputState::new(window, cx);
+        state.set_value("AppForge", window, cx);
+        state
+      }),
+      done: [false; crate::guide_art::KEY_STEP_COUNT],
       busy: false,
       error: None,
     };
@@ -173,6 +191,15 @@ impl Workspace {
       anthropic_model: model_input(cx, window, &settings.ai.anthropic_model),
     };
     let forms = Forms::new(window, cx);
+    let language_names: Vec<SharedString> = Language::ALL.iter().map(|language| SharedString::new_static(language.native_name())).collect();
+    let selected_language = Language::ALL.iter().position(|language| *language == settings.language).map(IndexPath::new);
+    let language_select = cx.new(|cx| SelectState::new(language_names, selected_language, window, cx));
+    let language_subscription = cx.subscribe_in(&language_select, window, |this, _, event: &SelectEvent<Vec<SharedString>>, window, cx| {
+      let SelectEvent::Confirm(Some(name)) = event else { return };
+      if let Some(language) = Language::ALL.iter().find(|language| language.native_name() == name.as_ref()) {
+        this.set_language(*language, window, cx);
+      }
+    });
     let mut this = Self {
       data_dir,
       settings,
@@ -194,6 +221,8 @@ impl Workspace {
       show_settings: false,
       saving: false,
       login,
+      language_select,
+      _subscriptions: vec![language_subscription],
       forms,
       settings_form,
       tasks: Tasks::default(),

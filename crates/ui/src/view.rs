@@ -3,7 +3,7 @@ use crate::{
   workspace::{Load, Workspace},
 };
 use gpui_kit::{
-  component::{h_flex, scroll::ScrollableElement as _, spinner::Spinner, v_flex, ActiveTheme, TitleBar},
+  component::{h_flex, spinner::Spinner, v_flex, ActiveTheme, TitleBar},
   *,
 };
 
@@ -59,6 +59,6 @@ impl Workspace {
         _ => v_flex().flex_1().items_center().justify_center().child(Spinner::new()).into_any_element(),
       }
     };
-    v_flex().id("main").flex_1().min_w_0().min_h_0().child(content).overflow_y_scrollbar()
+    v_flex().id("main").flex_1().h_full().min_w_0().min_h_0().overflow_hidden().child(content)
   }
 }

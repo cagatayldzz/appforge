@@ -5,9 +5,12 @@ use crate::{
 };
 use gpui_kit::{
   component::{
+    avatar::Avatar,
     button::{Button, ButtonVariants as _},
     h_flex,
-    scroll::ScrollableElement as _,
+    label::Label,
+    separator::Separator,
+    sidebar::{Sidebar, SidebarGroup, SidebarMenu, SidebarMenuItem},
     tag::Tag,
     v_flex, ActiveTheme, Icon, IconName, Selectable as _, Sizable as _,
   },
@@ -18,85 +21,80 @@ impl Workspace {
   pub(crate) fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
     let theme = cx.theme().clone();
     let l = self.settings.language;
-    let apps: Vec<_> = match &self.apps {
+    let muted = theme.muted_foreground;
+    let apps = match &self.apps {
       Load::Ready(apps) => apps.clone(),
       _ => Vec::new(),
     };
-    let list = v_flex().id("app-list").flex_1().min_h_0().gap_1().children(apps.into_iter().map(|app| {
+    let items = apps.into_iter().map(|app| {
       let id = app.id.clone();
       let selected = !self.show_settings && self.selected.as_ref() == Some(&id);
-      Button::new(SharedString::from(format!("app-{id}")))
-        .label(app.name.clone())
-        .ghost()
-        .w_full()
-        .justify_start()
-        .selected(selected)
-        .on_click(cx.listener(move |this, _, window, cx| this.select_app(id.clone(), window, cx)))
-    }));
-    let list = match &self.apps {
-      Load::Loading => list.child(div().px_2().text_sm().text_color(theme.muted_foreground).child(tr(l, "Loading apps…"))),
-      _ => list,
-    };
-    v_flex()
-      .w(px(SIDEBAR_WIDTH))
-      .flex_shrink_0()
-      .h_full()
-      .pt_4()
-      .px_3()
+      let listener = cx.listener(move |this, _, window, cx| this.select_app(id.clone(), window, cx));
+      SidebarMenuItem::new(app.name.clone())
+        .icon(Icon::new(IconName::LayoutDashboard))
+        .active(selected)
+        .on_click(move |event, window, cx| listener(event, window, cx))
+    });
+    let workspace = cx.entity();
+    let group = SidebarGroup::new(tr(l, "APP STORE"))
+      .suffix(move |_, _| {
+        let workspace = workspace.clone();
+        Button::new("reload-apps")
+          .icon(Icon::new(IconName::RefreshCw))
+          .ghost()
+          .xsmall()
+          .tooltip(tr(l, "Reload apps"))
+          .on_click(move |_, window, cx| workspace.update(cx, |this, cx| this.load_apps(window, cx)))
+      })
+      .child(SidebarMenu::new().children(items));
+    // The header and footer are plain containers: Kit's `SidebarHeader` and `SidebarFooter` light up on hover.
+    let header = h_flex()
+      .w_full()
+      .gap_3()
+      .items_center()
+      .px_4()
+      .pt_5()
       .pb_3()
-      .gap_1()
-      .bg(theme.sidebar)
-      .border_r_1()
-      .border_color(theme.border)
-      .child(div().px_2().pb_4().text_xl().font_weight(FontWeight::BOLD).child("AppForge"))
+      .child(Avatar::new().placeholder(Icon::new(IconName::LayoutDashboard)))
+      .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).child("AppForge"));
+    let footer = v_flex()
+      .w_full()
+      .gap_3()
+      .p_4()
+      .child(Separator::horizontal())
       .child(
         h_flex()
-          .px_2()
-          .pb_1()
           .justify_between()
           .items_center()
-          .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).text_color(theme.muted_foreground).child(tr(l, "APP STORE")))
-          .child(
-            Button::new("reload-apps")
-              .icon(Icon::new(IconName::Redo))
-              .ghost()
-              .small()
-              .tooltip(tr(l, "Reload apps"))
-              .on_click(cx.listener(|this, _, window, cx| this.load_apps(window, cx))),
-          ),
-      )
-      .child(list.overflow_y_scrollbar())
-      .child(
-        h_flex()
-          .px_2()
-          .py_1()
-          .gap_2()
-          .items_center()
-          .text_sm()
-          .text_color(theme.muted_foreground)
-          .child(tr(l, "Google Play"))
+          .child(Label::new(tr(l, "Google Play")).text_sm())
           .child(Tag::secondary().small().child(tr(l, "Soon"))),
       )
       .child(
-        Button::new("open-settings")
-          .icon(Icon::new(IconName::Settings))
-          .label(tr(l, "Settings"))
-          .ghost()
-          .w_full()
-          .justify_start()
-          .selected(self.show_settings)
-          .on_click(cx.listener(|this, _, _, cx| {
-            this.show_settings = true;
-            cx.notify();
-          })),
-      )
-      .child(
-        Button::new("sign-out")
-          .label(tr(l, "Sign out"))
-          .ghost()
-          .w_full()
-          .justify_start()
-          .on_click(cx.listener(|this, _, window, cx| this.sign_out(window, cx))),
-      )
+        h_flex()
+          .gap_2()
+          .child(
+            Button::new("open-settings")
+              .icon(Icon::new(IconName::Settings))
+              .label(tr(l, "Settings"))
+              .outline()
+              .small()
+              .flex_1()
+              .selected(self.show_settings)
+              .on_click(cx.listener(|this, _, _, cx| {
+                this.show_settings = true;
+                cx.notify();
+              })),
+          )
+          .child(
+            Button::new("sign-out").label(tr(l, "Sign out")).ghost().small().on_click(cx.listener(|this, _, window, cx| this.sign_out(window, cx))),
+          ),
+      );
+    let loading = matches!(self.apps, Load::Loading).then(|| div().px_4().text_sm().text_color(muted).child(tr(l, "Loading apps…")));
+    Sidebar::<SidebarGroup<SidebarMenu>>::new("app-sidebar")
+      .collapsible(false)
+      .w(px(SIDEBAR_WIDTH))
+      .header(v_flex().child(header).children(loading))
+      .footer(footer)
+      .child(group)
   }
 }
