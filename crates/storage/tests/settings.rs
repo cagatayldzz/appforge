@@ -1,5 +1,5 @@
 use appforge_ai::Provider;
-use appforge_storage::{AppleAccount, Language, MemorySecrets, PrivacyDeclaration, SecretKey, SecretStore, Settings};
+use appforge_storage::{AppleAccount, Language, MemorySecrets, PrivacyDeclaration, SecretKey, SecretStore, Settings, WindowMode, WindowState};
 use std::{
   fs,
   sync::atomic::{AtomicUsize, Ordering},
@@ -69,5 +69,17 @@ fn language_and_onboarding_default_then_round_trip() {
   settings.save(&path).unwrap();
   assert!(fs::read_to_string(&path).unwrap().contains("\"turkish\""));
   assert_eq!(Settings::load(&path).unwrap(), settings);
+  fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn the_window_state_is_kept_and_old_settings_without_it_still_load() {
+  let dir = temporary_dir("window");
+  let path = dir.join("settings.json");
+  fs::write(&path, r#"{"onboarded":true}"#).unwrap();
+  assert_eq!(Settings::load(&path).unwrap().window, None);
+  let settings = Settings { window: Some(WindowState { mode: WindowMode::Maximized, x: 40, y: 60, width: 1200, height: 800 }), ..Default::default() };
+  settings.save(&path).unwrap();
+  assert_eq!(Settings::load(&path).unwrap().window, settings.window);
   fs::remove_dir_all(dir).unwrap();
 }

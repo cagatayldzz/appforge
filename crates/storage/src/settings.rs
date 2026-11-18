@@ -77,6 +77,27 @@ impl Language {
   }
 }
 
+/// How the window was left.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WindowMode {
+  #[default]
+  Windowed,
+  Maximized,
+  Fullscreen,
+}
+
+/// Where the window was and how big, in points. In a maximized or full-screen window these are the bounds to come back to.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(default)]
+pub struct WindowState {
+  pub mode: WindowMode,
+  pub x: i32,
+  pub y: i32,
+  pub width: i32,
+  pub height: i32,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default)]
 pub struct Settings {
@@ -87,6 +108,8 @@ pub struct Settings {
   pub ai: AiSettings,
   /// Privacy answers per App Store Connect app id.
   pub privacy: BTreeMap<String, PrivacyDeclaration>,
+  /// The window as it was left, so the next launch opens the same way.
+  pub window: Option<WindowState>,
 }
 
 impl Settings {

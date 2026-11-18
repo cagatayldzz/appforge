@@ -1,6 +1,7 @@
 use crate::{
-  i18n::{tr, trf},
-  widgets::{area_field, centered, pair, section, text_field},
+  i18n::tr,
+  theme::colors,
+  widgets::{area_field, centered, pair, section, strip, strip_tab, text_field},
   workspace::{locales, DetailTab, Load, Workspace},
 };
 use appforge_appstore::App;
@@ -8,16 +9,12 @@ use appforge_storage::PrivacyDeclaration;
 use gpui_kit::{
   component::{
     alert::Alert,
-    avatar::Avatar,
     button::{Button, ButtonVariants as _},
     empty::{Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle},
     h_flex,
     scroll::ScrollableElement as _,
-    separator::Separator,
     spinner::Spinner,
     switch::Switch,
-    tab::{Tab, TabBar},
-    tag::Tag,
     v_flex, ActiveTheme, Disableable as _, Icon, IconName, Selectable as _, Sizable as _,
   },
   *,
@@ -29,24 +26,6 @@ const KEYWORDS_LIMIT: usize = 100;
 const PROMOTIONAL_LIMIT: usize = 170;
 const DESCRIPTION_LIMIT: usize = 4000;
 const WHATS_NEW_LIMIT: usize = 4000;
-
-/// "PREPARE_FOR_SUBMISSION" as "Prepare for submission".
-fn state_label(state: &str) -> String {
-  let lower = state.replace('_', " ").to_lowercase();
-  let mut characters = lower.chars();
-  characters.next().map(|first| first.to_uppercase().collect::<String>() + characters.as_str()).unwrap_or_default()
-}
-
-/// A tag in the colour of where the version stands at Apple.
-fn state_tag(state: &str) -> Tag {
-  let tag = match state {
-    "READY_FOR_SALE" | "READY_FOR_DISTRIBUTION" | "ACCEPTED" | "PENDING_DEVELOPER_RELEASE" => Tag::success(),
-    "REJECTED" | "METADATA_REJECTED" | "DEVELOPER_REJECTED" | "INVALID_BINARY" => Tag::danger(),
-    "PREPARE_FOR_SUBMISSION" => Tag::warning(),
-    _ => Tag::info(),
-  };
-  tag.small().child(state_label(state))
-}
 
 fn app_privacy_url(app: &App) -> String {
   format!("https://appstoreconnect.apple.com/apps/{}/appPrivacy", app.id)
@@ -66,38 +45,29 @@ impl Workspace {
   }
 
   pub(crate) fn render_detail(&mut self, app: App, cx: &mut Context<Self>) -> impl IntoElement {
-    let theme = cx.theme().clone();
+    let c = colors(cx);
     let l = self.settings.language;
-    let version =
-      self.ready_snapshot().and_then(|snapshot| snapshot.version.as_ref()).map(|version| (version.version_string.clone(), version.state.clone()));
-    let mut badges = h_flex().gap_2().items_center().flex_wrap().child(Tag::secondary().small().child(app.bundle_id.clone()));
-    if let Some((number, state)) = &version {
-      badges = badges.child(Tag::secondary().small().outline().child(trf(l, "Version {}", &[number]))).child(state_tag(state));
+    let mut tabs = Vec::new();
+    for tab in DetailTab::ALL {
+      let strip_tab = strip_tab(SharedString::from(format!("tab-{}", tab.label())), tr(l, tab.label()), self.tab == tab, cx);
+      tabs.push(strip_tab.on_click(cx.listener(move |this, _, _, cx| {
+        this.tab = tab;
+        cx.notify();
+      })));
     }
-    let header = h_flex()
-      .w_full()
-      .gap_4()
+    let controls = h_flex()
+      .gap_2()
+      .px_3()
       .items_center()
-      .pt_6()
-      .pb_4()
-      .child(Avatar::new().name(app.name.clone()))
-      .child(v_flex().flex_1().min_w_0().gap_1p5().child(div().text_2xl().font_weight(FontWeight::SEMIBOLD).child(app.name.clone())).child(badges))
       .child(
         Button::new("reload-snapshot")
           .icon(Icon::new(IconName::RefreshCw))
           .ghost()
+          .small()
           .tooltip(tr(l, "Reload"))
           .on_click(cx.listener(|this, _, window, cx| this.load_snapshot(window, cx))),
-      );
-    let selected_tab = DetailTab::ALL.iter().position(|tab| *tab == self.tab).unwrap_or(0);
-    let tabs = TabBar::new("detail-tabs")
-      .underline()
-      .selected_index(selected_tab)
-      .on_click(cx.listener(|this, index: &usize, _, cx| {
-        this.tab = DetailTab::ALL[*index];
-        cx.notify();
-      }))
-      .children(DetailTab::ALL.iter().map(|tab| Tab::new().label(tr(l, tab.label()))));
+      )
+      .children(self.save_control(cx));
     let body = match &self.snapshot {
       Load::Ready(_) => match self.tab {
         DetailTab::Information => self.render_information(&app, cx).into_any_element(),
@@ -120,49 +90,46 @@ impl Workspace {
       _ => h_flex()
         .gap_2()
         .items_center()
-        .text_sm()
-        .text_color(theme.muted_foreground)
+        .text_color(c.text_secondary)
         .child(Spinner::new())
         .child(tr(l, "Loading from App Store Connect…"))
         .into_any_element(),
     };
-    let bar = self.save_bar(cx);
-    // The header and the tabs stay in place and the save bar stays at the bottom; only the page between them scrolls.
+    // The tabs and the app stay in place; only the page under them scrolls.
     v_flex()
       .flex_1()
-      .h_full()
       .min_h_0()
       .overflow_hidden()
-      .child(v_flex().w_full().flex_shrink_0().child(centered(header)).child(centered(tabs)))
-      .child(v_flex().id("detail-scroll").flex_1().min_h_0().overflow_y_scrollbar().child(centered(v_flex().py_6().child(body))))
-      .children(bar)
+      .child(strip(cx).children(tabs).child(div().flex_1()).child(controls))
+      .child(v_flex().id("detail-scroll").flex_1().min_h_0().overflow_y_scrollbar().child(centered(v_flex().py_6().gap_6().child(body))))
   }
 
-  /// The bar under the page with the button that saves it. The Analysis tab has none.
-  fn save_bar(&self, cx: &mut Context<Self>) -> Option<Div> {
+  /// The button in the tab strip that saves the page. The Analysis tab has none.
+  fn save_control(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
     let l = self.settings.language;
-    let theme = cx.theme().clone();
     let has_version = self.ready_snapshot().is_some_and(|snapshot| snapshot.version.is_some());
     let tab = self.tab;
-    let (id, label, hint, enabled): (&'static str, SharedString, SharedString, bool) = match tab {
-      DetailTab::Information => {
-        ("save-information", tr(l, "Save to App Store Connect"), tr(l, "Saving sends your changes to App Store Connect."), true)
-      }
-      DetailTab::Review => ("save-review", tr(l, "Save to App Store Connect"), tr(l, "Saving sends your changes to App Store Connect."), has_version),
-      DetailTab::Privacy => {
-        ("save-privacy", tr(l, "Save"), tr(l, "Your answers stay on this Mac. The privacy policy URL is sent to App Store Connect."), true)
-      }
+    let (id, label, enabled): (&'static str, SharedString, bool) = match tab {
+      DetailTab::Information => ("save-information", tr(l, "Save"), true),
+      DetailTab::Review => ("save-review", tr(l, "Save"), has_version),
+      DetailTab::Privacy => ("save-privacy", tr(l, "Save"), true),
       DetailTab::Analysis => return None,
     };
-    let button = self.save_button(id, label, enabled, cx, move |this, window, cx| match tab {
-      DetailTab::Information => this.save_information(window, cx),
-      DetailTab::Review => this.save_review(window, cx),
-      DetailTab::Privacy => this.save_privacy(window, cx),
-      DetailTab::Analysis => {}
-    });
-    Some(v_flex().w_full().flex_shrink_0().bg(theme.background).child(Separator::horizontal()).child(centered(
-      h_flex().py_3().gap_4().items_center().justify_between().child(div().text_sm().text_color(theme.muted_foreground).child(hint)).child(button),
-    )))
+    let tooltip = if tab == DetailTab::Privacy {
+      tr(l, "Your answers stay on this Mac. The privacy policy URL is sent to App Store Connect.")
+    } else {
+      tr(l, "Save to App Store Connect")
+    };
+    Some(
+      self
+        .save_button(id, label, enabled, cx, move |this, window, cx| match tab {
+          DetailTab::Information => this.save_information(window, cx),
+          DetailTab::Review => this.save_review(window, cx),
+          DetailTab::Privacy => this.save_privacy(window, cx),
+          DetailTab::Analysis => {}
+        })
+        .tooltip(tooltip),
+    )
   }
 
   fn locale_picker(&mut self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
@@ -189,10 +156,11 @@ impl Workspace {
     enabled: bool,
     cx: &mut Context<Self>,
     save: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
-  ) -> impl IntoElement {
+  ) -> Button {
     Button::new(id)
       .label(label)
       .primary()
+      .small()
       .loading(self.saving)
       .disabled(!enabled || self.saving || self.settings_locked)
       .on_click(cx.listener(move |this, _, window, cx| save(this, window, cx)))

@@ -2,6 +2,7 @@
 //! App Privacy, and see what could get an app rejected.
 
 mod analysis;
+mod apps_view;
 mod detail;
 mod forms;
 mod guide_art;
@@ -10,14 +11,17 @@ mod login;
 mod settings_view;
 mod setup;
 mod sidebar;
+mod theme;
 mod view;
 mod welcome;
 mod widgets;
+mod window_state;
 mod workspace;
 
 use gpui_kit::{component::Theme, *};
 use std::borrow::Cow;
 
+pub use window_state::{initial_window_bounds, MIN_HEIGHT, MIN_WIDTH};
 pub use workspace::Workspace;
 
 actions!(appforge, [Quit]);

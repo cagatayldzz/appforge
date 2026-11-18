@@ -7,4 +7,4 @@ mod settings;
 
 pub use paths::data_dir;
 pub use secrets::{Keychain, MemorySecrets, SecretError, SecretKey, SecretStore};
-pub use settings::{AiSettings, AppleAccount, Language, PrivacyDeclaration, Settings};
+pub use settings::{AiSettings, AppleAccount, Language, PrivacyDeclaration, Settings, WindowMode, WindowState};

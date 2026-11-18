@@ -8,6 +8,8 @@ use std::{collections::HashMap, sync::OnceLock};
 /// English text and its Turkish translation. Both sides use the same `{}` placeholders in the same order.
 pub const TURKISH: &[(&str, &str)] = &[
   // App screens: structure
+  ("Apps", "Uygulamalar"),
+  ("{} apps", "{} uygulama"),
   ("Basics", "Temel bilgiler"),
   ("Links", "Bağlantılar"),
   ("Version {}", "Sürüm {}"),

@@ -22,8 +22,8 @@ pub fn run() {
 
 fn open_window(cx: &mut App) {
   let options = WindowOptions {
-    window_bounds: Some(WindowBounds::Windowed(Bounds::centered(None, size(px(1100.), px(760.)), cx))),
-    window_min_size: Some(size(px(800.), px(550.))),
+    window_bounds: Some(appforge_ui::initial_window_bounds(cx)),
+    window_min_size: Some(size(px(appforge_ui::MIN_WIDTH), px(appforge_ui::MIN_HEIGHT))),
     titlebar: Some(TitleBar::title_bar_options()),
     ..TitleBar::window_options()
   };

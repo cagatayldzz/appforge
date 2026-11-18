@@ -74,7 +74,11 @@ impl Workspace {
           .child(Label::new(tr(l, "Google Play")).text_sm())
           .child(Tag::secondary().small().child(tr(l, "Coming soon"))),
       );
-    let sidebar = Sidebar::<SidebarMenu>::new("setup-sidebar").collapsible(false).w(px(SIDEBAR_WIDTH)).header(header).footer(footer);
+    let sidebar = div()
+      .w(px(SIDEBAR_WIDTH))
+      .flex_shrink_0()
+      .h_full()
+      .child(Sidebar::<SidebarMenu>::new("setup-sidebar").collapsible(false).w_full().header(header).footer(footer));
     let progress = v_flex()
       .w_full()
       .max_w(px(SETUP_CONTENT_WIDTH))

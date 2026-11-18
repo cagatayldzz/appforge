@@ -21,11 +21,14 @@ use std::{
   collections::HashMap,
   path::PathBuf,
   sync::Arc,
-  time::{SystemTime, UNIX_EPOCH},
+  time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 /// The cached playbook is refreshed in the background when it is older than this.
 const PLAYBOOK_MAX_AGE_SECONDS: u64 = 7 * 24 * 60 * 60;
+
+/// How long the window must be still before its place is written.
+const WINDOW_SAVE_DELAY: Duration = Duration::from_millis(500);
 
 pub enum Load<T> {
   Idle,
@@ -51,6 +54,30 @@ impl DetailTab {
       Self::Review => "App Review",
       Self::Privacy => "App Privacy",
       Self::Analysis => "Analysis",
+    }
+  }
+}
+
+/// The pages of Settings, listed in the left column while Settings is open.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SettingsPage {
+  General,
+  Account,
+  AiProvider,
+  Rules,
+  About,
+}
+
+impl SettingsPage {
+  pub const ALL: [SettingsPage; 5] = [Self::General, Self::Account, Self::AiProvider, Self::Rules, Self::About];
+
+  pub fn label(self) -> &'static str {
+    match self {
+      Self::General => "General",
+      Self::Account => "Account",
+      Self::AiProvider => "AI provider",
+      Self::Rules => "Rules",
+      Self::About => "About",
     }
   }
 }
@@ -100,6 +127,7 @@ struct Tasks {
   save: Option<Task<()>>,
   ai: Option<Task<()>>,
   playbook: Option<Task<()>>,
+  window: Option<Task<()>>,
 }
 
 pub struct Workspace {
@@ -123,6 +151,9 @@ pub struct Workspace {
   pub playbook_error: Option<SharedString>,
   pub has_key: HashMap<Provider, bool>,
   pub show_settings: bool,
+  pub settings_page: SettingsPage,
+  /// The main area shows every app as a grid instead of one app.
+  pub show_all_apps: bool,
   pub saving: bool,
   pub login: LoginForm,
   /// The language menu shared by the welcome screen, the sign-in guide and Settings. Add a language to `Language::ALL` and it shows up here.
@@ -219,10 +250,16 @@ impl Workspace {
       playbook_error: None,
       has_key: HashMap::new(),
       show_settings: false,
+      settings_page: SettingsPage::General,
+      show_all_apps: false,
       saving: false,
       login,
       language_select,
-      _subscriptions: vec![language_subscription],
+      _subscriptions: vec![
+        language_subscription,
+        cx.observe_window_appearance(window, |_, window, cx| crate::theme::apply_theme(window, cx)),
+        cx.observe_window_bounds(window, |this, window, cx| this.remember_window(window, cx)),
+      ],
       forms,
       settings_form,
       tasks: Tasks::default(),
@@ -232,6 +269,7 @@ impl Workspace {
         "The settings file could not be read, so nothing will be saved. Fix or remove settings.json in the data folder and restart AppForge.".into(),
       );
     }
+    crate::theme::apply_theme(window, cx);
     this.restore(window, cx);
     this
   }
@@ -252,6 +290,29 @@ impl Workspace {
     if let Err(error) = self.settings.save(&self.data_dir.join("settings.json")) {
       Self::error(window, cx, trf(self.settings.language, "Could not save settings: {}", &[&error.to_string()]));
     }
+  }
+
+  /// Remembers the size and place of the window, so the next launch opens the same way. Dragging an edge changes the
+  /// bounds many times a second, so the file is written once the window has been still for a moment.
+  fn remember_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    let state = crate::window_state::state_of(window);
+    if self.settings.window == Some(state) {
+      return;
+    }
+    self.settings.window = Some(state);
+    self.tasks.window = Some(cx.spawn_in(window, async move |this, cx| {
+      cx.background_executor().timer(WINDOW_SAVE_DELAY).await;
+      this
+        .update(cx, |this, _| {
+          // A settings file that could not be read is never overwritten; losing the window place is not worth a warning.
+          if !this.settings_locked {
+            if let Err(error) = this.settings.save(&this.data_dir.join("settings.json")) {
+              eprintln!("Could not save the window place: {error}");
+            }
+          }
+        })
+        .ok();
+    }));
   }
 
   // Startup and sign-in ---------------------------------------------------------------------------------------
@@ -459,6 +520,7 @@ impl Workspace {
 
   pub fn select_app(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
     self.show_settings = false;
+    self.show_all_apps = false;
     self.selected = Some(id);
     self.ai = AiState::Idle;
     self.report = None;
