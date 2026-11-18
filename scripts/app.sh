@@ -3,6 +3,7 @@
 #   scripts/app.sh --dev                     debug build, then launch dist/AppForge.app
 #   scripts/app.sh [debug|release] --build   build dist/AppForge.app (default: debug)
 #   scripts/app.sh --check                   scripts and their tests, formatting, clippy and tests
+#   scripts/app.sh --update                  update the Rust dependencies in Cargo.lock, then check that everything still builds
 
 set -euo pipefail
 
@@ -10,7 +11,7 @@ set -euo pipefail
 project_dir="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$project_dir"
 
-usage="Usage: scripts/app.sh --dev | [debug|release] --build | --check | --icon"
+usage="Usage: scripts/app.sh --dev | [debug|release] --build | --check | --update | --icon"
 resources="$project_dir/apps/appforge/macos"
 app_dir="$project_dir/dist/AppForge.app"
 
@@ -29,6 +30,7 @@ for argument in "$@"; do
     --dev) action="dev"; configuration="debug" ;;
     --build) action="build" ;;
     --check) action="check" ;;
+    --update) action="update" ;;
     --icon) action="icon" ;;
     *) fail "$usage" ;;
   esac
@@ -49,6 +51,23 @@ run_check() {
   cargo test --locked --workspace
 }
 
+
+# Moves every dependency to the newest version its Cargo.toml allows (only Cargo.lock changes), then builds and runs the
+# tests, so a version that breaks the app is found at once. The old lock file is put back when that fails.
+run_update() {
+  local backup
+  backup="$(mktemp)"
+  cp Cargo.lock "$backup"
+  cargo update
+  if cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace; then
+    rm -f "$backup"
+    echo "Dependencies updated. Review the change with: git diff Cargo.lock"
+  else
+    cp "$backup" Cargo.lock
+    rm -f "$backup"
+    fail "The updated dependencies do not build or pass the tests, so Cargo.lock was put back."
+  fi
+}
 
 # Render icon.svg at every size macOS expects and pack it into AppIcon.icns.
 make_icon() {
@@ -134,6 +153,7 @@ build_app() {
 # Run the requested action.
 case "$action" in
   check) run_check ;;
+  update) run_update ;;
   icon) make_icon ;;
   build) build_app ;;
   dev)

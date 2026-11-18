@@ -10,6 +10,8 @@ use std::{
 
 pub const DEFAULT_BASE_URL: &str = "https://api.appstoreconnect.apple.com";
 const PAGE_SIZE: usize = 200;
+/// How many of the newest builds are looked at for an icon.
+const ICON_BUILDS: usize = 10;
 /// The largest icon file taken from the answer.
 const MAX_ICON_BYTES: u64 = 2 * 1024 * 1024;
 
@@ -95,12 +97,19 @@ impl Client {
     Ok(items.iter().map(parse_app).collect())
   }
 
-  /// The icon of an app as an image file about `size` pixels wide. App Store Connect serves it with the latest build of the
-  /// app, so an app that has no build yet has none (`None`).
+  /// The icon of an app as an image file about `size` pixels wide. App Store Connect serves it with the builds of the app,
+  /// so an app that has no build with an icon yet has none (`None`). The newest builds are tried first: an old build
+  /// that expired has no icon any more.
   pub fn app_icon(&self, app_id: &str, size: u32) -> Result<Option<Vec<u8>>, Error> {
-    let path = format!("/v1/apps/{app_id}/builds?limit=1&sort=-uploadedDate&fields[builds]=iconAssetToken");
+    let path = format!("/v1/apps/{app_id}/builds?limit={ICON_BUILDS}&sort=-uploadedDate&fields[builds]=iconAssetToken,expired");
     let Some(page) = self.get_optional(&path)? else { return Ok(None) };
-    let Some(template) = page["data"][0]["attributes"]["iconAssetToken"]["templateUrl"].as_str() else { return Ok(None) };
+    let template = page["data"]
+      .as_array()
+      .into_iter()
+      .flatten()
+      .filter(|build| build["attributes"]["expired"].as_bool() != Some(true))
+      .find_map(|build| build["attributes"]["iconAssetToken"]["templateUrl"].as_str());
+    let Some(template) = template else { return Ok(None) };
     let url = template.replace("{w}", &size.to_string()).replace("{h}", &size.to_string()).replace("{f}", "png");
     // The address comes from the answer: it must be a secure web address, and the token is never sent to it.
     if !url.starts_with("https://") && !url.starts_with(&self.base_url) {

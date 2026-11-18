@@ -1,4 +1,4 @@
-use appforge_ai::{Client, Error, Provider, Request};
+use appforge_ai::{Client, Error, Provider, Request, Usage};
 use std::{
   io::{Read, Write},
   net::TcpListener,
@@ -90,4 +90,45 @@ fn an_unauthorized_key_gets_an_actionable_message() {
 fn a_blank_key_fails_before_any_request() {
   let client = Client::with_base_urls("http://unused.invalid", "http://unused.invalid");
   assert!(matches!(client.complete(&request(Provider::OpenAi, "  ")), Err(Error::MissingKey(Provider::OpenAi))));
+}
+
+#[test]
+fn the_token_usage_is_read_from_each_provider_and_priced() {
+  let (url, _) = serve_once("200 OK", r#"{"choices":[{"message":{"content":"{}"}}],"usage":{"prompt_tokens":3000,"completion_tokens":500}}"#);
+  let client = Client::with_base_urls(&url, "http://unused.invalid");
+  let done = client.complete_with_usage(&request(Provider::OpenAi, "k")).unwrap();
+  assert_eq!(done.usage, Usage { input_tokens: 3000, output_tokens: 500 });
+  let (url, _) = serve_once("200 OK", r#"{"content":[{"type":"text","text":"{}"}],"usage":{"input_tokens":2000,"output_tokens":100}}"#);
+  let client = Client::with_base_urls("http://unused.invalid", &url);
+  assert_eq!(client.complete_with_usage(&request(Provider::Anthropic, "k")).unwrap().usage.total(), 2100);
+  // 1M input tokens cost the input price, 1M output tokens the output price.
+  let haiku = Provider::Anthropic.model_info("claude-haiku-5-5").unwrap();
+  let cost = haiku.cost(Usage { input_tokens: 1_000_000, output_tokens: 1_000_000 });
+  assert!((cost - 0.60).abs() < 1e-9, "{cost}");
+  assert_eq!(haiku.price_text(), "$0.10 / $0.50");
+}
+
+#[test]
+fn only_cheap_models_are_offered_and_the_first_is_the_default() {
+  for provider in Provider::ALL {
+    assert!(!provider.models().is_empty());
+    assert_eq!(provider.default_model(), provider.models()[0].id);
+    assert!(provider.models().iter().all(|model| model.input_per_million <= 1.0 && model.output_per_million <= 5.0), "{provider:?}");
+  }
+  assert!(Provider::Anthropic.model_info("claude-sonnet-5-5").is_none());
+}
+
+#[test]
+fn models_that_think_by_default_are_asked_to_think_as_little_as_possible() {
+  let (url, received) = serve_once("200 OK", r#"{"content":[{"type":"text","text":"a"}]}"#);
+  let client = Client::with_base_urls("http://unused.invalid", &url);
+  client.complete(&Request { model: "claude-haiku-5-5", ..request(Provider::Anthropic, "k") }).unwrap();
+  let raw = received.recv().unwrap();
+  let body: serde_json::Value = serde_json::from_str(raw.split_once("\r\n\r\n").unwrap().1).unwrap();
+  assert_eq!(body["output_config"]["effort"], "low");
+  let (url, received) = serve_once("200 OK", r#"{"choices":[{"message":{"content":"{}"}}]}"#);
+  let client = Client::with_base_urls(&url, "http://unused.invalid");
+  client.complete(&Request { model: "gpt-5-nano", ..request(Provider::OpenAi, "k") }).unwrap();
+  let body: serde_json::Value = serde_json::from_str(received.recv().unwrap().split_once("\r\n\r\n").unwrap().1).unwrap();
+  assert_eq!(body["reasoning_effort"], "minimal");
 }

@@ -18,6 +18,7 @@ doctest = false
 appforge-ai.workspace = true
 appforge-appstore.workspace = true
 appforge-compliance.workspace = true
+appforge-project.workspace = true
 appforge-storage.workspace = true
 gpui-kit.workspace = true
 gpui-kit-assets.workspace = true

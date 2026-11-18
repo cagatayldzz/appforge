@@ -15,6 +15,7 @@ Requirements: Command Line Tools (not Xcode), Rust 1.92+ (stable) and Bun. After
 | `bun run dev` | debug build, launch `dist/AppForge.app` |
 | `bun run build` | release build → `dist/AppForge.app` |
 | `bun run check` | script syntax and shell tests, `cargo fmt --check`, clippy with warnings as errors, tests (run before finishing a change) |
+| `bun run update` | update the Rust dependencies in `Cargo.lock` to the newest versions `Cargo.toml` allows, then clippy and tests; `Cargo.lock` is put back if they fail |
 | `bun run test` | shell tests, then `cargo test --locked --workspace` |
 | `bun run release` | request a release: dispatches the Release workflow for the pushed default branch (needs `gh`) |
 | `bun run icon` | redraw `AppIcon.icns` and `DevIcon.icns` from `apps/appforge/macos/icon.svg` (needs Google Chrome) |
@@ -26,7 +27,7 @@ Automation uses only shell and Rust; there is no TypeScript or other runtime in 
 
 | Path | Purpose |
 | --- | --- |
-| `scripts/app.sh` | build, bundle, sign, launch, check (`--dev`, `[debug\|release] --build`, `--check`, `--icon`) |
+| `scripts/app.sh` | build, bundle, sign, launch, check (`--dev`, `[debug\|release] --build`, `--check`, `--update`, `--icon`) |
 | `scripts/release.sh` | request a release; in CI: `prepare` (next version, stamping), `notes`, `package`, `finalize` (assets, checksums) |
 | `scripts/notarize-app.sh` | sign with Developer ID and notarize `dist/AppForge.app` (macOS tools, release secrets) |
 | `scripts/tests/*.sh` | shell tests, run by `scripts/tests/run.sh` (version, notes, packaging, workflow guarantees) |

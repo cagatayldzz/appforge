@@ -262,3 +262,14 @@ fn an_app_without_a_build_has_no_icon_and_an_odd_address_is_refused() {
   assert!(matches!(client(&url).app_icon("100", 128), Err(Error::Unexpected(_))));
   assert_eq!(seen.lock().unwrap().len(), 1, "the odd address must not be requested");
 }
+
+#[test]
+fn an_expired_or_icon_less_newest_build_is_skipped_for_an_older_one_with_an_icon() {
+  let builds = r#"{"data":[
+    {"type":"builds","id":"b3","attributes":{"expired":false}},
+    {"type":"builds","id":"b2","attributes":{"expired":true,"iconAssetToken":{"templateUrl":"{base}/image/expired.{f}"}}},
+    {"type":"builds","id":"b1","attributes":{"expired":false,"iconAssetToken":{"templateUrl":"{base}/image/{w}x{h}bb.{f}"}}}]}"#;
+  let (url, seen) = serve(&[("GET /v1/apps/100/builds", 200, builds), ("GET /image/64x64bb.png", 200, "OLDER")]);
+  assert_eq!(client(&url).app_icon("100", 64).unwrap(), Some(b"OLDER".to_vec()));
+  assert_eq!(seen.lock().unwrap().len(), 2);
+}

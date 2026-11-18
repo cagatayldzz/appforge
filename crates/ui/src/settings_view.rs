@@ -29,13 +29,21 @@ impl Workspace {
     let l = self.settings.language;
     let active = self.settings.ai.provider == provider;
     let has_key = self.has_key.get(&provider).copied().unwrap_or(false);
-    let (key_input, model_input, key_name) = match provider {
+    let (key_input, model_select, key_name) = match provider {
       Provider::OpenAi => (&self.settings_form.openai_key, &self.settings_form.openai_model, "OpenAI API key"),
       Provider::Anthropic => (&self.settings_form.anthropic_key, &self.settings_form.anthropic_model, "Anthropic API key"),
     };
     let status: SharedString =
       if has_key { trf(l, "{} saved in the Keychain. Type a new one to replace it.", &[key_name]) } else { trf(l, "No {} yet.", &[key_name]) };
     // The provider that is in use shows a dot and its state; the others offer to become the one in use.
+    let price_hint: SharedString = match provider.model_info(self.settings.ai.model(provider)) {
+      Some(info) => trf(
+        l,
+        "Price per million tokens: {} in, {} out. Only low-cost models are offered. Prices can change, so check the provider's price page.",
+        &[&format!("${:.2}", info.input_per_million), &format!("${:.2}", info.output_per_million)],
+      ),
+      None => SharedString::default(),
+    };
     let state = if active {
       h_flex().gap_1p5().items_center().child(div().size_2().rounded_full().bg(c.success)).child(tr(l, "In use")).into_any_element()
     } else {
@@ -78,7 +86,7 @@ impl Workspace {
         v_flex()
           .gap_4()
           .pt_1()
-          .child(field(tr(l, "Model"), div().w(px(FIELD_WIDTH)).child(Input::new(model_input)).into_any_element(), None))
+          .child(field(tr(l, "Model"), div().w(px(FIELD_WIDTH)).child(Select::new(model_select)).into_any_element(), Some(price_hint)))
           .child(field(tr(l, "API key"), key_row.into_any_element(), Some(status))),
       )
   }
@@ -118,7 +126,7 @@ impl Workspace {
             .label(if folder.is_some() { tr(l, "Change") } else { tr(l, "Choose folder") })
             .outline()
             .small()
-            .on_click(cx.listener(move |this, _, window, cx| this.choose_code_folder(choose_id.clone(), window, cx))),
+            .on_click(cx.listener(move |this, _, window, cx| this.choose_code_folder(choose_id.clone(), false, window, cx))),
         );
         if folder.is_some() {
           actions = actions.child(

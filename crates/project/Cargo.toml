@@ -1,0 +1,15 @@
+[package]
+name = "appforge-project"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Reads a short description of an app's source code folder for the AI"
+
+[lints]
+workspace = true
+
+[lib]
+doctest = false

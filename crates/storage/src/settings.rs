@@ -33,10 +33,16 @@ impl Default for AiSettings {
 }
 
 impl AiSettings {
+  /// The model to use. A model that Settings no longer offers (an older, dearer choice) is replaced by the default.
   pub fn model(&self, provider: Provider) -> &str {
-    match provider {
+    let chosen = match provider {
       Provider::OpenAi => &self.openai_model,
       Provider::Anthropic => &self.anthropic_model,
+    };
+    if provider.model_info(chosen).is_some() {
+      chosen
+    } else {
+      provider.default_model()
     }
   }
 }

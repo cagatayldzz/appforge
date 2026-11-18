@@ -16,6 +16,7 @@ appforge-ai = { path = "crates/ai" }
 appforge-app = { path = "crates/app" }
 appforge-appstore = { path = "crates/appstore" }
 appforge-compliance = { path = "crates/compliance" }
+appforge-project = { path = "crates/project" }
 appforge-storage = { path = "crates/storage" }
 appforge-ui = { path = "crates/ui" }
 gpui-kit = { version = "0.10.0", features = ["gpui-fast", "syntect"] }

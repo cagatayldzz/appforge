@@ -7,6 +7,7 @@ mod detail;
 mod forms;
 mod guide_art;
 pub mod i18n;
+mod listing_ai;
 mod login;
 mod settings_view;
 mod setup;

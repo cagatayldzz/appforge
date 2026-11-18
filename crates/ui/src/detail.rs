@@ -1,5 +1,5 @@
 use crate::{
-  i18n::tr,
+  i18n::{tr, trf},
   theme::colors,
   widgets::{area_field, centered, pair, section, text_field},
   workspace::{locales, DetailTab, Load, Workspace},
@@ -76,8 +76,35 @@ impl Workspace {
     };
     // The pages are listed in the sidebar, so the page says which one it is; it scrolls under that heading.
     let heading = div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, self.tab.label()));
-    v_flex().flex_1().min_h_0().overflow_hidden().child(
-      v_flex().id("detail-scroll").flex_1().min_h_0().overflow_y_scrollbar().child(centered(v_flex().py_6().gap_6().child(heading).child(body))),
+    // The Information page has a button at the bottom right that stays there while the page scrolls.
+    let generate = (self.tab == DetailTab::Information && matches!(self.snapshot, Load::Ready(_))).then(|| self.generate_button(cx));
+    v_flex()
+      .relative()
+      .flex_1()
+      .min_h_0()
+      .overflow_hidden()
+      .child(
+        v_flex().id("detail-scroll").size_full().overflow_y_scrollbar().child(centered(v_flex().pt_6().pb_24().gap_6().child(heading).child(body))),
+      )
+      .children(generate)
+  }
+
+  /// Writes the listing with the AI, from the app's source folder. Floats at the bottom right of the page.
+  fn generate_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    let l = self.settings.language;
+    let tooltip = match self.model_in_use() {
+      Some(model) => trf(l, "Writes the subtitle, description, keywords, promotional text and what's new. Uses {}.", &[&model]),
+      None => tr(l, "Writes the subtitle, description, keywords, promotional text and what's new."),
+    };
+    div().absolute().bottom_6().right_8().child(
+      Button::new("generate-listing")
+        .icon(Icon::new(IconName::Bot))
+        .label(tr(l, "Write with AI"))
+        .primary()
+        .large()
+        .loading(self.drafting)
+        .tooltip(tooltip)
+        .on_click(cx.listener(|this, _, window, cx| this.generate_listing(window, cx))),
     )
   }
 

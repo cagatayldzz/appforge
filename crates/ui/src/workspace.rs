@@ -116,25 +116,27 @@ pub struct LoginForm {
 pub struct SettingsForm {
   pub openai_key: Entity<InputState>,
   pub anthropic_key: Entity<InputState>,
-  pub openai_model: Entity<InputState>,
-  pub anthropic_model: Entity<InputState>,
+  /// The model menus: only the cheap models, each with its price.
+  pub openai_model: Entity<SelectState<Vec<SharedString>>>,
+  pub anthropic_model: Entity<SelectState<Vec<SharedString>>>,
 }
 
 /// Tasks live on the workspace; replacing one cancels the previous one.
 #[derive(Default)]
-struct Tasks {
-  restore: Option<Task<()>>,
-  sign_in: Option<Task<()>>,
-  key_file: Option<Task<()>>,
-  secrets: Option<Task<()>>,
-  apps: Option<Task<()>>,
-  snapshot: Option<Task<()>>,
-  save: Option<Task<()>>,
-  ai: Option<Task<()>>,
-  playbook: Option<Task<()>>,
-  window: Option<Task<()>>,
-  icons: Option<Task<()>>,
-  folder: Option<Task<()>>,
+pub(crate) struct Tasks {
+  pub(crate) restore: Option<Task<()>>,
+  pub(crate) sign_in: Option<Task<()>>,
+  pub(crate) key_file: Option<Task<()>>,
+  pub(crate) secrets: Option<Task<()>>,
+  pub(crate) apps: Option<Task<()>>,
+  pub(crate) snapshot: Option<Task<()>>,
+  pub(crate) save: Option<Task<()>>,
+  pub(crate) ai: Option<Task<()>>,
+  pub(crate) playbook: Option<Task<()>>,
+  pub(crate) window: Option<Task<()>>,
+  pub(crate) icons: Option<Task<()>>,
+  pub(crate) folder: Option<Task<()>>,
+  pub(crate) draft: Option<Task<()>>,
 }
 
 pub struct Workspace {
@@ -142,7 +144,7 @@ pub struct Workspace {
   pub settings: Settings,
   /// The settings file exists but could not be read: nothing is saved over it.
   pub settings_locked: bool,
-  secrets: Arc<dyn SecretStore>,
+  pub(crate) secrets: Arc<dyn SecretStore>,
   pub client: Option<Arc<Client>>,
   /// Reading the Keychain at startup.
   pub starting: bool,
@@ -170,10 +172,30 @@ pub struct Workspace {
   _subscriptions: Vec<Subscription>,
   pub forms: Forms,
   pub settings_form: SettingsForm,
-  tasks: Tasks,
+  pub(crate) tasks: Tasks,
+  /// The AI is writing the store listing.
+  pub drafting: bool,
 }
 
-fn now() -> u64 {
+/// How a model shows in its menu: its name and what a million tokens cost, input / output.
+pub(crate) fn model_label(info: &appforge_ai::ModelInfo) -> String {
+  format!("{} · {}", info.label, info.price_text())
+}
+
+/// The menu of the models of `provider`, with the one in use chosen.
+fn model_select(
+  provider: Provider,
+  ai: &appforge_storage::AiSettings,
+  window: &mut Window,
+  cx: &mut Context<Workspace>,
+) -> Entity<SelectState<Vec<SharedString>>> {
+  let labels: Vec<SharedString> = provider.models().iter().map(|info| SharedString::from(model_label(info))).collect();
+  let chosen = ai.model(provider);
+  let selected = provider.models().iter().position(|info| info.id == chosen).map(IndexPath::new);
+  cx.new(|cx| SelectState::new(labels, selected, window, cx))
+}
+
+pub(crate) fn now() -> u64 {
   SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
@@ -216,20 +238,24 @@ impl Workspace {
       busy: false,
       error: None,
     };
-    let model_input = |cx: &mut Context<Self>, window: &mut Window, value: &str| {
-      let value = value.to_owned();
-      cx.new(|cx| {
-        let mut state = InputState::new(window, cx);
-        state.set_value(value, window, cx);
-        state
-      })
-    };
     let settings_form = SettingsForm {
       openai_key: cx.new(|cx| InputState::new(window, cx).placeholder("sk-…").masked(true)),
       anthropic_key: cx.new(|cx| InputState::new(window, cx).placeholder("sk-ant-…").masked(true)),
-      openai_model: model_input(cx, window, &settings.ai.openai_model),
-      anthropic_model: model_input(cx, window, &settings.ai.anthropic_model),
+      openai_model: model_select(Provider::OpenAi, &settings.ai, window, cx),
+      anthropic_model: model_select(Provider::Anthropic, &settings.ai, window, cx),
     };
+    let model_subscriptions: Vec<Subscription> =
+      [(Provider::OpenAi, &settings_form.openai_model), (Provider::Anthropic, &settings_form.anthropic_model)]
+        .into_iter()
+        .map(|(provider, select)| {
+          cx.subscribe_in(select, window, move |this, _, event: &SelectEvent<Vec<SharedString>>, window, cx| {
+            let SelectEvent::Confirm(Some(label)) = event else { return };
+            if let Some(info) = provider.models().iter().find(|info| model_label(info) == label.as_ref()) {
+              this.set_model(provider, info.id, window, cx);
+            }
+          })
+        })
+        .collect();
     let forms = Forms::new(window, cx);
     let language_names: Vec<SharedString> = Language::ALL.iter().map(|language| SharedString::new_static(language.native_name())).collect();
     let selected_language = Language::ALL.iter().position(|language| *language == settings.language).map(IndexPath::new);
@@ -265,14 +291,17 @@ impl Workspace {
       saving: false,
       login,
       language_select,
-      _subscriptions: vec![
-        language_subscription,
-        cx.observe_window_appearance(window, |_, window, cx| crate::theme::apply_theme(window, cx)),
-        cx.observe_window_bounds(window, |this, window, cx| this.remember_window(window, cx)),
-      ],
+      _subscriptions: std::iter::once(language_subscription)
+        .chain([
+          cx.observe_window_appearance(window, |_, window, cx| crate::theme::apply_theme(window, cx)),
+          cx.observe_window_bounds(window, |this, window, cx| this.remember_window(window, cx)),
+        ])
+        .chain(model_subscriptions)
+        .collect(),
       forms,
       settings_form,
       tasks: Tasks::default(),
+      drafting: false,
     };
     if this.settings_locked {
       this.login.error = Some(
@@ -284,12 +313,26 @@ impl Workspace {
     this
   }
 
-  fn error(window: &mut Window, cx: &mut App, message: impl Into<SharedString>) {
+  pub(crate) fn error(window: &mut Window, cx: &mut App, message: impl Into<SharedString>) {
     window.push_notification(Notification::error(message), cx);
   }
 
-  fn success(window: &mut Window, cx: &mut App, message: impl Into<SharedString>) {
+  pub(crate) fn warning(window: &mut Window, cx: &mut App, message: impl Into<SharedString>) {
+    window.push_notification(Notification::warning(message), cx);
+  }
+
+  pub(crate) fn success(window: &mut Window, cx: &mut App, message: impl Into<SharedString>) {
     window.push_notification(Notification::success(message), cx);
+  }
+
+  /// Remembers the model chosen from the menu of `provider`.
+  fn set_model(&mut self, provider: Provider, model: &str, window: &mut Window, cx: &mut Context<Self>) {
+    match provider {
+      Provider::OpenAi => self.settings.ai.openai_model = model.to_owned(),
+      Provider::Anthropic => self.settings.ai.anthropic_model = model.to_owned(),
+    }
+    self.save_settings(window, cx);
+    cx.notify();
   }
 
   pub fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -361,7 +404,7 @@ impl Workspace {
   }
 
   /// Asks for the folder that holds the source code of an app and remembers it.
-  pub fn choose_code_folder(&mut self, app_id: String, window: &mut Window, cx: &mut Context<Self>) {
+  pub fn choose_code_folder(&mut self, app_id: String, then_generate: bool, window: &mut Window, cx: &mut Context<Self>) {
     let receiver = cx.prompt_for_paths(PathPromptOptions {
       files: false,
       directories: true,
@@ -376,6 +419,10 @@ impl Workspace {
               this.settings.code_folders.insert(app_id, path);
               this.save_settings(window, cx);
               cx.notify();
+              // Asked for from the generate button: carry on with what was being done.
+              if then_generate {
+                this.generate_listing(window, cx);
+              }
             })
             .ok();
         }
@@ -577,24 +624,30 @@ impl Workspace {
           cx.notify();
         })
         .ok();
-      let fetched = cx
+      let (fetched, failure) = cx
         .background_spawn(async move {
           let mut fetched = Vec::new();
+          let mut failure = None;
           for id in ids.into_iter().filter(|id| !cache.is_fresh(id)) {
             match client.app_icon(&id, ICON_SIZE) {
               Ok(Some(bytes)) => match cache.store(&id, &bytes) {
                 Ok(path) => fetched.push((id, path)),
-                Err(error) => eprintln!("Could not keep the icon of app {id}: {error}"),
+                Err(error) => failure = failure.or(Some(format!("Could not keep the icon of app {id}: {error}"))),
               },
+              // An app with no build has no icon: it keeps its letter.
               Ok(None) => {}
-              Err(error) => eprintln!("Could not get the icon of app {id}: {error}"),
+              Err(error) => failure = failure.or(Some(error.to_string())),
             }
           }
-          fetched
+          (fetched, failure)
         })
         .await;
       this
-        .update(cx, |this, cx| {
+        .update_in(cx, |this, window, cx| {
+          // One notice, and only when not a single icon could be had: a failure for one app is not worth interrupting for.
+          if let (true, Some(error)) = (fetched.is_empty(), failure) {
+            Self::warning(window, cx, trf(this.settings.language, "Could not get the app icons: {}", &[&error]));
+          }
           this.icons.extend(fetched);
           cx.notify();
         })
@@ -894,20 +947,13 @@ impl Workspace {
     cx.notify();
   }
 
-  /// Saves the model and, when one was typed, the API key of `provider`.
+  /// Saves the API key that was typed for `provider`.
   pub fn save_ai(&mut self, provider: Provider, window: &mut Window, cx: &mut Context<Self>) {
-    let (key_input, model_input) = match provider {
-      Provider::OpenAi => (&self.settings_form.openai_key, &self.settings_form.openai_model),
-      Provider::Anthropic => (&self.settings_form.anthropic_key, &self.settings_form.anthropic_model),
+    let key_input = match provider {
+      Provider::OpenAi => &self.settings_form.openai_key,
+      Provider::Anthropic => &self.settings_form.anthropic_key,
     };
     let key = read_input(key_input, cx);
-    let model = read_input(model_input, cx);
-    let model = if model.is_empty() { provider.default_model().to_owned() } else { model };
-    match provider {
-      Provider::OpenAi => self.settings.ai.openai_model = model,
-      Provider::Anthropic => self.settings.ai.anthropic_model = model,
-    }
-    self.save_settings(window, cx);
     if key.is_empty() {
       Self::success(window, cx, trf(self.settings.language, "{} settings saved.", &[provider.label()]));
       cx.notify();
