@@ -203,6 +203,8 @@ impl Workspace {
       }
       SettingsPage::CodeFolders => self.code_folders_body(cx),
       SettingsPage::Rules => v_flex()
+        .gap_4()
+        .child(self.render_guidelines(cx))
         .child(setting_row(
           tr(l, "Rules"),
           Some(tr(l, "The Analysis reads the App Store Compliance Playbook. AppForge downloads it from GitHub and refreshes it weekly; you can also update it from the Analysis page.")),

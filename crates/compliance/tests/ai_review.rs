@@ -96,9 +96,18 @@ fn the_analysis_sends_the_playbook_as_data_and_returns_findings() {
   let (url, received) = serve_once(body);
   let playbook = Playbook { documents: vec![("APPLE.md".into(), "RULE: demo accounts must work".into())], fetched_at: Some(1) };
   let client = Client::with_base_urls("http://unused.invalid", &url);
-  let review =
-    analyze_with_ai(&client, Provider::Anthropic, "key", "model", &snapshot(), &PrivacyDeclaration::default(), &Report::default(), &playbook)
-      .unwrap();
+  let review = analyze_with_ai(
+    &client,
+    Provider::Anthropic,
+    "key",
+    "model",
+    &snapshot(),
+    &PrivacyDeclaration::default(),
+    &Report::default(),
+    &playbook,
+    &Default::default(),
+  )
+  .unwrap();
   assert_eq!(review.summary, "Needs work");
   assert_eq!(review.findings[0].title, "SDK mismatch");
   let raw = received.recv().unwrap();

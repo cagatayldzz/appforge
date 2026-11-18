@@ -8,6 +8,7 @@ mod detail;
 mod distribution;
 mod forms;
 mod guide_art;
+mod guidelines;
 pub mod i18n;
 mod listing_ai;
 mod login;

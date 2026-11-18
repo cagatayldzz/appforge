@@ -7,6 +7,16 @@ use std::{collections::HashMap, sync::OnceLock};
 
 /// English text and its Turkish translation. Both sides use the same `{}` placeholders in the same order.
 pub const TURKISH: &[(&str, &str)] = &[
+  ("Search by rule number or topic", "Madde numarası veya konu ara"),
+  ("Last checked {}", "Son kontrol {}"),
+  ("View Apple rule", "Apple kuralını gör"),
+  ("Apple guidelines checked.", "Apple kılavuzu kontrol edildi."),
+  ("View on Apple", "Apple’da aç"),
+  ("Added rules", "Eklenen maddeler"),
+  ("Changed rules", "Değişen maddeler"),
+  ("Removed rules", "Kaldırılan maddeler"),
+  ("{} matching rules", "{} eşleşen madde"),
+  ("Apple App Review Guidelines", "Apple App Review Kılavuzu"),
   ("Delete your public reply to this review?", "Bu yoruma verdiğiniz herkese açık yanıt silinsin mi?"),
   ("This reply will appear publicly on the App Store.", "Bu yanıt App Store’da herkese açık görünecek."),
   ("Delete reply", "Yanıtı sil"),

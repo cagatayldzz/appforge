@@ -30,6 +30,8 @@ With an app open, the column next to the bar shows the app (icon, name, bundle i
 
 ## Your apps
 
+AppForge keeps loaded pages for each app during the signed-in session. Switching tabs or returning to an app reuses that data. **Reload** updates the open page, and existing data stays visible while Apple responds.
+
 | Page | Shows and edits |
 | --- | --- |
 | App Information | Name and subtitle, and the listing of the version in preparation: description, keywords, promotional text, support and marketing URLs, What's New. Counters show the limits (name and subtitle 30, keywords 100, promotional text 170). A language picker appears when the app has several languages. |
@@ -66,6 +68,10 @@ The built-in rules check the saved data (not unsaved edits): limits, placeholder
 
 **Analyze with Claude / OpenAI** asks the model to read the listing, review notes and privacy answers against the [App Store Compliance Playbook](https://github.com/mjmirza/app-store-compliance) and to add what the built-in rules miss. It sends the text to the provider you chose; the demo account name and password and the reviewer's contact details are never sent. The playbook is downloaded from GitHub on first use and refreshed weekly (**Update rules** does it now).
 
+## Apple App Review Guidelines
+
+AppForge checks Apple’s guidelines in the background at startup if the last successful check was at least 24 hours ago. **Update rules** runs the check on demand. If Apple’s page is unavailable or cannot be parsed, AppForge keeps the last valid catalog. Findings link to the official rules where a matching number exists, and AI analysis receives a limited set of relevant Apple excerpts alongside the community playbook.
+
 ## Settings
 
 | Page | Holds |
@@ -74,7 +80,7 @@ The built-in rules check the saved data (not unsaved edits): limits, placeholder
 | Account | Which key you are signed in with, and **Sign out**. |
 | AI provider | For Claude and OpenAI: a menu of the models, with what a million input and output tokens cost, the API key (kept in the Keychain), and which provider is in use. |
 | Code folders | For each app, the folder that holds its source code (**Choose folder**, **Change**, **Remove**). A folder that was moved or deleted is shown in red. |
-| Rules | The playbook the analysis reads. |
+| Rules | Search the Apple App Review Guidelines by number or topic, open the official rule, and see the latest additions, changes and removals. |
 | About | The version and a button that shows the data folder. |
 
 Only low-cost models are offered: Claude Haiku 5.5 and 4.5, and GPT-4.1 nano, GPT-5 nano, GPT-6 Luna and GPT-4.1 mini. The prices are the providers' list prices when they were last checked and can change, so check the provider's price page. A model you had chosen earlier that is no longer offered is replaced by the default.

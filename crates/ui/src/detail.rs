@@ -47,34 +47,38 @@ impl Workspace {
   pub(crate) fn render_detail(&mut self, app: App, cx: &mut Context<Self>) -> impl IntoElement {
     let c = colors(cx);
     let l = self.settings.language;
-    let body = match &self.snapshot {
-      Load::Ready(_) => match self.tab {
-        DetailTab::Distribution => self.render_distribution(cx),
-        DetailTab::CustomerReviews => self.render_customer_reviews(cx),
-        DetailTab::Information => self.render_information(&app, cx).into_any_element(),
-        DetailTab::Review => self.render_review(cx).into_any_element(),
-        DetailTab::Privacy => self.render_privacy(&app, cx).into_any_element(),
-        DetailTab::Analysis => self.render_analysis(cx).into_any_element(),
-      },
-      Load::Failed(message) => v_flex()
-        .gap_3()
-        .child(Alert::error("snapshot-error", message.clone()))
-        .child(
-          h_flex().child(
-            Button::new("retry-snapshot")
-              .label(tr(l, "Try again"))
-              .outline()
-              .on_click(cx.listener(|this, _, window, cx| this.load_snapshot(window, cx))),
-          ),
-        )
-        .into_any_element(),
-      _ => h_flex()
-        .gap_2()
-        .items_center()
-        .text_color(c.text_secondary)
-        .child(Spinner::new())
-        .child(tr(l, "Loading from App Store Connect…"))
-        .into_any_element(),
+    let body = if self.tab == DetailTab::CustomerReviews {
+      self.render_customer_reviews(cx)
+    } else {
+      match self.active_data().map(|data| &data.snapshot) {
+        Some(Load::Ready(_)) => match self.tab {
+          DetailTab::Distribution => self.render_distribution(cx),
+          DetailTab::CustomerReviews => self.render_customer_reviews(cx),
+          DetailTab::Information => self.render_information(&app, cx).into_any_element(),
+          DetailTab::Review => self.render_review(cx).into_any_element(),
+          DetailTab::Privacy => self.render_privacy(&app, cx).into_any_element(),
+          DetailTab::Analysis => self.render_analysis(cx).into_any_element(),
+        },
+        Some(Load::Failed(message)) => v_flex()
+          .gap_3()
+          .child(Alert::error("snapshot-error", message.clone()))
+          .child(
+            h_flex().child(
+              Button::new("retry-snapshot")
+                .label(tr(l, "Try again"))
+                .outline()
+                .on_click(cx.listener(|this, _, window, cx| this.load_snapshot(window, cx))),
+            ),
+          )
+          .into_any_element(),
+        _ => h_flex()
+          .gap_2()
+          .items_center()
+          .text_color(c.text_secondary)
+          .child(Spinner::new())
+          .child(tr(l, "Loading from App Store Connect…"))
+          .into_any_element(),
+      }
     };
     // The pages are listed in the sidebar, so the page says which one it is; it scrolls under that heading.
     let heading = div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, self.tab.label()));
@@ -85,7 +89,7 @@ impl Workspace {
 
   /// Writes the listing with the AI, from the app's source folder.
   pub(crate) fn generate_button(&self, cx: &mut Context<Self>) -> Option<Button> {
-    if self.tab != DetailTab::Information || !matches!(self.snapshot, Load::Ready(_)) {
+    if self.tab != DetailTab::Information || self.ready_snapshot().is_none() {
       return None;
     }
     let l = self.settings.language;

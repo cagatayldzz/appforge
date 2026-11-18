@@ -21,3 +21,6 @@ appforge-storage.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 ureq.workspace = true
+html5ever = "0.27"
+markup5ever_rcdom = "0.3"
+tempfile = "3"

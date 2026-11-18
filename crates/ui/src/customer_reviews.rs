@@ -22,19 +22,35 @@ use gpui_kit::{
 impl Workspace {
   pub(crate) fn load_customer_reviews(&mut self, window: &mut Window, cx: &mut Context<Self>) {
     let (Some(client), Some(app)) = (self.client.clone(), self.selected.clone()) else { return };
-    self.customer_reviews = Load::Loading;
-    self.tasks.customer_reviews = Some(cx.spawn_in(window, async move |this, cx| {
-      let result = cx.background_spawn(async move { client.customer_reviews(&app) }).await;
+    let Some(data) = self.app_data.get_mut(&app) else { return };
+    if data.reviews_task.is_some() {
+      return;
+    }
+    if !matches!(data.reviews, Load::Ready(_)) {
+      data.reviews = Load::Loading;
+    }
+    let target = app.clone();
+    data.reviews_task = Some(cx.spawn_in(window, async move |this, cx| {
+      let result = cx.background_spawn(async move { client.customer_reviews(&target) }).await;
       this
         .update_in(cx, |this, window, cx| {
-          this.customer_reviews = match result {
-            Ok(reviews) => Load::Ready(reviews),
+          let Some(data) = this.app_data.get_mut(&app) else { return };
+          data.reviews_task = None;
+          let active = this.selected.as_ref() == Some(&app);
+          match result {
+            Ok(reviews) => data.reviews = Load::Ready(reviews),
             Err(error) => {
-              Self::error(window, cx, error.to_string());
-              Load::Failed(error.to_string().into())
+              if !matches!(data.reviews, Load::Ready(_)) {
+                data.reviews = Load::Failed(error.to_string().into());
+              }
+              if active {
+                Self::error(window, cx, error.to_string());
+              }
             }
-          };
-          cx.notify();
+          }
+          if active {
+            cx.notify();
+          }
         })
         .ok();
     }));
@@ -43,12 +59,23 @@ impl Workspace {
 
   pub(crate) fn render_customer_reviews(&self, cx: &mut Context<Self>) -> AnyElement {
     let l = self.settings.language;
-    match &self.customer_reviews {
-      Load::Ready(reviews) if reviews.is_empty() => div().child(tr(l, "No customer reviews.")).into_any_element(),
-      Load::Ready(reviews) => {
+    match self.active_data().map(|data| &data.reviews) {
+      Some(Load::Ready(reviews)) if reviews.is_empty() => div().child(tr(l, "No customer reviews.")).into_any_element(),
+      Some(Load::Ready(reviews)) => {
         v_flex().gap_6().children(reviews.iter().map(|review| self.review_card(review, cx)).collect::<Vec<_>>()).into_any_element()
       }
-      Load::Failed(message) => Alert::error("customer-reviews-error", message.clone()).into_any_element(),
+      Some(Load::Failed(message)) => v_flex()
+        .gap_3()
+        .child(Alert::error("customer-reviews-error", message.clone()))
+        .child(
+          h_flex().child(
+            Button::new("retry-customer-reviews")
+              .label(tr(l, "Try again"))
+              .outline()
+              .on_click(cx.listener(|this, _, window, cx| this.load_customer_reviews(window, cx))),
+          ),
+        )
+        .into_any_element(),
       _ => h_flex().gap_2().child(Spinner::new()).child(tr(l, "Loading from App Store Connect…")).into_any_element(),
     }
   }

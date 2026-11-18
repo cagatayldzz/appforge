@@ -228,8 +228,11 @@ dependencies = [
  "appforge-ai",
  "appforge-appstore",
  "appforge-storage",
+ "html5ever",
+ "markup5ever_rcdom",
  "serde",
  "serde_json",
+ "tempfile",
  "ureq",
 ]
 

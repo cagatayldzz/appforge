@@ -19,7 +19,7 @@ use gpui_kit::{
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// "3 days ago" for a time in seconds since the Unix epoch.
-fn ago(l: Language, fetched_at: u64) -> SharedString {
+pub(crate) fn ago(l: Language, fetched_at: u64) -> SharedString {
   let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
   let seconds = now.saturating_sub(fetched_at);
   match seconds {
@@ -52,7 +52,16 @@ impl Workspace {
         cx.notify();
       }))
       .into_any_element();
-    finding_card(finding, Some(button), l, cx)
+    let source = self.guidelines.rule(&finding.guideline).map(|rule| {
+      let url = rule.url();
+      Button::new(SharedString::from(format!("guideline-{}-{}", finding.id, finding.title)))
+        .label(tr(l, "View Apple rule"))
+        .small()
+        .outline()
+        .on_click(move |_, _, cx| cx.open_url(&url))
+    });
+    let actions = h_flex().gap_2().flex_wrap().child(button).children(source).into_any_element();
+    finding_card(finding, Some(actions), l, cx)
   }
 
   pub(crate) fn render_analysis(&mut self, cx: &mut Context<Self>) -> impl IntoElement {

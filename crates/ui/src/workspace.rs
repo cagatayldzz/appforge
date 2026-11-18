@@ -6,7 +6,7 @@ use crate::{
 };
 use appforge_ai::Provider;
 use appforge_appstore::{App as StoreApp, AppInfoLocalization, AppSnapshot, Client, Credentials, ReviewDetail, VersionLocalization};
-use appforge_compliance::{analyze_with_ai, check, AiReview, Playbook, Report};
+use appforge_compliance::{analyze_with_ai, check, AiReview, Guidelines, Playbook, Report};
 use appforge_storage::{AppleAccount, IconCache, Keychain, Language, PrivacyDeclaration, SecretKey, SecretStore, Settings};
 use gpui_kit::{
   component::{
@@ -33,7 +33,9 @@ const ICON_SIZE: u32 = 128;
 /// How long the window must be still before its place is written.
 const WINDOW_SAVE_DELAY: Duration = Duration::from_millis(500);
 
+#[derive(Default)]
 pub enum Load<T> {
+  #[default]
   Idle,
   Loading,
   Ready(T),
@@ -133,17 +135,25 @@ pub(crate) struct Tasks {
   pub(crate) key_file: Option<Task<()>>,
   pub(crate) secrets: Option<Task<()>>,
   pub(crate) apps: Option<Task<()>>,
-  pub(crate) snapshot: Option<Task<()>>,
   pub(crate) save: Option<Task<()>>,
   pub(crate) ai: Option<Task<()>>,
   pub(crate) playbook: Option<Task<()>>,
+  pub(crate) guidelines: Option<Task<()>>,
   pub(crate) window: Option<Task<()>>,
   pub(crate) icons: Option<Task<()>>,
   pub(crate) folder: Option<Task<()>>,
   pub(crate) draft: Option<Task<()>>,
-  pub(crate) distribution: Option<Task<()>>,
   pub(crate) store_write: Option<Task<()>>,
-  pub(crate) customer_reviews: Option<Task<()>>,
+}
+
+#[derive(Default)]
+pub(crate) struct AppData {
+  pub snapshot: Load<AppSnapshot>,
+  pub distribution: Load<appforge_appstore::Distribution>,
+  pub reviews: Load<Vec<appforge_appstore::CustomerReview>>,
+  pub snapshot_task: Option<Task<()>>,
+  pub distribution_task: Option<Task<()>>,
+  pub reviews_task: Option<Task<()>>,
 }
 
 pub struct Workspace {
@@ -159,15 +169,17 @@ pub struct Workspace {
   /// The icon file of each app, by app id, for the apps whose icon is known.
   pub icons: HashMap<String, PathBuf>,
   pub selected: Option<String>,
-  pub snapshot: Load<AppSnapshot>,
-  pub(crate) distribution: Load<appforge_appstore::Distribution>,
+  pub(crate) app_data: HashMap<String, AppData>,
   pub(crate) store_write_busy: bool,
-  pub(crate) customer_reviews: Load<Vec<appforge_appstore::CustomerReview>>,
   pub tab: DetailTab,
   pub locale: String,
   pub report: Option<Report>,
   pub ai: AiState,
   pub playbook: Playbook,
+  pub(crate) guidelines: Arc<Guidelines>,
+  pub(crate) guidelines_busy: bool,
+  pub(crate) guidelines_error: Option<SharedString>,
+  pub(crate) guideline_search: Entity<InputState>,
   pub playbook_busy: bool,
   pub playbook_error: Option<SharedString>,
   pub has_key: HashMap<Provider, bool>,
@@ -267,6 +279,8 @@ impl Workspace {
         })
         .collect();
     let forms = Forms::new(window, cx);
+    let guideline_search = cx.new(|cx| InputState::new(window, cx));
+    let guideline_search_subscription = cx.observe(&guideline_search, |_, _, cx| cx.notify());
     let language_names: Vec<SharedString> = Language::ALL.iter().map(|language| SharedString::new_static(language.native_name())).collect();
     let selected_language = Language::ALL.iter().position(|language| *language == settings.language).map(IndexPath::new);
     let language_select = cx.new(|cx| SelectState::new(language_names, selected_language, window, cx));
@@ -286,15 +300,17 @@ impl Workspace {
       apps: Load::Idle,
       icons: HashMap::new(),
       selected: None,
-      snapshot: Load::Idle,
-      distribution: Load::Idle,
+      app_data: HashMap::new(),
       store_write_busy: false,
-      customer_reviews: Load::Idle,
       tab: DetailTab::Information,
       locale: String::new(),
       report: None,
       ai: AiState::Idle,
       playbook,
+      guidelines: Arc::new(Guidelines::default()),
+      guidelines_busy: false,
+      guidelines_error: None,
+      guideline_search,
       playbook_busy: false,
       playbook_error: None,
       has_key: HashMap::new(),
@@ -310,6 +326,7 @@ impl Workspace {
           cx.observe_window_bounds(window, |this, window, cx| this.remember_window(window, cx)),
         ])
         .chain(model_subscriptions)
+        .chain(std::iter::once(guideline_search_subscription))
         .collect(),
       forms,
       settings_form,
@@ -398,6 +415,7 @@ impl Workspace {
       this.update_in(cx, |this, window, cx| this.finish_restore(loaded.0.map_err(|error| error.to_string()), loaded.1, window, cx)).ok();
     }));
     self.refresh_playbook_if_stale(window, cx);
+    self.refresh_guidelines(false, window, cx);
   }
 
   fn finish_restore(&mut self, key: Result<Option<String>, String>, keys: Vec<(Provider, bool)>, window: &mut Window, cx: &mut Context<Self>) {
@@ -580,16 +598,11 @@ impl Workspace {
     self.icons.clear();
     self.tasks.icons = None;
     self.selected = None;
-    self.snapshot = Load::Idle;
-    self.distribution = Load::Idle;
-    self.tasks.distribution = None;
-    self.customer_reviews = Load::Idle;
-    self.tasks.customer_reviews = None;
+    self.app_data.clear();
     self.report = None;
     self.ai = AiState::Idle;
     self.show_settings = false;
     self.tasks.apps = None;
-    self.tasks.snapshot = None;
     cx.notify();
   }
 
@@ -675,10 +688,33 @@ impl Workspace {
   pub fn select_app(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
     self.show_settings = false;
     self.show_all_apps = false;
-    self.selected = Some(id);
-    self.ai = AiState::Idle;
-    self.report = None;
-    self.load_snapshot(window, cx);
+    if self.selected.as_ref() != Some(&id) {
+      self.selected = Some(id.clone());
+      self.locale.clear();
+      self.ai = AiState::Idle;
+      self.tasks.ai = None;
+      self.report = None;
+      self.app_data.entry(id).or_default();
+      self.fill_snapshot_forms(window, cx);
+    }
+    self.ensure_app_page(window, cx);
+    cx.notify();
+  }
+
+  pub(crate) fn active_data(&self) -> Option<&AppData> {
+    self.app_data.get(self.selected.as_ref()?)
+  }
+
+  pub(crate) fn ensure_app_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    if self.tab == DetailTab::CustomerReviews && self.active_data().is_some_and(|data| matches!(data.reviews, Load::Idle)) {
+      self.load_customer_reviews(window, cx);
+    }
+    if self.tab != DetailTab::CustomerReviews && self.active_data().is_some_and(|data| matches!(data.snapshot, Load::Idle)) {
+      self.load_snapshot(window, cx);
+    }
+    if self.tab == DetailTab::Distribution && self.active_data().is_some_and(|data| matches!(data.distribution, Load::Idle)) {
+      self.load_distribution(window, cx);
+    }
   }
 
   pub fn selected_app(&self) -> Option<StoreApp> {
@@ -687,7 +723,7 @@ impl Workspace {
   }
 
   pub fn ready_snapshot(&self) -> Option<&AppSnapshot> {
-    match &self.snapshot {
+    match &self.active_data()?.snapshot {
       Load::Ready(snapshot) => Some(snapshot),
       _ => None,
     }
@@ -699,30 +735,55 @@ impl Workspace {
 
   pub fn load_snapshot(&mut self, window: &mut Window, cx: &mut Context<Self>) {
     let (Some(client), Some(app)) = (self.client.clone(), self.selected_app()) else { return };
-    self.snapshot = Load::Loading;
-    self.distribution = Load::Idle;
-    self.tasks.distribution = None;
-    self.customer_reviews = Load::Idle;
-    self.tasks.customer_reviews = None;
-    self.tasks.snapshot = Some(cx.spawn_in(window, async move |this, cx| {
+    let id = app.id.clone();
+    let data = self.app_data.entry(id.clone()).or_default();
+    if data.snapshot_task.is_some() {
+      return;
+    }
+    if !matches!(data.snapshot, Load::Ready(_)) {
+      data.snapshot = Load::Loading;
+    }
+    data.snapshot_task = Some(cx.spawn_in(window, async move |this, cx| {
       let result = cx.background_spawn(async move { client.snapshot(&app) }).await;
       this
         .update_in(cx, |this, window, cx| {
+          let Some(data) = this.app_data.get_mut(&id) else { return };
+          data.snapshot_task = None;
+          let active = this.selected.as_ref() == Some(&id);
           match result {
-            Ok(snapshot) => this.snapshot_loaded(snapshot, window, cx),
+            Ok(snapshot) => {
+              let same_version = matches!(&data.snapshot, Load::Ready(previous) if previous.version == snapshot.version);
+              if !same_version {
+                data.distribution = Load::Idle;
+                data.distribution_task = None;
+              }
+              data.snapshot = Load::Ready(snapshot);
+              if active {
+                this.fill_snapshot_forms(window, cx);
+                this.ensure_app_page(window, cx);
+              }
+            }
             Err(error) => {
-              this.snapshot = Load::Failed(error.to_string().into());
-              Self::error(window, cx, error.to_string());
+              if !matches!(data.snapshot, Load::Ready(_)) {
+                data.snapshot = Load::Failed(error.to_string().into());
+              }
+              if active && this.tab != DetailTab::CustomerReviews {
+                Self::error(window, cx, error.to_string());
+                this.ensure_app_page(window, cx);
+              }
             }
           }
-          cx.notify();
+          if active {
+            cx.notify();
+          }
         })
         .ok();
     }));
     cx.notify();
   }
 
-  fn snapshot_loaded(&mut self, snapshot: AppSnapshot, window: &mut Window, cx: &mut Context<Self>) {
+  fn fill_snapshot_forms(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    let Some(snapshot) = self.ready_snapshot().cloned() else { return };
     let available = locales(&snapshot);
     if !available.contains(&self.locale) {
       self.locale = available.first().cloned().unwrap_or_default();
@@ -732,19 +793,12 @@ impl Workspace {
     let declaration = self.privacy_declaration();
     set_input(&self.forms.data_types, &declaration.data_types, window, cx);
     set_input(&self.forms.sdks, &declaration.third_party_sdks, window, cx);
-    self.snapshot = Load::Ready(snapshot);
     self.recompute_report();
-    if self.tab == DetailTab::Distribution {
-      self.load_distribution(window, cx);
-    }
-    if self.tab == DetailTab::CustomerReviews {
-      self.load_customer_reviews(window, cx);
-    }
   }
 
   pub fn select_locale(&mut self, locale: String, window: &mut Window, cx: &mut Context<Self>) {
     self.locale = locale;
-    if let Load::Ready(snapshot) = &self.snapshot {
+    if let Some(snapshot) = self.ready_snapshot() {
       let snapshot = snapshot.clone();
       self.forms.fill_locale(&snapshot, &self.locale, window, cx);
     }
@@ -764,20 +818,32 @@ impl Workspace {
     cx: &mut Context<Self>,
     work: impl FnOnce(&Client) -> Result<bool, appforge_appstore::Error> + Send + 'static,
   ) {
-    let Some(client) = self.client.clone() else { return };
+    let (Some(client), Some(id)) = (self.client.clone(), self.selected.clone()) else { return };
     if self.saving || self.store_write_busy {
       return;
     }
     self.saving = true;
     self.tasks.save = Some(cx.spawn_in(window, async move |this, cx| {
-      let result = cx.background_spawn(async move { work(&client) }).await;
+      let worker = client.clone();
+      let result = cx.background_spawn(async move { work(&worker) }).await;
       this
         .update_in(cx, |this, window, cx| {
           this.saving = false;
+          if !this.client.as_ref().is_some_and(|current| Arc::ptr_eq(current, &client)) {
+            return;
+          }
           match result {
             Ok(true) => {
               Self::success(window, cx, tr(this.settings.language, "Saved to App Store Connect."));
-              this.load_snapshot(window, cx);
+              if let Some(data) = this.app_data.get_mut(&id) {
+                data.snapshot_task = None;
+                if this.selected.as_ref() != Some(&id) {
+                  data.snapshot = Load::Idle;
+                }
+              }
+              if this.selected.as_ref() == Some(&id) {
+                this.load_snapshot(window, cx);
+              }
             }
             Ok(false) => Self::success(window, cx, tr(this.settings.language, "Nothing changed.")),
             Err(error) => Self::error(window, cx, error.to_string()),
@@ -894,6 +960,7 @@ impl Workspace {
     let declaration = self.privacy_declaration();
     let secrets = self.secrets.clone();
     let playbook = self.playbook.clone();
+    let guidelines = self.guidelines.clone();
     let data_dir = self.data_dir.clone();
     self.ai = AiState::Running;
     self.tasks.ai = Some(cx.spawn_in(window, async move |this, cx| {
@@ -903,7 +970,7 @@ impl Workspace {
           // The rules are downloaded the first time they are needed.
           let playbook = if playbook.is_empty() { Playbook::refresh(&data_dir).unwrap_or(playbook) } else { playbook };
           let client = appforge_ai::Client::default();
-          analyze_with_ai(&client, provider, &key, &model, &snapshot, &declaration, &report, &playbook).map(|review| (review, playbook))
+          analyze_with_ai(&client, provider, &key, &model, &snapshot, &declaration, &report, &playbook, &guidelines).map(|review| (review, playbook))
         })
         .await;
       this
@@ -934,6 +1001,9 @@ impl Workspace {
 
   /// Downloads the playbook. `announce` shows a notification with the outcome (when the user asked for it).
   pub fn refresh_playbook(&mut self, announce: bool, window: &mut Window, cx: &mut Context<Self>) {
+    if announce {
+      self.refresh_guidelines(true, window, cx);
+    }
     if self.playbook_busy {
       return;
     }

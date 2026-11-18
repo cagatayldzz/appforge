@@ -3,7 +3,7 @@ use crate::{
   i18n::{tr, trf},
   theme::colors,
   widgets::{section, state_badge},
-  workspace::{DetailTab, Load, Workspace},
+  workspace::{Load, Workspace},
 };
 use appforge_appstore::{Client, Error};
 use gpui_kit::{
@@ -77,23 +77,39 @@ impl Workspace {
     let (Some(client), Some(snapshot)) = (self.client.clone(), self.ready_snapshot()) else { return };
     let app = snapshot.app.id.clone();
     let version = snapshot.version.clone();
-    self.distribution = Load::Loading;
-    self.tasks.distribution = Some(cx.spawn_in(window, async move |this, cx| {
+    let Some(data) = self.app_data.get_mut(&app) else { return };
+    if data.distribution_task.is_some() {
+      return;
+    }
+    if !matches!(data.distribution, Load::Ready(_)) {
+      data.distribution = Load::Loading;
+    }
+    let target = app.clone();
+    data.distribution_task = Some(cx.spawn_in(window, async move |this, cx| {
       let result = cx
-        .background_spawn(
-          async move { client.distribution(&app, version.as_ref().map(|version| (version.id.as_str(), version.version_string.as_str()))) },
-        )
+        .background_spawn(async move {
+          client.distribution(&target, version.as_ref().map(|version| (version.id.as_str(), version.version_string.as_str())))
+        })
         .await;
       this
         .update_in(cx, |this, window, cx| {
-          this.distribution = match result {
-            Ok(distribution) => Load::Ready(distribution),
+          let Some(data) = this.app_data.get_mut(&app) else { return };
+          data.distribution_task = None;
+          let active = this.selected.as_ref() == Some(&app);
+          match result {
+            Ok(distribution) => data.distribution = Load::Ready(distribution),
             Err(error) => {
-              Self::error(window, cx, error.to_string());
-              Load::Failed(error.to_string().into())
+              if !matches!(data.distribution, Load::Ready(_)) {
+                data.distribution = Load::Failed(error.to_string().into());
+              }
+              if active {
+                Self::error(window, cx, error.to_string());
+              }
             }
-          };
-          cx.notify();
+          }
+          if active {
+            cx.notify();
+          }
         })
         .ok();
     }));
@@ -118,13 +134,31 @@ impl Workspace {
               Ok(()) => Self::success(window, cx, tr(this.settings.language, "Saved to App Store Connect.")),
               Err(error) => Self::error(window, cx, error.to_string()),
             }
-            if this.selected.as_ref() == Some(&app) {
+            let active = this.selected.as_ref() == Some(&app);
+            if let Some(data) = this.app_data.get_mut(&app) {
+              if customer_review {
+                data.reviews_task = None;
+                if !active {
+                  data.reviews = Load::Idle;
+                }
+              } else {
+                data.distribution_task = None;
+                data.distribution = Load::Idle;
+                if result.is_ok() {
+                  data.snapshot_task = None;
+                  if !active {
+                    data.snapshot = Load::Idle;
+                  }
+                }
+              }
+            }
+            if active {
               if customer_review {
                 this.load_customer_reviews(window, cx);
               } else if result.is_ok() {
                 this.load_snapshot(window, cx);
-              } else if this.tab == DetailTab::Distribution {
-                this.load_distribution(window, cx);
+              } else {
+                this.ensure_app_page(window, cx);
               }
             }
           }
@@ -191,9 +225,9 @@ impl Workspace {
 
   pub(crate) fn render_distribution(&self, cx: &mut Context<Self>) -> AnyElement {
     let l = self.settings.language;
-    let data = match &self.distribution {
-      Load::Ready(data) => data,
-      Load::Failed(message) => return Alert::error("distribution-error", message.clone()).into_any_element(),
+    let data = match self.active_data().map(|data| &data.distribution) {
+      Some(Load::Ready(data)) => data,
+      Some(Load::Failed(message)) => return Alert::error("distribution-error", message.clone()).into_any_element(),
       _ => return h_flex().gap_2().child(Spinner::new()).child(tr(l, "Loading from App Store Connect…")).into_any_element(),
     };
     let Some(snapshot) = self.ready_snapshot() else { return div().into_any_element() };

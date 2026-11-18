@@ -201,12 +201,7 @@ impl Workspace {
           .child(tr(l, tab.label()))
           .on_click(cx.listener(move |this, _, window, cx| {
             this.tab = tab;
-            if tab == DetailTab::Distribution && matches!(this.distribution, Load::Idle) {
-              this.load_distribution(window, cx);
-            }
-            if tab == DetailTab::CustomerReviews && matches!(this.customer_reviews, Load::Idle) {
-              this.load_customer_reviews(window, cx);
-            }
+            this.ensure_app_page(window, cx);
             cx.notify();
           }))
           .into_any_element()
@@ -217,12 +212,18 @@ impl Workspace {
   /// Actions for the open app, pinned below the sidebar pages.
   fn page_actions(&self, cx: &mut Context<Self>) -> AnyElement {
     let l = self.settings.language;
-    let reload = Button::new("reload-snapshot")
-      .icon(Icon::new(IconName::RefreshCw))
-      .label(tr(l, "Reload"))
-      .outline()
-      .small()
-      .on_click(cx.listener(|this, _, window, cx| this.load_snapshot(window, cx)));
+    let busy = self.active_data().is_some_and(|data| match self.tab {
+      DetailTab::CustomerReviews => data.reviews_task.is_some(),
+      DetailTab::Distribution => data.snapshot_task.is_some() || data.distribution_task.is_some(),
+      _ => data.snapshot_task.is_some(),
+    });
+    let reload = Button::new("reload-snapshot").icon(Icon::new(IconName::RefreshCw)).label(tr(l, "Reload")).loading(busy).outline().small().on_click(
+      cx.listener(|this, _, window, cx| match this.tab {
+        DetailTab::CustomerReviews => this.load_customer_reviews(window, cx),
+        DetailTab::Distribution if this.ready_snapshot().is_some() => this.load_distribution(window, cx),
+        _ => this.load_snapshot(window, cx),
+      }),
+    );
     let save = self.save_control(cx);
     v_flex()
       .gap_2()
