@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a1a3d"/>
+      <stop offset="1" stop-color="#120b1c"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.02"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.06"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ff7a3d" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ff7a3d" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="anvil" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#c9c3d9"/>
+    </linearGradient>
+    <linearGradient id="spark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd36a"/>
+      <stop offset="1" stop-color="#ff6a3d"/>
+    </linearGradient>
+    <clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="14"/></filter>
+  </defs>
+  <rect x="100" y="112" width="824" height="824" rx="185" fill="#000" opacity="0.45" filter="url(#soft)"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#body)"/>
+  <g clip-path="url(#tile)"><ellipse cx="512" cy="470" rx="380" ry="260" fill="url(#glow)"/></g>
+  <rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="url(#rim)" stroke-width="3"/>
+  <!-- An anvil (the forge) with a spark flying off it (the app taking shape). -->
+  <path d="M232 520 C350 520 420 500 450 470 H770 C770 560 700 590 650 592 V650 C650 672 668 684 700 686 V740 H324 V686 C356 684 374 672 374 650 V592 C340 590 290 570 232 520 Z" fill="url(#anvil)"/>
+  <path d="M520 150 L548 258 L656 286 L548 314 L520 422 L492 314 L384 286 L492 258 Z" fill="url(#spark)" transform="translate(110 38) scale(0.8) translate(-110 0) translate(48 40)"/>
+  <path d="M760 330 L772 370 L812 382 L772 394 L760 434 L748 394 L708 382 L748 370 Z" fill="url(#spark)" opacity="0.85"/>
+  <circle cx="300" cy="360" r="12" fill="#ffd36a" opacity="0.8"/>
+</svg>

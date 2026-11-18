@@ -1,0 +1,18 @@
+[package]
+name = "appforge-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "AppForge application: startup, windows and key bindings"
+
+[lints]
+workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+appforge-ui.workspace = true
+gpui-kit.workspace = true

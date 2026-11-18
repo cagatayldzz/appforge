@@ -1,0 +1,62 @@
+[workspace]
+resolver = "2"
+members = ["apps/*", "crates/*"]
+default-members = ["apps/appforge"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.92"
+publish = false
+license = "UNLICENSED"
+repository = "https://github.com/cagatayldzz/appforge"
+
+[workspace.dependencies]
+appforge-ai = { path = "crates/ai" }
+appforge-app = { path = "crates/app" }
+appforge-appstore = { path = "crates/appstore" }
+appforge-compliance = { path = "crates/compliance" }
+appforge-storage = { path = "crates/storage" }
+appforge-ui = { path = "crates/ui" }
+gpui-kit = { version = "0.10.0", features = ["gpui-fast", "syntect"] }
+gpui-kit-assets = "0.10.0"
+jsonwebtoken = "9"
+keyring = { version = "3", default-features = false, features = ["apple-native"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "3", features = ["json"] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "deny"
+unimplemented = "deny"
+
+[profile.release]
+strip = "debuginfo"
+
+# Dependencies (the editor's syntax highlighting above all) are slow without optimization, so they are optimized
+# in development builds too. Only AppForge's own crates stay unoptimized, which keeps rebuilds quick.
+[profile.dev.package."*"]
+debug = false
+opt-level = 3
+
+[profile.dev.package.gpui-pre]
+opt-level = 3
+
+[profile.dev.package.gpui-pre-platform]
+opt-level = 3
+
+[profile.dev.package.gpui-fast]
+opt-level = 3
+
+[profile.dev.package.gpui-fast-platform]
+opt-level = 3
+
+[profile.dev.package.gpui-component]
+opt-level = 3
+
+[profile.dev.package.gpui-kit]
+opt-level = 3

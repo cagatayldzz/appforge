@@ -1,0 +1,58 @@
+use appforge_ai::Provider;
+use appforge_storage::{AppleAccount, MemorySecrets, PrivacyDeclaration, SecretKey, SecretStore, Settings};
+use std::{
+  fs,
+  sync::atomic::{AtomicUsize, Ordering},
+};
+
+fn temporary_dir(name: &str) -> std::path::PathBuf {
+  // The counter keeps parallel tests apart: the clock alone can return the same value twice.
+  static NEXT: AtomicUsize = AtomicUsize::new(0);
+  let dir = std::env::temp_dir().join(format!("appforge-{name}-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+  fs::create_dir_all(&dir).unwrap();
+  dir
+}
+
+#[test]
+fn settings_round_trip_and_a_missing_file_is_the_default() {
+  let dir = temporary_dir("settings");
+  let path = dir.join("nested").join("settings.json");
+  assert_eq!(Settings::load(&path).unwrap(), Settings::default());
+  let mut settings = Settings { apple: Some(AppleAccount { issuer_id: "issuer".into(), key_id: "KEY123".into() }), ..Default::default() };
+  settings.ai.provider = Provider::OpenAi;
+  settings.privacy.insert("42".into(), PrivacyDeclaration { collects_data: true, ..Default::default() });
+  settings.save(&path).unwrap();
+  assert_eq!(Settings::load(&path).unwrap(), settings);
+  fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn an_unreadable_settings_file_is_an_error_not_the_default() {
+  let dir = temporary_dir("settings-bad");
+  let path = dir.join("settings.json");
+  fs::write(&path, "not json").unwrap();
+  assert!(Settings::load(&path).is_err());
+  fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn missing_fields_fall_back_to_defaults() {
+  let dir = temporary_dir("settings-partial");
+  let path = dir.join("settings.json");
+  fs::write(&path, r#"{"apple":{"issuer_id":"a","key_id":"b"}}"#).unwrap();
+  let settings = Settings::load(&path).unwrap();
+  assert_eq!(settings.ai.provider, Provider::Anthropic);
+  assert!(settings.privacy.is_empty());
+  fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn memory_secrets_store_read_and_delete() {
+  let secrets = MemorySecrets::default();
+  assert_eq!(secrets.get(SecretKey::ApplePrivateKey).unwrap(), None);
+  secrets.set(SecretKey::ApiKey(Provider::OpenAi), "sk-test").unwrap();
+  assert_eq!(secrets.get(SecretKey::ApiKey(Provider::OpenAi)).unwrap().as_deref(), Some("sk-test"));
+  assert_eq!(secrets.get(SecretKey::ApiKey(Provider::Anthropic)).unwrap(), None);
+  secrets.delete(SecretKey::ApiKey(Provider::OpenAi)).unwrap();
+  assert_eq!(secrets.get(SecretKey::ApiKey(Provider::OpenAi)).unwrap(), None);
+}

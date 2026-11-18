@@ -1,0 +1,22 @@
+[package]
+name = "appforge-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "AppForge interface built with GPUI Kit"
+
+[lints]
+workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+appforge-ai.workspace = true
+appforge-appstore.workspace = true
+appforge-compliance.workspace = true
+appforge-storage.workspace = true
+gpui-kit.workspace = true
+gpui-kit-assets.workspace = true

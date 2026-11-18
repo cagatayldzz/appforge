@@ -1,0 +1,19 @@
+[package]
+name = "appforge-ai"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+description = "OpenAI and Claude clients (API key)"
+
+[lints]
+workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+ureq.workspace = true

@@ -1,0 +1,112 @@
+# Development
+
+## Platform
+
+Supported and tested: macOS 15+ on Apple Silicon. Intel, Linux and Windows are unsupported. The minimum
+system version is `LSMinimumSystemVersion` in `apps/appforge/macos/Info.plist` (`scripts/app.sh` links
+against it).
+
+Requirements: Command Line Tools (not Xcode), Rust 1.92+ (stable) and Bun. After cloning run `bun install`.
+
+## Commands
+
+| Command | Does |
+| --- | --- |
+| `bun run dev` | debug build, launch `dist/AppForge.app` |
+| `bun run build` | release build → `dist/AppForge.app` |
+| `bun run check` | script syntax and shell tests, `cargo fmt --check`, clippy with warnings as errors, tests (run before finishing a change) |
+| `bun run test` | shell tests, then `cargo test --locked --workspace` |
+| `bun run release` | request a release: dispatches the Release workflow for the pushed default branch (needs `gh`) |
+| `bun run icon` | redraw `AppIcon.icns` and `DevIcon.icns` from `apps/appforge/macos/icon.svg` (needs Google Chrome) |
+| `bun run commit` | `git add -A && oco --yes` (needs [OpenCommit](https://github.com/di-sukharev/opencommit)) |
+
+## Scripts
+
+Automation uses only shell and Rust; there is no TypeScript or other runtime in scripts or workflows.
+
+| Path | Purpose |
+| --- | --- |
+| `scripts/app.sh` | build, bundle, sign, launch, check (`--dev`, `[debug\|release] --build`, `--check`, `--icon`) |
+| `scripts/release.sh` | request a release; in CI: `prepare` (next version, stamping), `notes`, `package`, `finalize` (assets, checksums) |
+| `scripts/notarize-app.sh` | sign with Developer ID and notarize `dist/AppForge.app` (macOS tools, release secrets) |
+| `scripts/tests/*.sh` | shell tests, run by `scripts/tests/run.sh` (version, notes, packaging, workflow guarantees) |
+
+## Releases
+
+`bun run release` (or running the Release workflow by hand) releases the pushed default branch. The version comes
+from Conventional Commits since the latest `v*` tag: a breaking change (`!:` or `BREAKING CHANGE:`) is major,
+`feat` is minor, everything else is patch. The workflow then:
+
+1. **Validate**: Apple secrets are present, shell tests, `cargo fmt`, clippy and tests of `appforge-ai`, `appforge-appstore`, `appforge-compliance`, `appforge-storage`.
+2. **Prepare**: choose the version, stamp `Cargo.toml`, `Cargo.lock`, `package.json` and `Info.plist` in the CI checkout, write `RELEASE_NOTES.md` (commit titles grouped as New Features, Bug Fixes, Documentation, Chores, with a changelog link).
+3. **Build** (macOS, in parallel): workspace clippy and tests; release build, Developer ID signature, notarization, `AppForge-<tag>-macos-arm64.zip`.
+4. **Verify**: exactly the expected assets, none empty, `SHA256SUMS.txt`.
+5. **Publish**: checksums verified, draft GitHub release, then published as latest.
+
+Required Actions secrets: `APPLE_CERTIFICATE_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID`,
+`APPLE_APP_SPECIFIC_PASSWORD`. The version in the repository is stamped only in CI; the tag is the source of truth.
+`CI` (`.github/workflows/ci.yml`) runs the shell tests, formatting, and clippy and tests of the three plain-Rust crates on Linux.
+
+## Packages
+
+| Package | Kind | Purpose |
+| --- | --- | --- |
+| `appforge` | app | executable entry point (binary `AppForge`) |
+| `appforge-app` | lib | startup, window, key bindings |
+| `appforge-ui` | lib | views built with GPUI Kit |
+| `appforge-compliance` | lib | review rules, playbook, AI analysis |
+| `appforge-appstore` | lib | App Store Connect API client |
+| `appforge-ai` | lib | OpenAI and Claude clients |
+| `appforge-storage` | lib | settings, privacy answers, Keychain secrets |
+
+Code map and data flow: [architecture](architecture.md).
+
+## Tests
+
+Tests live in `crates/<crate>/tests/`, never inline. API clients are tested against a local HTTP server on a random port; no test reaches Apple, OpenAI or Anthropic, and none touches the Keychain (`MemorySecrets`). Tests that touch the data directory use temporary directories; `APPFORGE_DATA_DIR` overrides the location. `crates/appstore/tests/test_key.p8` is a throwaway P-256 key for token tests, not a credential.
+
+Shell tests for the scripts and workflows live in `scripts/tests/`. The interface has no automated tests; check a change by running `bun run dev`.
+
+## Visual inspection
+
+Run `bun run dev` with a scratch `APPFORGE_DATA_DIR` and take a screenshot of the AppForge window only. Screenshots can contain private paths or terminal history, so keep them in a scratch location and do not commit them.
+
+## Running the app in isolation
+
+Use a scratch data directory so your own project list stays out:
+
+```sh
+APPFORGE_DATA_DIR=/tmp/appforge-data ./target/debug/AppForge
+```
+
+Seed `APPFORGE_DATA_DIR/projects.json` to start with chosen projects (a plain list of paths also loads):
+
+```json
+{
+  "projects": [
+    { "path": "/path/to/a", "category": null, "color": "#8b7bff", "icon": "rocket" },
+    { "path": "/path/to/b", "category": "category-1", "name": "Billing" }
+  ],
+  "categories": [{ "id": "category-1", "name": "", "collapsed": false }],
+  "active": "/path/to/a"
+}
+```
+
+## README screenshots
+
+The images in `docs/images` show a staged demo project ("atlas") so that no real name, machine name, path or
+terminal history appears. To redo them:
+
+1. Make a scratch home with a few small Git repositories (one with uncommitted changes) in `~/Developer`.
+2. Put a `.zshrc` in a scratch `ZDOTDIR` that clears the screen and sets a plain prompt such as `atlas main $ `,
+   and a `projects.json` and `preferences.json` (`{"theme":"dark"}` or `"light"`) in a scratch `APPFORGE_DATA_DIR`.
+3. Run `HOME=<scratch home> ZDOTDIR=<scratch zsh> APPFORGE_DATA_DIR=<scratch data> ./target/debug/AppForge`, size the window
+   to about 1040×660, open the file or diff to show, then capture only the window without its shadow
+   (`screencapture -o -l <window id>`).
+
+Check every image for names, paths and dates before committing it; the status bar shows the home folder as `~`.
+
+## Formatting
+
+2 spaces, LF, final newline, `max_width = 150`. `rustfmt.toml` and `.editorconfig` hold the rules; run
+`cargo fmt --all`.
