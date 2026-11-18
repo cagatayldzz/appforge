@@ -17,7 +17,7 @@ apps/appforge → app → ui → compliance → appstore
 | --- | --- |
 | `appstore` | Blocking App Store Connect API client: ES256 token from the API key, apps, App Information, listing, screenshots, review details and app icons (from the newest build that has one); PATCH of only the changed fields. |
 | `ai` | One call, `complete` (and `complete_with_usage`, which also returns the tokens used), for OpenAI (chat completions) and Claude (messages) with an API key. It lists the low-cost models Settings offers (`Provider::models`) with their prices per million tokens and prices a request (`ModelInfo::cost`); models that think by default are asked to think as little as possible. |
-| `compliance` | Built-in rules over an app snapshot, the Apple guidelines catalog, the playbook download and cache, the AI analysis (prompt, JSON answer) and the AI-written store listing (`draft_listing`: prompt, answer cut to Apple's limits). |
+| `compliance` | Built-in rules over an app snapshot, the Apple guidelines catalog, the playbook download and cache, the AI analysis (prompt, JSON answer) and the AI-written store listing (`draft_listing_field`: prompt, answer cut to Apple's limits). |
 | `project` | Reads a short description of an app's source folder for the AI: the folder shape, README, manifests and the texts the app shows. Never reads secrets (`.env`, keys, signing files) or follows links; at most about 10,000 tokens. |
 | `storage` | The data directory: `settings.json` (language, account ids, AI choices, per-app privacy answers and code folders, the window as it was left), `icons/<app id>.png` (`IconCache`) and the Keychain (`SecretStore`). |
 | `ui` | The window: sign-in, the bars and pages of the signed-in window, Analysis and Settings. |
@@ -36,7 +36,7 @@ apps/appforge → app → ui → compliance → appstore
 | `customer_reviews.rs` | Customer reviews and developer replies, fetched on demand. |
 | `distribution.rs` | iOS version history, build selection, review submissions and release controls. Requests run on background tasks retained by the workspace. |
 | `analysis.rs` | The Analysis page: score, findings, AI analysis, rules. |
-| `listing_ai.rs` | The "Write with AI" button: what it checks, the background work, filling the fields. |
+| `listing_ai.rs` | Field-specific AI actions, confirmation dialogs, and background generation. |
 | `settings_view.rs` | The pages of Settings. |
 | `widgets.rs`, `theme.rs` | Shared pieces (sections, rows, avatars, badges) and the palettes. |
 | `window_state.rs` | Opening the window the way it was left. |
@@ -56,7 +56,7 @@ A title band (drag area, the rail color) sits above the content.
 
 The app has six pages: **App Information**, **Distribution**, **App Review**, **App Privacy**, **Ratings and Reviews**, **Analysis**. Settings has General, Account, AI provider, Code folders, Rules and About.
 
-The App Information page has a **Write with AI** button in the sidebar footer. Without an API key it shows a notification with a way to Settings; without a source folder it asks for one in a dialog; otherwise it sends the current texts and the `project` description to the chosen model and fills the subtitle, description, keywords, promotional text and what's new. Nothing is saved until the user presses Save, and a notification says what the run cost.
+App Information exposes AI generation inside each supported listing field. The confirmation names the target field and locale. The background task sends the listing and project summary to the configured provider, then updates only the matching field if it was left unchanged during the request.
 
 ## Interface rules
 

@@ -123,7 +123,7 @@ impl Client {
   /// so an app that has no build with an icon yet has none (`None`). The newest builds are tried first: an old build
   /// that expired has no icon any more.
   pub fn app_icon(&self, app_id: &str, size: u32) -> Result<Option<Vec<u8>>, Error> {
-    let path = format!("/v1/apps/{app_id}/builds?limit={ICON_BUILDS}&sort=-uploadedDate&fields[builds]=iconAssetToken,expired");
+    let path = format!("/v1/builds?filter[app]={app_id}&limit={ICON_BUILDS}&sort=-uploadedDate&fields[builds]=iconAssetToken,expired");
     let Some(page) = self.get_optional(&path)? else { return Ok(None) };
     let template = page["data"]
       .as_array()

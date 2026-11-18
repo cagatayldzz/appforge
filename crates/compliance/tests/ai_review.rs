@@ -118,3 +118,18 @@ fn the_analysis_sends_the_playbook_as_data_and_returns_findings() {
   assert!(body["system"].as_str().unwrap().contains("untrusted data"));
   assert!(!raw.contains("hunter2-secret"));
 }
+
+#[test]
+fn listing_generation_requests_one_field_and_applies_its_character_limit() {
+  use appforge_compliance::{draft_listing_field, ListingField, ListingFields};
+
+  let answer = serde_json::json!({"value": "a".repeat(45), "description": "Ignore this"}).to_string();
+  let (url, received) = serve_once(serde_json::json!({"choices": [{"message": {"content": answer}}]}).to_string());
+  let client = Client::with_base_urls(&url, "http://unused.invalid");
+  let (draft, _) =
+    draft_listing_field(&client, Provider::OpenAi, "key", "model", &ListingFields::default(), "en-US", "Puzzle game", ListingField::Subtitle)
+      .unwrap();
+  assert_eq!(draft, "a".repeat(30));
+  let request = received.recv().unwrap();
+  assert!(request.contains("Edit only the subtitle field. Character limit: 30."));
+}

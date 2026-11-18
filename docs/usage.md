@@ -54,11 +54,9 @@ App Store Connect's API cannot read or write the App Privacy (nutrition label) a
 
 ## Write with AI
 
-On the App Information page, the **Write with AI** button sits above **Reload** and **Save** in the sidebar footer. It writes the subtitle, description, keywords, promotional text and what's new, from what the app's source folder says about it. It does not change the app name or the URLs.
+Use the AI icon inside a listing field on **App Information**. The confirmation shows the selected field, app, language, and model. **Generate** requests one draft for the selected field.
 
-1. **No API key yet?** A notice says the AI is not connected and has an **Open Settings** button that goes to the AI provider page.
-2. **No source folder yet?** A dialog asks you to choose the folder that holds the app's source code; once you do, the writing starts. You can also set or change the folders in Settings > Code folders.
-3. **Writing.** The result fills the fields. **Nothing is saved**: read it, change what you like, then press **Save**. A field the AI had nothing to add to keeps its text. A notice says how many tokens it used and about what it cost.
+If the provider key or source folder is missing, AppForge helps you configure it before generating. Review the draft and press **Save** to send your edits to App Store Connect. AppForge skips the draft if you change the selected app, language, or field while the request is running.
 
 What is sent to the provider you chose: the current listing texts, and a short description of the folder: its shape (top levels), the README, the project files that name the app and what it uses (for example `Package.swift`, `Info.plist`, `package.json`), and the texts the app shows (such as `Localizable.strings`), about 10,000 tokens at most. Source code itself is not sent. Files that hold secrets (`.env`, keys, signing files, `GoogleService-Info.plist`) and links that leave the folder are never read.
 
@@ -83,7 +81,7 @@ AppForge checks Apple’s guidelines in the background at startup if the last su
 | Rules | Search the Apple App Review Guidelines by number or topic, open the official rule, and see the latest additions, changes and removals. |
 | About | The version and a button that shows the data folder. |
 
-Only low-cost models are offered: Claude Haiku 5.5 and 4.5, and GPT-4.1 nano, GPT-5 nano, GPT-6 Luna and GPT-4.1 mini. The prices are the providers' list prices when they were last checked and can change, so check the provider's price page. A model you had chosen earlier that is no longer offered is replaced by the default.
+Only low-cost models are offered: Claude Haiku 5.5 and 4.5, and GPT-6 Luna. The prices are the providers' list prices when they were last checked and can change, so check the provider's price page. A model you had chosen earlier that is no longer offered is replaced by the default.
 
 ## Where things are kept
 

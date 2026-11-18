@@ -101,7 +101,9 @@ fn code_folders_are_kept_per_app_and_old_settings_have_none() {
 fn a_model_that_is_no_longer_offered_is_replaced_by_the_default() {
   let mut settings = Settings::default();
   settings.ai.anthropic_model = "claude-sonnet-5-5".into();
-  settings.ai.openai_model = "gpt-4.1-mini".into();
   assert_eq!(settings.ai.model(Provider::Anthropic), Provider::Anthropic.default_model());
-  assert_eq!(settings.ai.model(Provider::OpenAi), "gpt-4.1-mini");
+  for retired in ["gpt-4.1-nano", "gpt-5-nano", "gpt-4.1-mini"] {
+    settings.ai.openai_model = retired.into();
+    assert_eq!(settings.ai.model(Provider::OpenAi), "gpt-6-luna");
+  }
 }

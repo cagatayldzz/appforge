@@ -7,6 +7,22 @@ use std::{collections::HashMap, sync::OnceLock};
 
 /// English text and its Turkish translation. Both sides use the same `{}` placeholders in the same order.
 pub const TURKISH: &[(&str, &str)] = &[
+  ("No draft for this field. Add relevant details to the listing or project README and try again.", "Bu alan için taslak üretilemedi. Mağaza metnine veya proje README dosyasına ilgili bilgileri ekleyip tekrar deneyin."),
+  ("No alternative was generated. The current text was kept.", "Yeni bir öneri üretilmedi. Mevcut metin korundu."),
+  ("Generate {}", "{} üret"),
+  ("Generate", "Üret"),
+  ("Generate a draft for this field using the listing and project summary.", "Mağaza metinleri ve proje özeti kullanılarak bu alan için bir taslak üretilecek."),
+  ("The draft was skipped because the app, language, or field changed.", "Uygulama, dil veya alan değiştiği için taslak uygulanmadı."),
+  ("Safety", "Güvenlik"),
+  ("Performance", "Performans"),
+  ("Business", "İş ve Ödemeler"),
+  ("Design", "Tasarım"),
+  ("Legal", "Hukuk"),
+  ("Loading Apple rules…", "Apple kuralları yükleniyor…"),
+  ("No rules downloaded yet.", "Henüz kural indirilmedi."),
+  ("{} rules", "{} madde"),
+  ("No matching rules.", "Eşleşen madde yok."),
+  ("Open rule", "Maddeyi aç"),
   ("Search by rule number or topic", "Madde numarası veya konu ara"),
   ("Last checked {}", "Son kontrol {}"),
   ("View Apple rule", "Apple kuralını gör"),

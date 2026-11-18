@@ -225,13 +225,7 @@ impl Workspace {
       }),
     );
     let save = self.save_control(cx);
-    v_flex()
-      .gap_2()
-      .px_4()
-      .py_3()
-      .children(self.generate_button(cx).map(|button| button.w_full()))
-      .child(h_flex().gap_2().child(reload).children(save.map(|button| button.flex_1())))
-      .into_any_element()
+    v_flex().gap_2().px_4().py_3().child(h_flex().gap_2().child(reload).children(save.map(|button| button.flex_1()))).into_any_element()
   }
 
   fn settings_rows(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {

@@ -13,8 +13,8 @@ mod rules;
 pub use ai_review::{analyze_with_ai, describe, parse_ai_answer, AiReview};
 pub use guidelines::{Guideline, GuidelineChanges, Guidelines, GUIDELINES_URL};
 pub use listing_draft::{
-  draft_listing, listing_prompt, parse_listing_answer, ListingDraft, ListingFields, DESCRIPTION_LIMIT, KEYWORDS_LIMIT, PROMOTIONAL_LIMIT,
-  SUBTITLE_LIMIT, WHATS_NEW_LIMIT,
+  draft_listing, draft_listing_field, listing_prompt, parse_listing_answer, ListingDraft, ListingField, ListingFields, DESCRIPTION_LIMIT,
+  KEYWORDS_LIMIT, PROMOTIONAL_LIMIT, SUBTITLE_LIMIT, WHATS_NEW_LIMIT,
 };
 
 pub use playbook::{Playbook, PLAYBOOK_REPOSITORY};

@@ -1,10 +1,11 @@
 use crate::{
-  i18n::{tr, trf},
+  i18n::tr,
   theme::colors,
-  widgets::{area_field, centered, pair, section, text_field},
+  widgets::{area_field, area_field_with_action, centered, pair, section, text_field, text_field_with_action},
   workspace::{locales, DetailTab, Load, Workspace},
 };
 use appforge_appstore::App;
+use appforge_compliance::ListingField;
 use appforge_storage::PrivacyDeclaration;
 use gpui_kit::{
   component::{
@@ -87,28 +88,6 @@ impl Workspace {
     )
   }
 
-  /// Writes the listing with the AI, from the app's source folder.
-  pub(crate) fn generate_button(&self, cx: &mut Context<Self>) -> Option<Button> {
-    if self.tab != DetailTab::Information || self.ready_snapshot().is_none() {
-      return None;
-    }
-    let l = self.settings.language;
-    let tooltip = match self.model_in_use() {
-      Some(model) => trf(l, "Writes the subtitle, description, keywords, promotional text and what's new. Uses {}.", &[&model]),
-      None => tr(l, "Writes the subtitle, description, keywords, promotional text and what's new."),
-    };
-    Some(
-      Button::new("generate-listing")
-        .icon(Icon::new(IconName::Bot))
-        .label(tr(l, "Write with AI"))
-        .outline()
-        .small()
-        .loading(self.drafting)
-        .tooltip(tooltip)
-        .on_click(cx.listener(|this, _, window, cx| this.generate_listing(window, cx))),
-    )
-  }
-
   /// The button that saves the page, shown in the sidebar. The Analysis page has none.
   pub(crate) fn save_control(&self, cx: &mut Context<Self>) -> Option<Button> {
     let l = self.settings.language;
@@ -182,8 +161,8 @@ impl Workspace {
     page = page.child(section(
       tr(l, "Basics"),
       pair(
-        text_field(tr(l, "App name"), &forms.name, Some(NAME_LIMIT), cx),
-        text_field(tr(l, "Subtitle"), &forms.subtitle, Some(SUBTITLE_LIMIT), cx),
+        text_field_with_action(tr(l, "App name"), &forms.name, NAME_LIMIT, self.field_generate_button(ListingField::Name, cx), cx),
+        text_field_with_action(tr(l, "Subtitle"), &forms.subtitle, SUBTITLE_LIMIT, self.field_generate_button(ListingField::Subtitle, cx), cx),
       ),
     ));
     if has_version {
@@ -192,9 +171,27 @@ impl Workspace {
           tr(l, "Store listing"),
           v_flex()
             .gap_4()
-            .child(area_field(tr(l, "Description"), &forms.description, Some(DESCRIPTION_LIMIT), cx))
-            .child(text_field(tr(l, "Keywords"), &forms.keywords, Some(KEYWORDS_LIMIT), cx))
-            .child(area_field(tr(l, "Promotional text"), &forms.promotional, Some(PROMOTIONAL_LIMIT), cx)),
+            .child(area_field_with_action(
+              tr(l, "Description"),
+              &forms.description,
+              DESCRIPTION_LIMIT,
+              self.field_generate_button(ListingField::Description, cx),
+              cx,
+            ))
+            .child(text_field_with_action(
+              tr(l, "Keywords"),
+              &forms.keywords,
+              KEYWORDS_LIMIT,
+              self.field_generate_button(ListingField::Keywords, cx),
+              cx,
+            ))
+            .child(area_field_with_action(
+              tr(l, "Promotional text"),
+              &forms.promotional,
+              PROMOTIONAL_LIMIT,
+              self.field_generate_button(ListingField::PromotionalText, cx),
+              cx,
+            )),
         ))
         .child(section(
           tr(l, "Links"),
@@ -202,7 +199,13 @@ impl Workspace {
         ))
         .child(section(
           tr(l, "What's new in this version"),
-          area_field(tr(l, "What's new in this version"), &forms.whats_new, Some(WHATS_NEW_LIMIT), cx),
+          area_field_with_action(
+            tr(l, "What's new in this version"),
+            &forms.whats_new,
+            WHATS_NEW_LIMIT,
+            self.field_generate_button(ListingField::WhatsNew, cx),
+            cx,
+          ),
         ));
     } else {
       page = page.child(

@@ -6,14 +6,14 @@ use crate::{
   workspace::{model_label, SettingsPage, Workspace},
 };
 use appforge_ai::{Client, Provider};
-use appforge_compliance::{draft_listing, ListingDraft, ListingFields};
+use appforge_compliance::{draft_listing_field, ListingField, ListingFields};
 use appforge_storage::SecretKey;
 use gpui_kit::{
   component::{
     button::{Button, ButtonVariants as _},
     h_flex,
     notification::Notification,
-    Icon, IconName, Sizable as _, WindowExt as _,
+    v_flex, Disableable as _, Icon, IconName, Sizable as _, WindowExt as _,
   },
   *,
 };
@@ -22,10 +22,57 @@ use gpui_kit::{
 struct AiNotConnected;
 
 impl Workspace {
-  /// What the button does. It checks what is needed one thing at a time and says what is missing:
-  /// an AI that is not connected is a notice with a way to Settings, a missing folder is a dialog that asks for it.
-  pub(crate) fn generate_listing(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-    if self.drafting {
+  pub(crate) fn field_generate_button(&self, field: ListingField, cx: &mut Context<Self>) -> Button {
+    let tooltip = trf(self.settings.language, "Generate {}", &[&tr(self.settings.language, field_label(field))]);
+    Button::new(SharedString::from(format!("generate-{}", field.key())))
+      .icon(Icon::new(IconName::Bot))
+      .ghost()
+      .xsmall()
+      .loading(self.drafting == Some(field))
+      .disabled(self.drafting.is_some())
+      .tooltip(tooltip)
+      .on_click(cx.listener(move |this, _, window, cx| this.confirm_field_generation(field, window, cx)))
+  }
+
+  pub(crate) fn confirm_field_generation(&self, field: ListingField, window: &mut Window, cx: &mut Context<Self>) {
+    let Some(app) = self.selected_app() else { return };
+    let l = self.settings.language;
+    let locale: SharedString = self.locale.clone().into();
+    let title = trf(l, "Generate {}", &[&tr(l, field_label(field))]);
+    let model = self.model_in_use().map(SharedString::from);
+    let workspace = cx.entity();
+    window.open_dialog(cx, move |dialog, _, _| {
+      let workspace = workspace.clone();
+      let app_id = app.id.clone();
+      let target_locale = locale.clone();
+      let footer = h_flex()
+        .w_full()
+        .justify_end()
+        .gap_2()
+        .child(Button::new("cancel-field-generation").label(tr(l, "Cancel")).outline().on_click(|_, window, cx| window.close_dialog(cx)))
+        .child(Button::new("confirm-field-generation").label(tr(l, "Generate")).primary().on_click(move |_, window, cx| {
+          window.close_dialog(cx);
+          workspace.update(cx, |this, cx| {
+            if this.selected.as_ref() == Some(&app_id) && this.locale == target_locale.as_ref() {
+              this.generate_listing(field, window, cx);
+            }
+          });
+        }));
+      dialog
+        .title(title.clone())
+        .child(
+          v_flex()
+            .gap_2()
+            .child(format!("{} · {locale}", app.name))
+            .children(model.clone())
+            .child(tr(l, "Generate a draft for this field using the listing and project summary.")),
+        )
+        .footer(footer)
+    });
+  }
+
+  fn generate_listing(&mut self, field: ListingField, window: &mut Window, cx: &mut Context<Self>) {
+    if self.drafting.is_some() {
       return;
     }
     let Some(app) = self.selected_app() else { return };
@@ -35,7 +82,7 @@ impl Workspace {
       return;
     }
     let Some(folder) = self.settings.code_folders.get(&app.id).cloned().filter(|folder| folder.is_dir()) else {
-      self.ask_for_code_folder(app.id, app.name, window, cx);
+      self.ask_for_code_folder(app.id, app.name, field, window, cx);
       return;
     };
     let l = self.settings.language;
@@ -50,7 +97,11 @@ impl Workspace {
       promotional_text: read_area(&self.forms.promotional, cx),
       whats_new: read_area(&self.forms.whats_new, cx),
     };
-    self.drafting = true;
+    let original = self.field_value(field, cx);
+    let target_app = app.id;
+    let target_locale = locale.clone();
+    let session = self.client.clone();
+    self.drafting = Some(field);
     self.tasks.draft = Some(cx.spawn_in(window, async move |this, cx| {
       let used = model.clone();
       let result = cx
@@ -61,15 +112,35 @@ impl Workspace {
             .ok_or_else(|| trf(l, "Add your {} API key in Settings first.", &[provider.label()]).to_string())?;
           let summary = appforge_project::summarize(&folder)
             .map_err(|error| trf(l, "Could not read the project folder: {}", &[&error.to_string()]).to_string())?;
-          draft_listing(&Client::default(), provider, &key, &model, &current, &locale, &summary.text)
+          draft_listing_field(&Client::default(), provider, &key, &model, &current, &locale, &summary.text, field)
         })
         .await;
       this
         .update_in(cx, |this, window, cx| {
-          this.drafting = false;
+          this.drafting = None;
           match result {
             Ok((draft, usage)) => {
-              this.apply_draft(&draft, window, cx);
+              let same_session =
+                this.client.as_ref().zip(session.as_ref()).is_some_and(|(current, original)| std::sync::Arc::ptr_eq(current, original));
+              if !same_session
+                || this.selected.as_ref() != Some(&target_app)
+                || this.locale != target_locale
+                || this.field_value(field, cx) != original
+              {
+                Self::warning(window, cx, tr(l, "The draft was skipped because the app, language, or field changed."));
+                cx.notify();
+                return;
+              }
+              if draft.is_empty() || draft == original {
+                if original.is_empty() {
+                  Self::warning(window, cx, tr(l, "No draft for this field. Add relevant details to the listing or project README and try again."));
+                } else {
+                  Self::success(window, cx, tr(l, "No alternative was generated. The current text was kept."));
+                }
+                cx.notify();
+                return;
+              }
+              this.apply_field_draft(field, &draft, window, cx);
               let price = provider.model_info(&used).map(|info| format!("${:.4}", info.cost(usage))).unwrap_or_default();
               Self::success(
                 window,
@@ -86,23 +157,25 @@ impl Workspace {
     cx.notify();
   }
 
-  /// Puts what the AI wrote in the fields. A field the AI left empty keeps what it had. Nothing is saved: the user reads it first.
-  fn apply_draft(&mut self, draft: &ListingDraft, window: &mut Window, cx: &mut Context<Self>) {
-    let forms = &self.forms;
-    if !draft.subtitle.is_empty() {
-      set_input(&forms.subtitle, &draft.subtitle, window, cx);
+  fn field_value(&self, field: ListingField, cx: &App) -> String {
+    match field {
+      ListingField::Name => read_input(&self.forms.name, cx),
+      ListingField::Subtitle => read_input(&self.forms.subtitle, cx),
+      ListingField::Keywords => read_input(&self.forms.keywords, cx),
+      ListingField::Description => read_area(&self.forms.description, cx),
+      ListingField::PromotionalText => read_area(&self.forms.promotional, cx),
+      ListingField::WhatsNew => read_area(&self.forms.whats_new, cx),
     }
-    if !draft.description.is_empty() {
-      set_area(&forms.description, &draft.description, window, cx);
-    }
-    if !draft.keywords.is_empty() {
-      set_input(&forms.keywords, &draft.keywords, window, cx);
-    }
-    if !draft.promotional_text.is_empty() {
-      set_area(&forms.promotional, &draft.promotional_text, window, cx);
-    }
-    if !draft.whats_new.is_empty() {
-      set_area(&forms.whats_new, &draft.whats_new, window, cx);
+  }
+
+  fn apply_field_draft(&self, field: ListingField, draft: &str, window: &mut Window, cx: &mut Context<Self>) {
+    match field {
+      ListingField::Name => set_input(&self.forms.name, draft, window, cx),
+      ListingField::Subtitle => set_input(&self.forms.subtitle, draft, window, cx),
+      ListingField::Keywords => set_input(&self.forms.keywords, draft, window, cx),
+      ListingField::Description => set_area(&self.forms.description, draft, window, cx),
+      ListingField::PromotionalText => set_area(&self.forms.promotional, draft, window, cx),
+      ListingField::WhatsNew => set_area(&self.forms.whats_new, draft, window, cx),
     }
   }
 
@@ -129,7 +202,7 @@ impl Workspace {
   }
 
   /// The app has no source folder yet: ask for it in a dialog, and carry on when it is chosen.
-  fn ask_for_code_folder(&mut self, app_id: String, app_name: String, window: &mut Window, cx: &mut Context<Self>) {
+  fn ask_for_code_folder(&mut self, app_id: String, app_name: String, field: ListingField, window: &mut Window, cx: &mut Context<Self>) {
     let l = self.settings.language;
     let workspace = cx.entity();
     let text = trf(
@@ -149,7 +222,7 @@ impl Workspace {
           move |_, window, cx| {
             window.close_dialog(cx);
             let app_id = app_id.clone();
-            workspace.update(cx, |this, cx| this.choose_code_folder(app_id, true, window, cx));
+            workspace.update(cx, |this, cx| this.choose_code_folder(app_id, Some(field), window, cx));
           },
         ));
       dialog.title(tr(l, "Choose the project folder")).child(div().text_sm().child(text.clone())).footer(footer)
@@ -160,5 +233,16 @@ impl Workspace {
   pub(crate) fn model_in_use(&self) -> Option<String> {
     let provider = self.settings.ai.provider;
     provider.model_info(self.settings.ai.model(provider)).map(model_label)
+  }
+}
+
+pub(crate) fn field_label(field: ListingField) -> &'static str {
+  match field {
+    ListingField::Name => "App name",
+    ListingField::Subtitle => "Subtitle",
+    ListingField::Description => "Description",
+    ListingField::Keywords => "Keywords",
+    ListingField::PromotionalText => "Promotional text",
+    ListingField::WhatsNew => "What's new in this version",
   }
 }

@@ -6,7 +6,7 @@ use crate::{
 };
 use appforge_ai::Provider;
 use appforge_appstore::{App as StoreApp, AppInfoLocalization, AppSnapshot, Client, Credentials, ReviewDetail, VersionLocalization};
-use appforge_compliance::{analyze_with_ai, check, AiReview, Guidelines, Playbook, Report};
+use appforge_compliance::{analyze_with_ai, check, AiReview, Guidelines, ListingField, Playbook, Report};
 use appforge_storage::{AppleAccount, IconCache, Keychain, Language, PrivacyDeclaration, SecretKey, SecretStore, Settings};
 use gpui_kit::{
   component::{
@@ -180,6 +180,7 @@ pub struct Workspace {
   pub(crate) guidelines_busy: bool,
   pub(crate) guidelines_error: Option<SharedString>,
   pub(crate) guideline_search: Entity<InputState>,
+  pub(crate) guideline_section: Option<char>,
   pub playbook_busy: bool,
   pub playbook_error: Option<SharedString>,
   pub has_key: HashMap<Provider, bool>,
@@ -196,7 +197,7 @@ pub struct Workspace {
   pub settings_form: SettingsForm,
   pub(crate) tasks: Tasks,
   /// The AI is writing the store listing.
-  pub drafting: bool,
+  pub drafting: Option<ListingField>,
 }
 
 /// How a model shows in its menu: its name and what a million tokens cost, input / output.
@@ -311,6 +312,7 @@ impl Workspace {
       guidelines_busy: false,
       guidelines_error: None,
       guideline_search,
+      guideline_section: None,
       playbook_busy: false,
       playbook_error: None,
       has_key: HashMap::new(),
@@ -331,7 +333,7 @@ impl Workspace {
       forms,
       settings_form,
       tasks: Tasks::default(),
-      drafting: false,
+      drafting: None,
     };
     if this.settings_locked {
       this.login.error = Some(
@@ -435,7 +437,7 @@ impl Workspace {
   }
 
   /// Asks for the folder that holds the source code of an app and remembers it.
-  pub fn choose_code_folder(&mut self, app_id: String, then_generate: bool, window: &mut Window, cx: &mut Context<Self>) {
+  pub fn choose_code_folder(&mut self, app_id: String, then_generate: Option<ListingField>, window: &mut Window, cx: &mut Context<Self>) {
     let receiver = cx.prompt_for_paths(PathPromptOptions {
       files: false,
       directories: true,
@@ -447,12 +449,14 @@ impl Workspace {
         if let Some(path) = paths.into_iter().next() {
           this
             .update_in(cx, |this, window, cx| {
-              this.settings.code_folders.insert(app_id, path);
+              this.settings.code_folders.insert(app_id.clone(), path);
               this.save_settings(window, cx);
               cx.notify();
               // Asked for from the generate button: carry on with what was being done.
-              if then_generate {
-                this.generate_listing(window, cx);
+              if this.selected.as_ref() == Some(&app_id) {
+                if let Some(field) = then_generate {
+                  this.confirm_field_generation(field, window, cx);
+                }
               }
             })
             .ok();
@@ -599,6 +603,8 @@ impl Workspace {
     self.tasks.icons = None;
     self.selected = None;
     self.app_data.clear();
+    self.tasks.draft = None;
+    self.drafting = None;
     self.report = None;
     self.ai = AiState::Idle;
     self.show_settings = false;

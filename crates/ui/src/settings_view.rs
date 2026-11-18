@@ -126,7 +126,7 @@ impl Workspace {
             .label(if folder.is_some() { tr(l, "Change") } else { tr(l, "Choose folder") })
             .outline()
             .small()
-            .on_click(cx.listener(move |this, _, window, cx| this.choose_code_folder(choose_id.clone(), false, window, cx))),
+            .on_click(cx.listener(move |this, _, window, cx| this.choose_code_folder(choose_id.clone(), None, window, cx))),
         );
         if folder.is_some() {
           actions = actions.child(
@@ -206,7 +206,7 @@ impl Workspace {
         .gap_4()
         .child(self.render_guidelines(cx))
         .child(setting_row(
-          tr(l, "Rules"),
+          tr(l, "App Store Compliance Playbook"),
           Some(tr(l, "The Analysis reads the App Store Compliance Playbook. AppForge downloads it from GitHub and refreshes it weekly; you can also update it from the Analysis page.")),
           Button::new("settings-playbook").label(tr(l, "Open the playbook on GitHub")).outline().on_click(|_, _, cx| cx.open_url(PLAYBOOK_REPOSITORY)),
           cx,

@@ -51,6 +51,34 @@ pub fn area_field(label: impl Into<SharedString>, input: &Entity<TextareaState>,
   labelled(label.into(), counter(length, limit, cx), Textarea::new(input))
 }
 
+/// A listing input with its generation action inside the field.
+pub(crate) fn text_field_with_action(
+  label: SharedString,
+  input: &Entity<InputState>,
+  limit: usize,
+  action: impl IntoElement,
+  cx: &App,
+) -> impl IntoElement {
+  let length = input.read(cx).value().chars().count();
+  labelled(label, counter(length, Some(limit), cx), Input::new(input).suffix(action))
+}
+
+/// The textarea reserves space at the right for the action and scrollbar.
+pub(crate) fn area_field_with_action(
+  label: SharedString,
+  input: &Entity<TextareaState>,
+  limit: usize,
+  action: impl IntoElement,
+  cx: &App,
+) -> impl IntoElement {
+  let length = input.read(cx).value().chars().count();
+  labelled(
+    label,
+    counter(length, Some(limit), cx),
+    div().relative().child(Textarea::new(input).pr_9()).child(div().absolute().top_2().right_3().child(action)),
+  )
+}
+
 /// Centers `child` in a column of at most `CONTENT_MAX_WIDTH`, so every page lines up.
 pub fn centered(child: impl IntoElement) -> Div {
   h_flex().w_full().justify_center().child(div().w_full().max_w(px(CONTENT_MAX_WIDTH)).px_6().child(child))
