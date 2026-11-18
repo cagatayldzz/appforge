@@ -8,6 +8,7 @@ mod guide_art;
 pub mod i18n;
 mod login;
 mod settings_view;
+mod setup;
 mod sidebar;
 mod view;
 mod welcome;

@@ -201,7 +201,7 @@ pub fn create_key(language: Language, cx: &App) -> impl IntoElement {
     .bg(blue.opacity(0.08))
     .child(div().flex_1().font_weight(FontWeight::SEMIBOLD).child(text("AppForge")))
     .child(div().flex_1().child(text("ABC123DEFG")))
-    .child(div().flex_1().child(h_flex().gap_1().items_center().child(badge(4, cx)).child(link("Download API Key"))));
+    .child(div().flex_1().child(h_flex().gap_1().items_center().child(badge(4, cx)).child(link("Download"))));
 
   let main = v_flex()
     .flex_1()
@@ -209,10 +209,8 @@ pub fn create_key(language: Language, cx: &App) -> impl IntoElement {
     .gap_2()
     .child(div().text_sm().font_weight(FontWeight::BOLD).child(apple("App Store Connect API")))
     .child(h_flex().gap_3().child(tab("Team Keys", true)).child(tab("Individual Keys", false)))
-    .child(skeleton(px(220.), cx))
-    .child(
-      h_flex().gap_2().items_center().child(div().text_color(muted).child(text("Issuer ID"))).child(text("00000000-0000-0000-…")).child(link("Copy")),
-    )
+    .child(skeleton(px(140.), cx))
+    .child(h_flex().gap_2().items_center().child(div().text_color(muted).child(text("Issuer ID"))).child(text("00000000-…")).child(link("Copy")))
     .child(active)
     .child(v_flex().border_t_1().border_color(theme.border).child(header).child(old_row).child(reveal_after("new-key-row", 700, new_row)));
 

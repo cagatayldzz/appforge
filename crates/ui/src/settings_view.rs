@@ -79,7 +79,7 @@ impl Workspace {
     let l = self.settings.language;
     let heading = |text: SharedString| div().pt_4().text_lg().font_weight(FontWeight::SEMIBOLD).child(text);
     let cards: Vec<_> = Provider::ALL.iter().map(|provider| self.provider_card(*provider, cx).into_any_element()).collect();
-    let picker = self.language_picker("settings-language", cx);
+    let picker = self.language_picker("settings-language", false, cx);
     let account = match &self.settings.apple {
       Some(account) => trf(l, "Signed in with key {}.", &[&account.key_id]),
       None => tr(l, "Not signed in."),

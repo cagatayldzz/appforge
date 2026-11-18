@@ -19,6 +19,11 @@ pub const TURKISH: &[(&str, &str)] = &[
   ("Language", "Dil"),
   ("Get started", "Başla"),
   ("Ready", "Hazır"),
+  ("Welcome", "Hoş geldin"),
+  ("What AppForge does", "AppForge ne yapar"),
+  ("On Apple's website", "Apple'ın sitesinde"),
+  ("Issuer ID and Key ID", "Issuer ID ve Key ID"),
+  ("Add the key file", "Anahtar dosyasını ekle"),
   ("Click here", "Buraya tıkla"),
   ("Connecting your account takes about two minutes.", "Hesabını bağlamak yaklaşık iki dakika sürer."),
   // Sign-in guide
