@@ -273,3 +273,95 @@ fn an_expired_or_icon_less_newest_build_is_skipped_for_an_older_one_with_an_icon
   assert_eq!(client(&url).app_icon("100", 64).unwrap(), Some(b"OLDER".to_vec()));
   assert_eq!(seen.lock().unwrap().len(), 2);
 }
+
+#[test]
+fn distribution_commands_keep_draft_submission_and_release_separate() {
+  let (url, seen) = serve(&[
+    ("POST /v1/appStoreVersions", 201, "{}"),
+    ("PATCH /v1/appStoreVersions/version-1/relationships/build", 204, ""),
+    ("POST /v1/reviewSubmissions", 201, r#"{"data":{"id":"draft-1"}}"#),
+    ("POST /v1/reviewSubmissionItems", 201, "{}"),
+    ("PATCH /v1/reviewSubmissions/draft-1", 200, "{}"),
+    ("POST /v1/appStoreVersionReleaseRequests", 201, "{}"),
+  ]);
+  let client = client(&url);
+  client.create_ios_version("100", "2.1").unwrap();
+  client.select_version_build("version-1", "build-1").unwrap();
+  client.add_version_for_review("100", "version-1", None).unwrap();
+  assert_eq!(seen.lock().unwrap().len(), 4);
+  client.submit_for_review("draft-1").unwrap();
+  client.release_version("version-1").unwrap();
+  let requests = seen.lock().unwrap();
+  let bodies: Vec<serde_json::Value> = requests.iter().map(|request| serde_json::from_str(&request.body).unwrap()).collect();
+  assert_eq!(bodies[0]["data"]["attributes"]["releaseType"], "MANUAL");
+  assert_eq!(bodies[1]["data"]["id"], "build-1");
+  assert_eq!(bodies[3]["data"]["relationships"]["reviewSubmission"]["data"]["id"], "draft-1");
+  assert_eq!(bodies[4]["data"]["attributes"]["submitted"], true);
+  assert_eq!(bodies[5]["data"]["relationships"]["appStoreVersion"]["data"]["id"], "version-1");
+}
+
+#[test]
+fn distribution_reuses_a_draft_and_surfaces_a_failed_item() {
+  let (url, seen) = serve(&[("POST /v1/reviewSubmissionItems", 409, r#"{"errors":[{"detail":"Build is missing"}]}"#)]);
+  let error = client(&url).add_version_for_review("100", "version-1", Some("draft-1")).unwrap_err();
+  assert!(matches!(error, Error::Api { status: 409, message } if message == "Build is missing"));
+  let requests = seen.lock().unwrap();
+  assert_eq!(requests.len(), 1);
+  assert_eq!(requests[0].path, "/v1/reviewSubmissionItems");
+}
+
+#[test]
+fn distribution_finds_a_version_in_a_draft_before_apple_links_it_directly() {
+  let (url, _) = serve(&[
+    (
+      "GET /v1/apps/100/appStoreVersions",
+      200,
+      r#"{"data":[{"id":"version-1","attributes":{"versionString":"1.0","appVersionState":"PREPARE_FOR_SUBMISSION"}}]}"#,
+    ),
+    (
+      "GET /v1/builds",
+      200,
+      r#"{"data":[{"id":"build-1","attributes":{"version":"7","processingState":"VALID","buildAudienceType":"APP_STORE_ELIGIBLE"}}]}"#,
+    ),
+    ("GET /v1/appStoreVersions/version-1/build", 200, r#"{"data":{"id":"build-1"}}"#),
+    (
+      "GET /v1/apps/100/reviewSubmissions",
+      200,
+      r#"{"data":[{"id":"draft-1","attributes":{"state":"READY_FOR_REVIEW"},"relationships":{"items":{"data":[{"id":"item-1"}]}}}]}"#,
+    ),
+    ("GET /v1/reviewSubmissions/draft-1/items", 200, r#"{"data":[{"id":"item-1","relationships":{"appStoreVersion":{"data":{"id":"version-1"}}}}]}"#),
+  ]);
+  let distribution = client(&url).distribution("100", Some(("version-1", "1.0"))).unwrap();
+  assert_eq!(distribution.selected_build.as_deref(), Some("build-1"));
+  assert_eq!(distribution.builds[0].number, "7");
+  assert!(distribution.phased_release.is_none());
+  assert!(distribution.submissions[0].includes_version);
+}
+
+#[test]
+fn customer_reviews_show_existing_replies_and_write_to_the_correct_resources() {
+  let (url, seen) = serve(&[
+    (
+      "GET /v1/apps/100/customerReviews",
+      200,
+      r#"{
+      "data":[{"id":"review-1","attributes":{"rating":5,"title":"Great"},"relationships":{"response":{"data":{"id":"reply-1"}}}}],
+      "included":[{"type":"customerReviewResponses","id":"reply-1","attributes":{"responseBody":"Thanks","state":"PUBLISHED"}}]
+    }"#,
+    ),
+    ("POST /v1/customerReviewResponses", 201, "{}"),
+    ("DELETE /v1/customerReviewResponses/reply-1", 204, ""),
+  ]);
+  let client = client(&url);
+  let reviews = client.customer_reviews("100").unwrap();
+  assert_eq!(reviews[0].rating, 5);
+  assert_eq!(reviews[0].response.as_ref().unwrap().body, "Thanks");
+  client.save_customer_review_response("review-1", "Thank you!").unwrap();
+  client.delete_customer_review_response("reply-1").unwrap();
+  let requests = seen.lock().unwrap();
+  let reply: serde_json::Value = serde_json::from_str(&requests[1].body).unwrap();
+  assert_eq!(reply["data"]["attributes"]["responseBody"], "Thank you!");
+  assert_eq!(reply["data"]["relationships"]["review"]["data"]["id"], "review-1");
+  assert_eq!(requests[2].method, "DELETE");
+  assert_eq!(requests[2].path, "/v1/customerReviewResponses/reply-1");
+}

@@ -126,9 +126,11 @@ fn models_that_think_by_default_are_asked_to_think_as_little_as_possible() {
   let raw = received.recv().unwrap();
   let body: serde_json::Value = serde_json::from_str(raw.split_once("\r\n\r\n").unwrap().1).unwrap();
   assert_eq!(body["output_config"]["effort"], "low");
-  let (url, received) = serve_once("200 OK", r#"{"choices":[{"message":{"content":"{}"}}]}"#);
-  let client = Client::with_base_urls(&url, "http://unused.invalid");
-  client.complete(&Request { model: "gpt-5-nano", ..request(Provider::OpenAi, "k") }).unwrap();
-  let body: serde_json::Value = serde_json::from_str(received.recv().unwrap().split_once("\r\n\r\n").unwrap().1).unwrap();
-  assert_eq!(body["reasoning_effort"], "minimal");
+  for (model, effort) in [("gpt-5-nano", "minimal"), ("gpt-6-luna", "none")] {
+    let (url, received) = serve_once("200 OK", r#"{"choices":[{"message":{"content":"{}"}}]}"#);
+    let client = Client::with_base_urls(&url, "http://unused.invalid");
+    client.complete(&Request { model, ..request(Provider::OpenAi, "k") }).unwrap();
+    let body: serde_json::Value = serde_json::from_str(received.recv().unwrap().split_once("\r\n\r\n").unwrap().1).unwrap();
+    assert_eq!(body["reasoning_effort"], effort);
+  }
 }

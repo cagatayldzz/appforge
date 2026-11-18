@@ -26,24 +26,33 @@ On the far left is a narrow bar:
 - Under it, one button per app, with its icon (the icon comes with the app's latest build in App Store Connect; an app with no build yet shows its first letter).
 - **Settings** at the bottom.
 
-With an app open, the column next to the bar shows the app (icon, name, bundle id, version and where it stands at Apple, and the **score**, which opens the Analysis page), its four pages as a menu, and **Reload** and **Save** at the bottom.
+With an app open, the column next to the bar shows the app (icon, name, bundle id, version and where it stands at Apple, and the **score**, which opens the Analysis page), its six pages as a menu, and **Reload** and **Save** at the bottom.
 
 ## Your apps
 
 | Page | Shows and edits |
 | --- | --- |
 | App Information | Name and subtitle, and the listing of the version in preparation: description, keywords, promotional text, support and marketing URLs, What's New. Counters show the limits (name and subtitle 30, keywords 100, promotional text 170). A language picker appears when the app has several languages. |
+| Distribution | iOS version history, compatible uploaded builds, review submissions and release settings. |
 | App Review | Contact, "Sign-in required" with the demo account, and the notes for the reviewer. Saving creates the review details when there are none yet. |
 | App Privacy | The privacy policy URL (saved to App Store Connect) and your own answers: collects data, tracking, App Tracking Transparency, accounts and account deletion, a reviewer sign-in, data types and third-party SDKs. The answers stay on this Mac. |
+| Ratings and Reviews | Customer reviews, ratings and public developer replies. Publishing and deleting a reply require confirmation. |
 | Analysis | The readiness score, the findings and the AI analysis. |
 
 **Save** sends only the fields you changed and then reads the app again. Apple only accepts edits while a version is in preparation or was rejected; otherwise it refuses and AppForge shows Apple's message.
 
 App Store Connect's API cannot read or write the App Privacy (nutrition label) answers. The **Open App Privacy in App Store Connect** button opens that page; tick "I answered App Privacy" when it is done.
 
+## Distribute an iOS version
+
+1. Open **Distribution** and create a version if there is no editable version.
+2. In **Builds**, select a valid build that has already been uploaded to Apple.
+3. Choose manual release, release after approval, or a scheduled release. Enter a scheduled date and time in ISO 8601 format, such as `2027-01-31T12:00:00Z` for UTC. Eligible updates can use phased release.
+4. Add the version to a review draft, then choose **Submit for review**. Use **Reload** to check its status. A version approved for manual release has a **Release this version** action.
+
 ## Write with AI
 
-On the App Information page, the **Write with AI** button at the bottom right stays in place while the page scrolls. It writes the subtitle, description, keywords, promotional text and what's new, from what the app's source folder says about it. It does not change the app name or the URLs.
+On the App Information page, the **Write with AI** button sits above **Reload** and **Save** in the sidebar footer. It writes the subtitle, description, keywords, promotional text and what's new, from what the app's source folder says about it. It does not change the app name or the URLs.
 
 1. **No API key yet?** A notice says the AI is not connected and has an **Open Settings** button that goes to the AI provider page.
 2. **No source folder yet?** A dialog asks you to choose the folder that holds the app's source code; once you do, the writing starts. You can also set or change the folders in Settings > Code folders.
@@ -68,7 +77,7 @@ The built-in rules check the saved data (not unsaved edits): limits, placeholder
 | Rules | The playbook the analysis reads. |
 | About | The version and a button that shows the data folder. |
 
-Only low-cost models are offered: Claude Haiku 5.5 and 4.5, and GPT-4.1 nano, GPT-5 nano and GPT-4.1 mini. The prices are the providers' list prices when they were last checked and can change, so check the provider's price page. A model you had chosen earlier that is no longer offered is replaced by the default.
+Only low-cost models are offered: Claude Haiku 5.5 and 4.5, and GPT-4.1 nano, GPT-5 nano, GPT-6 Luna and GPT-4.1 mini. The prices are the providers' list prices when they were last checked and can change, so check the provider's price page. A model you had chosen earlier that is no longer offered is replaced by the default.
 
 ## Where things are kept
 

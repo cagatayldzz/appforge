@@ -32,7 +32,9 @@ apps/appforge → app → ui → compliance → appstore
 | `welcome.rs`, `login.rs`, `setup.rs`, `guide_art.rs` | First run: the welcome screen, the sign-in guide, its frame (sidebar, progress, pinned actions) and the small drawings of Apple's page. |
 | `sidebar.rs` | The signed-in bars: the activity bar and the sidebar (app, page menu, Reload and Save; or the pages of Settings). |
 | `apps_view.rs` | The grid of all apps. |
-| `detail.rs`, `forms.rs` | The four pages of an app and the fields they edit. |
+| `detail.rs`, `forms.rs` | The app detail layout and the forms for listing, review and privacy. |
+| `customer_reviews.rs` | Customer reviews and developer replies, fetched on demand. |
+| `distribution.rs` | iOS version history, build selection, review submissions and release controls. Requests run on background tasks retained by the workspace. |
 | `analysis.rs` | The Analysis page: score, findings, AI analysis, rules. |
 | `listing_ai.rs` | The "Write with AI" button: what it checks, the background work, filling the fields. |
 | `settings_view.rs` | The pages of Settings. |
@@ -49,12 +51,12 @@ A title band (drag area, the rail color) sits above the content.
 **Signed in**: three columns.
 
 - The **activity bar** (56 px): the Apps button, one avatar button per app (its icon, or its first letter), and Settings at the bottom.
-- The **sidebar** (280 px): at the top the open app (icon, name, bundle id, the version with where it stands at Apple, and the review score, which opens the Analysis page), under it the four pages of the app as a menu, and at the bottom Reload and Save (no Save on Analysis). While Settings is open it lists the pages of Settings instead. It does not show while the grid of all apps is open.
+- The **sidebar** (280 px): at the top the open app (icon, name, bundle id, the version with where it stands at Apple, and the review score, which opens the Analysis page), under it the six pages of the app as a menu, and at the bottom Reload and Save (no sidebar Save on Analysis, Distribution or Ratings and Reviews). While Settings is open it lists the pages of Settings instead. It does not show while the grid of all apps is open.
 - The **main area**: the page, which scrolls, in flat sections (a heading with a line under it, no boxes). The grid of all apps (`apps_view.rs`, three columns) takes the whole width.
 
-The app has four pages: **App Information**, **App Review**, **App Privacy**, **Analysis**. Settings has General, Account, AI provider, Code folders, Rules and About.
+The app has six pages: **App Information**, **Distribution**, **App Review**, **App Privacy**, **Ratings and Reviews**, **Analysis**. Settings has General, Account, AI provider, Code folders, Rules and About.
 
-The App Information page has a floating **Write with AI** button at its bottom right. Without an API key it shows a notification with a way to Settings; without a source folder it asks for one in a dialog; otherwise it sends the current texts and the `project` description to the chosen model and fills the subtitle, description, keywords, promotional text and what's new. Nothing is saved until the user presses Save, and a notification says what the run cost.
+The App Information page has a **Write with AI** button in the sidebar footer. Without an API key it shows a notification with a way to Settings; without a source folder it asks for one in a dialog; otherwise it sends the current texts and the `project` description to the chosen model and fills the subtitle, description, keywords, promotional text and what's new. Nothing is saved until the user presses Save, and a notification says what the run cost.
 
 ## Interface rules
 

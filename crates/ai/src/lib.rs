@@ -63,6 +63,7 @@ const ANTHROPIC_MODELS: &[ModelInfo] = &[
 const OPENAI_MODELS: &[ModelInfo] = &[
   ModelInfo { id: "gpt-4.1-nano", label: "GPT-4.1 nano", input_per_million: 0.10, output_per_million: 0.40 },
   ModelInfo { id: "gpt-5-nano", label: "GPT-5 nano", input_per_million: 0.05, output_per_million: 0.40 },
+  ModelInfo { id: "gpt-6-luna", label: "GPT-6 Luna", input_per_million: 0.10, output_per_million: 0.50 },
   ModelInfo { id: "gpt-4.1-mini", label: "GPT-4.1 mini", input_per_million: 0.40, output_per_million: 1.60 },
 ];
 
@@ -164,7 +165,9 @@ impl Client {
           "response_format": {"type": "json_object"},
         });
         // GPT-5 models reason before they answer, and reasoning is billed as output: keep it to the least.
-        if request.model.starts_with("gpt-5") {
+        if request.model == "gpt-6-luna" {
+          body["reasoning_effort"] = json!("none");
+        } else if request.model.starts_with("gpt-5") {
           body["reasoning_effort"] = json!("minimal");
         }
         body

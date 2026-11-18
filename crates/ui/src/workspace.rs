@@ -43,16 +43,20 @@ pub enum Load<T> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DetailTab {
   Information,
+  Distribution,
+  CustomerReviews,
   Review,
   Privacy,
   Analysis,
 }
 
 impl DetailTab {
-  pub const ALL: [DetailTab; 4] = [Self::Information, Self::Review, Self::Privacy, Self::Analysis];
+  pub const ALL: [DetailTab; 6] = [Self::Information, Self::Distribution, Self::Review, Self::Privacy, Self::CustomerReviews, Self::Analysis];
 
   pub fn label(self) -> &'static str {
     match self {
+      Self::Distribution => "Distribution",
+      Self::CustomerReviews => "Ratings and Reviews",
       Self::Information => "App Information",
       Self::Review => "App Review",
       Self::Privacy => "App Privacy",
@@ -137,6 +141,9 @@ pub(crate) struct Tasks {
   pub(crate) icons: Option<Task<()>>,
   pub(crate) folder: Option<Task<()>>,
   pub(crate) draft: Option<Task<()>>,
+  pub(crate) distribution: Option<Task<()>>,
+  pub(crate) store_write: Option<Task<()>>,
+  pub(crate) customer_reviews: Option<Task<()>>,
 }
 
 pub struct Workspace {
@@ -153,6 +160,9 @@ pub struct Workspace {
   pub icons: HashMap<String, PathBuf>,
   pub selected: Option<String>,
   pub snapshot: Load<AppSnapshot>,
+  pub(crate) distribution: Load<appforge_appstore::Distribution>,
+  pub(crate) store_write_busy: bool,
+  pub(crate) customer_reviews: Load<Vec<appforge_appstore::CustomerReview>>,
   pub tab: DetailTab,
   pub locale: String,
   pub report: Option<Report>,
@@ -277,6 +287,9 @@ impl Workspace {
       icons: HashMap::new(),
       selected: None,
       snapshot: Load::Idle,
+      distribution: Load::Idle,
+      store_write_busy: false,
+      customer_reviews: Load::Idle,
       tab: DetailTab::Information,
       locale: String::new(),
       report: None,
@@ -568,6 +581,10 @@ impl Workspace {
     self.tasks.icons = None;
     self.selected = None;
     self.snapshot = Load::Idle;
+    self.distribution = Load::Idle;
+    self.tasks.distribution = None;
+    self.customer_reviews = Load::Idle;
+    self.tasks.customer_reviews = None;
     self.report = None;
     self.ai = AiState::Idle;
     self.show_settings = false;
@@ -683,6 +700,10 @@ impl Workspace {
   pub fn load_snapshot(&mut self, window: &mut Window, cx: &mut Context<Self>) {
     let (Some(client), Some(app)) = (self.client.clone(), self.selected_app()) else { return };
     self.snapshot = Load::Loading;
+    self.distribution = Load::Idle;
+    self.tasks.distribution = None;
+    self.customer_reviews = Load::Idle;
+    self.tasks.customer_reviews = None;
     self.tasks.snapshot = Some(cx.spawn_in(window, async move |this, cx| {
       let result = cx.background_spawn(async move { client.snapshot(&app) }).await;
       this
@@ -713,6 +734,12 @@ impl Workspace {
     set_input(&self.forms.sdks, &declaration.third_party_sdks, window, cx);
     self.snapshot = Load::Ready(snapshot);
     self.recompute_report();
+    if self.tab == DetailTab::Distribution {
+      self.load_distribution(window, cx);
+    }
+    if self.tab == DetailTab::CustomerReviews {
+      self.load_customer_reviews(window, cx);
+    }
   }
 
   pub fn select_locale(&mut self, locale: String, window: &mut Window, cx: &mut Context<Self>) {
@@ -738,7 +765,7 @@ impl Workspace {
     work: impl FnOnce(&Client) -> Result<bool, appforge_appstore::Error> + Send + 'static,
   ) {
     let Some(client) = self.client.clone() else { return };
-    if self.saving {
+    if self.saving || self.store_write_busy {
       return;
     }
     self.saving = true;

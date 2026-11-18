@@ -28,7 +28,7 @@ const DESCRIPTION_LIMIT: usize = 4000;
 const WHATS_NEW_LIMIT: usize = 4000;
 
 fn app_privacy_url(app: &App) -> String {
-  format!("https://appstoreconnect.apple.com/apps/{}/appPrivacy", app.id)
+  format!("https://appstoreconnect.apple.com/apps/{}/distribution/privacy", app.id)
 }
 
 impl Workspace {
@@ -49,6 +49,8 @@ impl Workspace {
     let l = self.settings.language;
     let body = match &self.snapshot {
       Load::Ready(_) => match self.tab {
+        DetailTab::Distribution => self.render_distribution(cx),
+        DetailTab::CustomerReviews => self.render_customer_reviews(cx),
         DetailTab::Information => self.render_information(&app, cx).into_any_element(),
         DetailTab::Review => self.render_review(cx).into_any_element(),
         DetailTab::Privacy => self.render_privacy(&app, cx).into_any_element(),
@@ -76,32 +78,27 @@ impl Workspace {
     };
     // The pages are listed in the sidebar, so the page says which one it is; it scrolls under that heading.
     let heading = div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, self.tab.label()));
-    // The Information page has a button at the bottom right that stays there while the page scrolls.
-    let generate = (self.tab == DetailTab::Information && matches!(self.snapshot, Load::Ready(_))).then(|| self.generate_button(cx));
-    v_flex()
-      .relative()
-      .flex_1()
-      .min_h_0()
-      .overflow_hidden()
-      .child(
-        v_flex().id("detail-scroll").size_full().overflow_y_scrollbar().child(centered(v_flex().pt_6().pb_24().gap_6().child(heading).child(body))),
-      )
-      .children(generate)
+    v_flex().flex_1().min_h_0().overflow_hidden().child(
+      v_flex().id("detail-scroll").size_full().overflow_y_scrollbar().child(centered(v_flex().pt_6().pb_6().gap_6().child(heading).child(body))),
+    )
   }
 
-  /// Writes the listing with the AI, from the app's source folder. Floats at the bottom right of the page.
-  fn generate_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+  /// Writes the listing with the AI, from the app's source folder.
+  pub(crate) fn generate_button(&self, cx: &mut Context<Self>) -> Option<Button> {
+    if self.tab != DetailTab::Information || !matches!(self.snapshot, Load::Ready(_)) {
+      return None;
+    }
     let l = self.settings.language;
     let tooltip = match self.model_in_use() {
       Some(model) => trf(l, "Writes the subtitle, description, keywords, promotional text and what's new. Uses {}.", &[&model]),
       None => tr(l, "Writes the subtitle, description, keywords, promotional text and what's new."),
     };
-    div().absolute().bottom_6().right_8().child(
+    Some(
       Button::new("generate-listing")
         .icon(Icon::new(IconName::Bot))
         .label(tr(l, "Write with AI"))
-        .primary()
-        .large()
+        .outline()
+        .small()
         .loading(self.drafting)
         .tooltip(tooltip)
         .on_click(cx.listener(|this, _, window, cx| this.generate_listing(window, cx))),
@@ -117,7 +114,7 @@ impl Workspace {
       DetailTab::Information => ("save-information", tr(l, "Save"), true),
       DetailTab::Review => ("save-review", tr(l, "Save"), has_version),
       DetailTab::Privacy => ("save-privacy", tr(l, "Save"), true),
-      DetailTab::Analysis => return None,
+      DetailTab::Analysis | DetailTab::Distribution | DetailTab::CustomerReviews => return None,
     };
     let tooltip = if tab == DetailTab::Privacy {
       tr(l, "Your answers stay on this Mac. The privacy policy URL is sent to App Store Connect.")
@@ -130,7 +127,7 @@ impl Workspace {
           DetailTab::Information => this.save_information(window, cx),
           DetailTab::Review => this.save_review(window, cx),
           DetailTab::Privacy => this.save_privacy(window, cx),
-          DetailTab::Analysis => {}
+          DetailTab::Analysis | DetailTab::Distribution | DetailTab::CustomerReviews => {}
         })
         .tooltip(tooltip),
     )

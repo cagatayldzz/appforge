@@ -156,7 +156,13 @@ impl Workspace {
         .bg(color.opacity(if open { 0.28 } else { 0.14 }))
         .hover(move |badge| badge.bg(color.opacity(0.28)))
         .child(div().text_color(color).text_size(rems(1.5)).font_weight(FontWeight::BOLD).child(report.score().to_string()))
-        .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "Score")))
+        .child(
+          h_flex()
+            .items_center()
+            .gap_1()
+            .child(Icon::new(IconName::Check).xsmall().text_color(color))
+            .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "Score"))),
+        )
         .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
         .on_click(cx.listener(|this, _, _, cx| {
           this.tab = DetailTab::Analysis;
@@ -193,8 +199,14 @@ impl Workspace {
         list_row(SharedString::from(format!("page-{}", tab.label())), self.tab == tab, cx)
           .py_2()
           .child(tr(l, tab.label()))
-          .on_click(cx.listener(move |this, _, _, cx| {
+          .on_click(cx.listener(move |this, _, window, cx| {
             this.tab = tab;
+            if tab == DetailTab::Distribution && matches!(this.distribution, Load::Idle) {
+              this.load_distribution(window, cx);
+            }
+            if tab == DetailTab::CustomerReviews && matches!(this.customer_reviews, Load::Idle) {
+              this.load_customer_reviews(window, cx);
+            }
             cx.notify();
           }))
           .into_any_element()
@@ -202,22 +214,22 @@ impl Workspace {
       .collect()
   }
 
-  /// Reload and Save of the open app. The Analysis page has no Save.
+  /// Actions for the open app, pinned below the sidebar pages.
   fn page_actions(&self, cx: &mut Context<Self>) -> AnyElement {
     let l = self.settings.language;
-    h_flex()
+    let reload = Button::new("reload-snapshot")
+      .icon(Icon::new(IconName::RefreshCw))
+      .label(tr(l, "Reload"))
+      .outline()
+      .small()
+      .on_click(cx.listener(|this, _, window, cx| this.load_snapshot(window, cx)));
+    let save = self.save_control(cx);
+    v_flex()
       .gap_2()
       .px_4()
       .py_3()
-      .child(
-        Button::new("reload-snapshot")
-          .icon(Icon::new(IconName::RefreshCw))
-          .label(tr(l, "Reload"))
-          .outline()
-          .small()
-          .on_click(cx.listener(|this, _, window, cx| this.load_snapshot(window, cx))),
-      )
-      .children(self.save_control(cx).map(|save| save.flex_1()))
+      .children(self.generate_button(cx).map(|button| button.w_full()))
+      .child(h_flex().gap_2().child(reload).children(save.map(|button| button.flex_1())))
       .into_any_element()
   }
 

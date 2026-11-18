@@ -1,3 +1,6 @@
+pub(crate) mod distribution;
+pub(crate) mod reviews;
+
 use crate::{
   model::{attributes_object, Attributes},
   App, AppInfoLocalization, AppSnapshot, Credentials, Error, ReviewDetail, ScreenshotSet, Version, VersionLocalization,
@@ -39,6 +42,7 @@ impl Client {
     let mut response = match (method, body) {
       ("GET", _) => self.agent.get(url).header("Authorization", &authorization).call(),
       ("PATCH", Some(body)) => self.agent.patch(url).header("Authorization", &authorization).send_json(body),
+      ("DELETE", _) => self.agent.delete(url).header("Authorization", &authorization).call(),
       ("POST", Some(body)) => self.agent.post(url).header("Authorization", &authorization).send_json(body),
       _ => return Err(Error::Unexpected(format!("unsupported request {method}"))),
     }
@@ -69,17 +73,35 @@ impl Client {
 
   /// Every item of a collection, following `links.next`.
   fn get_all(&self, path: &str) -> Result<Vec<Value>, Error> {
+    self.get_collection(path).map(|(items, _)| items)
+  }
+
+  fn get_collection(&self, path: &str) -> Result<(Vec<Value>, Vec<Value>), Error> {
     let mut items = Vec::new();
+    let mut included = Vec::new();
     let mut url = format!("{}{path}", self.base_url);
     loop {
       let page = self.send("GET", &url, None)?;
       items.extend(page["data"].as_array().cloned().unwrap_or_default());
+      included.extend(page["included"].as_array().into_iter().flatten().cloned());
       match page["links"]["next"].as_str() {
         // Never follow a link to another host with our token.
-        Some(next) if next.starts_with(&self.base_url) => url = next.to_owned(),
-        _ => return Ok(items),
+        Some(next) if next.strip_prefix(&self.base_url).is_some_and(|path| path.starts_with('/')) => url = next.to_owned(),
+        _ => return Ok((items, included)),
       }
     }
+  }
+
+  fn create_resource(&self, kind: &str, attributes: Value, relationships: Value) -> Result<Value, Error> {
+    let mut data = json!({"type": kind, "relationships": relationships});
+    if !attributes.is_null() {
+      data["attributes"] = attributes;
+    }
+    self.write("POST", &format!("/v1/{kind}"), json!({"data": data}))
+  }
+
+  fn write(&self, method: &str, path: &str, body: Value) -> Result<Value, Error> {
+    self.send(method, &format!("{}{path}", self.base_url), Some(&body))
   }
 
   fn patch_attributes(&self, kind: &str, id: &str, attributes: Attributes) -> Result<Value, Error> {
@@ -280,4 +302,12 @@ fn parse_review_detail(item: &Value) -> ReviewDetail {
     demo_account_password: text(item, "demoAccountPassword"),
     notes: text(item, "notes"),
   }
+}
+
+fn resource_id(item: &Value) -> &str {
+  item["id"].as_str().unwrap_or_default()
+}
+
+fn relationship(kind: &str, id: &str) -> Value {
+  json!({"data": {"type": kind, "id": id}})
 }

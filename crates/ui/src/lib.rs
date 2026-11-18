@@ -3,7 +3,9 @@
 
 mod analysis;
 mod apps_view;
+mod customer_reviews;
 mod detail;
+mod distribution;
 mod forms;
 mod guide_art;
 pub mod i18n;

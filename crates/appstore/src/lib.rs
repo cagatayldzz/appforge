@@ -10,6 +10,9 @@ mod error;
 mod model;
 
 pub use auth::{validate_private_key, Credentials};
+pub use client::distribution::{Distribution, ReviewSubmission, StoreBuild, StoreVersion};
+
+pub use client::reviews::{CustomerReview, ReviewResponse};
 pub use client::{Client, DEFAULT_BASE_URL};
 pub use error::Error;
 pub use model::{App, AppInfoLocalization, AppSnapshot, ReviewDetail, ScreenshotSet, Version, VersionLocalization};
