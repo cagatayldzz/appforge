@@ -38,9 +38,9 @@ jobs:
         with:
           shared-key: core
       - name: Lint core packages
-        run: cargo clippy --locked -p appforge-ai -p appforge-appstore -p appforge-compliance -p appforge-storage --all-targets -- -D warnings
+        run: cargo clippy --locked -p appforge-ai -p appforge-appstore -p appforge-compliance -p appforge-project -p appforge-storage --all-targets -- -D warnings
       - name: Test core packages
-        run: cargo test --locked -p appforge-ai -p appforge-appstore -p appforge-compliance -p appforge-storage
+        run: cargo test --locked -p appforge-ai -p appforge-appstore -p appforge-compliance -p appforge-project -p appforge-storage
 
   prepare:
     name: 2 · Prepare version

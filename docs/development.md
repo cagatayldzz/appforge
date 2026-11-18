@@ -38,7 +38,7 @@ Automation uses only shell and Rust; there is no TypeScript or other runtime in 
 from Conventional Commits since the latest `v*` tag: a breaking change (`!:` or `BREAKING CHANGE:`) is major,
 `feat` is minor, everything else is patch. The workflow then:
 
-1. **Validate**: Apple secrets are present, shell tests, `cargo fmt`, clippy and tests of `appforge-ai`, `appforge-appstore`, `appforge-compliance`, `appforge-storage`.
+1. **Validate**: Apple secrets are present, shell tests, `cargo fmt`, clippy and tests of `appforge-ai`, `appforge-appstore`, `appforge-compliance`, `appforge-project`, `appforge-storage`.
 2. **Prepare**: choose the version, stamp `Cargo.toml`, `Cargo.lock`, `package.json` and `Info.plist` in the CI checkout, write `RELEASE_NOTES.md` (commit titles grouped as New Features, Bug Fixes, Documentation, Chores, with a changelog link).
 3. **Build** (macOS, in parallel): workspace clippy and tests; release build, Developer ID signature, notarization, `AppForge-<tag>-macos-arm64.zip`.
 4. **Verify**: exactly the expected assets, none empty, `SHA256SUMS.txt`.
@@ -46,7 +46,7 @@ from Conventional Commits since the latest `v*` tag: a breaking change (`!:` or 
 
 Required Actions secrets: `APPLE_CERTIFICATE_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID`,
 `APPLE_APP_SPECIFIC_PASSWORD`. The version in the repository is stamped only in CI; the tag is the source of truth.
-`CI` (`.github/workflows/ci.yml`) runs the shell tests, formatting, and clippy and tests of the three plain-Rust crates on Linux.
+`CI` (`.github/workflows/ci.yml`) runs the shell tests, formatting, and clippy and tests of the plain-Rust crates (the ones without the interface) on Linux.
 
 ## Packages
 
@@ -55,10 +55,11 @@ Required Actions secrets: `APPLE_CERTIFICATE_BASE64`, `APPLE_CERTIFICATE_PASSWOR
 | `appforge` | app | executable entry point (binary `AppForge`) |
 | `appforge-app` | lib | startup, window, key bindings |
 | `appforge-ui` | lib | views built with GPUI Kit |
-| `appforge-compliance` | lib | review rules, playbook, AI analysis |
-| `appforge-appstore` | lib | App Store Connect API client |
-| `appforge-ai` | lib | OpenAI and Claude clients |
-| `appforge-storage` | lib | settings, privacy answers, Keychain secrets |
+| `appforge-compliance` | lib | review rules, playbook, AI analysis, AI-written listing |
+| `appforge-project` | lib | short description of an app's source folder for the AI |
+| `appforge-appstore` | lib | App Store Connect API client, app icons |
+| `appforge-ai` | lib | OpenAI and Claude clients, the low-cost models and their prices |
+| `appforge-storage` | lib | settings, icon cache, Keychain secrets |
 
 Code map and data flow: [architecture](architecture.md).
 
@@ -70,42 +71,36 @@ Shell tests for the scripts and workflows live in `scripts/tests/`. The interfac
 
 ## Visual inspection
 
-Run `bun run dev` with a scratch `APPFORGE_DATA_DIR` and take a screenshot of the AppForge window only. Screenshots can contain private paths or terminal history, so keep them in a scratch location and do not commit them.
+The interface has no automated tests; a change is checked by running it. Run `bun run dev` with a scratch data directory and take a screenshot of the AppForge window only. Screenshots can contain private paths or terminal history, so keep them in a scratch location and do not commit them.
 
 ## Running the app in isolation
 
-Use a scratch data directory so your own project list stays out:
+Use a scratch data directory so your own settings stay out:
 
 ```sh
-APPFORGE_DATA_DIR=/tmp/appforge-data ./target/debug/AppForge
+mkdir -p /tmp/appforge-data
+echo '{"onboarded": true, "language": "english"}' > /tmp/appforge-data/settings.json
+APPFORGE_DATA_DIR=/tmp/appforge-data ./target/debug/appforge
 ```
 
-Seed `APPFORGE_DATA_DIR/projects.json` to start with chosen projects (a plain list of paths also loads):
+A signed-out start shows the welcome screen and the sign-in guide; the signed-in screens need a real App Store Connect account. `./target/debug/appforge` is the plain binary: it reads no Keychain until a key was saved for the account in `settings.json`.
 
-```json
-{
-  "projects": [
-    { "path": "/path/to/a", "category": null, "color": "#8b7bff", "icon": "rocket" },
-    { "path": "/path/to/b", "category": "category-1", "name": "Billing" }
-  ],
-  "categories": [{ "id": "category-1", "name": "", "collapsed": false }],
-  "active": "/path/to/a"
-}
-```
+## Keychain prompts in development
 
-## README screenshots
+`bun run dev` signs the app after every build. An ad-hoc signature is new on every build, so macOS asks for the login password again each time the app reads the Keychain. To stop that, create a local code-signing certificate once and the script uses it:
 
-The images in `docs/images` show a staged demo project ("atlas") so that no real name, machine name, path or
-terminal history appears. To redo them:
+1. Keychain Access > Certificate Assistant > Create a Certificate: name `AppForge Dev`, identity type Self Signed Root, certificate type Code Signing.
+2. Run `bun run dev` and choose **Always Allow** once.
 
-1. Make a scratch home with a few small Git repositories (one with uncommitted changes) in `~/Developer`.
-2. Put a `.zshrc` in a scratch `ZDOTDIR` that clears the screen and sets a plain prompt such as `atlas main $ `,
-   and a `projects.json` and `preferences.json` (`{"theme":"dark"}` or `"light"`) in a scratch `APPFORGE_DATA_DIR`.
-3. Run `HOME=<scratch home> ZDOTDIR=<scratch zsh> APPFORGE_DATA_DIR=<scratch data> ./target/debug/AppForge`, size the window
-   to about 1040×660, open the file or diff to show, then capture only the window without its shadow
-   (`screencapture -o -l <window id>`).
+Set `APPFORGE_SIGN_IDENTITY` to use a certificate with another name. Without the certificate the build still works and prints a note.
 
-Check every image for names, paths and dates before committing it; the status bar shows the home folder as `~`.
+## Dependencies
+
+`bun run update` moves the Rust dependencies to the newest versions `Cargo.toml` allows (only `Cargo.lock` changes), then runs clippy and the tests, and puts the old `Cargo.lock` back if they fail. A version beyond what `Cargo.toml` allows (a new `gpui-kit` minor, for example) is raised by hand in `Cargo.toml`.
+
+## README images
+
+The images in `docs/images` show made-up demo apps ("Pocket Garden"), so that no real app name, account, machine name, path or terminal history appears. They were made by filling a window with demo apps through a throwaway example (not kept in the repository), with a scratch `APPFORGE_DATA_DIR`, then capturing only the window without its shadow (`screencapture -o -l <window id>`) and scaling it to 1600 px wide. Check every image for private details before committing it.
 
 ## Formatting
 

@@ -10,7 +10,7 @@ action="$(cat .github/actions/build-release/action.yml)"
 
 assert_contains "pull_request:" "$ci" "CI runs on pull requests"
 assert_contains "bash scripts/tests/run.sh" "$ci" "CI runs the shell tests"
-assert_contains "cargo test --locked -p appforge-ai -p appforge-appstore -p appforge-compliance -p appforge-storage" "$ci" "CI tests the core crates"
+assert_contains "cargo test --locked -p appforge-ai -p appforge-appstore -p appforge-compliance -p appforge-project -p appforge-storage" "$ci" "CI tests the core crates"
 assert_contains "-D warnings" "$ci" "CI treats warnings as errors"
 
 assert_contains "workflow_dispatch:" "$release" "release is started by hand"
