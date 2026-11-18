@@ -4,10 +4,13 @@
 mod analysis;
 mod detail;
 mod forms;
+mod guide_art;
+pub mod i18n;
 mod login;
 mod settings_view;
 mod sidebar;
 mod view;
+mod welcome;
 mod widgets;
 mod workspace;
 

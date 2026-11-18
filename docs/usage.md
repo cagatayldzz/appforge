@@ -1,12 +1,18 @@
 # Usage
 
+## First launch
+
+The welcome screen explains what AppForge does and lets you pick the language (English or Türkçe). **Get started** opens the sign-in guide. You can change the language later in Settings > General.
+
 ## Sign in
 
 AppForge signs in with an App Store Connect API key, because Apple offers no password sign-in for tools.
 
-1. In App Store Connect open Users and Access > Integrations and create a key with the **App Manager** role.
-2. Download the `.p8` file (Apple lets you download it once).
-3. In AppForge enter the **Issuer ID** (shown above the key list) and the **Key ID**, choose the `.p8` file and press **Sign in**. A file named `AuthKey_<KEY ID>.p8` fills in the Key ID for you.
+The sign-in screen is a three-step guide:
+
+1. **Create key**: open App Store Connect (button in the guide), go to Users and Access > Integrations, create a key with the **App Manager** role and download the `.p8` file (Apple lets you download it once).
+2. **Copy IDs**: enter the **Issuer ID** (shown above the key list) and the **Key ID**.
+3. **Sign in**: choose the `.p8` file and press **Sign in**. A file named `AuthKey_<KEY ID>.p8` fills in the Key ID for you.
 
 The private key is kept in the macOS Keychain; only the Issuer ID and Key ID are written to `settings.json`. **Sign out** removes the key from the Keychain. Google Play is planned and shown as "Coming soon".
 

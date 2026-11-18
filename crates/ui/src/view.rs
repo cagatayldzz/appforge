@@ -1,4 +1,7 @@
-use crate::workspace::{Load, Workspace};
+use crate::{
+  i18n::tr,
+  workspace::{Load, Workspace},
+};
 use gpui_kit::{
   component::{h_flex, scroll::ScrollableElement as _, spinner::Spinner, v_flex, ActiveTheme, TitleBar},
   *,
@@ -7,6 +10,7 @@ use gpui_kit::{
 impl Render for Workspace {
   fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
     let theme = cx.theme().clone();
+    let l = self.settings.language;
     let body = if self.starting {
       v_flex()
         .flex_1()
@@ -14,8 +18,10 @@ impl Render for Workspace {
         .justify_center()
         .gap_2()
         .child(Spinner::new())
-        .child(div().text_sm().text_color(theme.muted_foreground).child("Opening your Keychain…"))
+        .child(div().text_sm().text_color(theme.muted_foreground).child(tr(l, "Opening your Keychain…")))
         .into_any_element()
+    } else if self.client.is_none() && !self.settings.onboarded && !self.settings_locked {
+      self.render_welcome(cx).into_any_element()
     } else if self.client.is_none() {
       self.render_login(cx).into_any_element()
     } else {
@@ -33,17 +39,22 @@ impl Render for Workspace {
 
 impl Workspace {
   fn render_main(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    let l = self.settings.language;
     let content = if self.show_settings {
       self.render_settings(cx).into_any_element()
     } else {
       match (&self.apps, self.selected_app()) {
         (Load::Ready(_), Some(app)) => self.render_detail(app, cx).into_any_element(),
         (Load::Ready(apps), None) if apps.is_empty() => self
-          .render_message("No apps found", "This App Store Connect account has no apps yet. Create one in App Store Connect, then reload.", cx)
+          .render_message(
+            tr(l, "No apps found"),
+            tr(l, "This App Store Connect account has no apps yet. Create one in App Store Connect, then reload."),
+            cx,
+          )
           .into_any_element(),
-        (Load::Failed(message), _) => self.render_message("Could not load your apps", message.clone(), cx).into_any_element(),
+        (Load::Failed(message), _) => self.render_message(tr(l, "Could not load your apps"), message.clone(), cx).into_any_element(),
         (Load::Ready(_), None) => {
-          self.render_message("Select an app", "Choose an app on the left to see and edit its information.", cx).into_any_element()
+          self.render_message(tr(l, "Select an app"), tr(l, "Choose an app on the left to see and edit its information."), cx).into_any_element()
         }
         _ => v_flex().flex_1().items_center().justify_center().child(Spinner::new()).into_any_element(),
       }

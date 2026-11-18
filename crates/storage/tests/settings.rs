@@ -1,5 +1,5 @@
 use appforge_ai::Provider;
-use appforge_storage::{AppleAccount, MemorySecrets, PrivacyDeclaration, SecretKey, SecretStore, Settings};
+use appforge_storage::{AppleAccount, Language, MemorySecrets, PrivacyDeclaration, SecretKey, SecretStore, Settings};
 use std::{
   fs,
   sync::atomic::{AtomicUsize, Ordering},
@@ -55,4 +55,19 @@ fn memory_secrets_store_read_and_delete() {
   assert_eq!(secrets.get(SecretKey::ApiKey(Provider::Anthropic)).unwrap(), None);
   secrets.delete(SecretKey::ApiKey(Provider::OpenAi)).unwrap();
   assert_eq!(secrets.get(SecretKey::ApiKey(Provider::OpenAi)).unwrap(), None);
+}
+
+#[test]
+fn language_and_onboarding_default_then_round_trip() {
+  let dir = temporary_dir("settings-language");
+  let path = dir.join("settings.json");
+  fs::write(&path, "{}").unwrap();
+  let loaded = Settings::load(&path).unwrap();
+  assert_eq!(loaded.language, Language::English);
+  assert!(!loaded.onboarded);
+  let settings = Settings { language: Language::Turkish, onboarded: true, ..Default::default() };
+  settings.save(&path).unwrap();
+  assert!(fs::read_to_string(&path).unwrap().contains("\"turkish\""));
+  assert_eq!(Settings::load(&path).unwrap(), settings);
+  fs::remove_dir_all(dir).unwrap();
 }

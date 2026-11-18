@@ -18,7 +18,9 @@ apps/appforge → app → ui → compliance → appstore
 
 ## Window layout
 
-A title bar (drag area) above the content. Signed out: the sign-in card (Issuer ID, Key ID, `.p8` file; Google Play is shown as coming soon). Signed in: a sidebar with the app list, Settings and Sign out, and the main area. An app has four tabs: **App Information**, **App Review**, **App Privacy**, **Analysis**. Settings holds the AI provider, model and API key.
+A title bar (drag area) above the content. Signed out, first launch: a welcome screen (what AppForge does, language, Get started). Then the three-step sign-in guide (create the key on Apple's site, copy Issuer ID and Key ID, choose the `.p8` file; Google Play is shown as coming soon). Signed in: a sidebar with the app list, Settings and Sign out, and the main area. An app has four tabs: **App Information**, **App Review**, **App Privacy**, **Analysis**. Settings holds the language, the account, the AI provider, model and API key, and About (version, data folder).
+
+The interface language (English or Türkçe) is `Settings.language`. Source text is English and is the key of `ui::i18n` (`tr`, `trf`); a text without a Turkish entry is shown in English, and a test in `crates/ui/tests/i18n.rs` fails when a used text has no entry. Placeholders in text fields and the rules and AI findings are not translated.
 
 ## Data flow
 
@@ -30,7 +32,7 @@ The Analysis recomputes from the saved snapshot and the privacy answers. The AI 
 
 `~/Library/Application Support/AppForge` (or `$APPFORGE_DATA_DIR`):
 
-- `settings.json`: Issuer ID and Key ID of the signed-in key, the AI provider and models, and the privacy answers per app. An unreadable file is never overwritten.
+- `settings.json`: the language, whether the welcome screen was done, Issuer ID and Key ID of the signed-in key, the AI provider and models, and the privacy answers per app. An unreadable file is never overwritten.
 - `playbook/`: the cached playbook pages (`APPLE.md`, `PRE-SUBMISSION-CHECKLIST.md`, `MISTAKE-PATTERNS.md`) and `fetched-at`.
 
 Secrets live in the Keychain (service `AppForge`): `apple-private-key`, `openai-api-key`, `anthropic-api-key`.

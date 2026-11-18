@@ -56,9 +56,33 @@ pub struct PrivacyDeclaration {
   pub data_types: String,
 }
 
+/// The language of the AppForge interface.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Language {
+  #[default]
+  English,
+  Turkish,
+}
+
+impl Language {
+  pub const ALL: [Language; 2] = [Language::English, Language::Turkish];
+
+  /// The name of the language in that language, so people find their own.
+  pub fn native_name(self) -> &'static str {
+    match self {
+      Language::English => "English",
+      Language::Turkish => "Türkçe",
+    }
+  }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default)]
 pub struct Settings {
+  /// The welcome screen was shown and finished.
+  pub onboarded: bool,
+  pub language: Language,
   pub apple: Option<AppleAccount>,
   pub ai: AiSettings,
   /// Privacy answers per App Store Connect app id.

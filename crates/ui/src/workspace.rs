@@ -1,6 +1,9 @@
 //! The window's state: the session, the app list, the selected app and every background task.
 
-use crate::forms::{read_area, read_input, set_input, Forms};
+use crate::{
+  forms::{read_area, read_input, set_input, Forms},
+  i18n::{tr, trf},
+};
 use appforge_ai::Provider;
 use appforge_appstore::{App as StoreApp, AppInfoLocalization, AppSnapshot, Client, Credentials, ReviewDetail, VersionLocalization};
 use appforge_compliance::{analyze_with_ai, check, AiReview, Playbook, Report};
@@ -60,6 +63,8 @@ pub struct LoginKey {
 }
 
 pub struct LoginForm {
+  /// The visible step of the sign-in guide: 0 create a key, 1 IDs, 2 private key.
+  pub step: usize,
   pub issuer: Entity<InputState>,
   pub key_id: Entity<InputState>,
   pub key: Option<LoginKey>,
@@ -146,6 +151,7 @@ impl Workspace {
     };
     let playbook = Playbook::load(&data_dir);
     let login = LoginForm {
+      step: 0,
       issuer: cx.new(|cx| InputState::new(window, cx).placeholder("00000000-0000-0000-0000-000000000000")),
       key_id: cx.new(|cx| InputState::new(window, cx).placeholder("ABC123DEFG")),
       key: None,
@@ -211,11 +217,11 @@ impl Workspace {
 
   pub fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
     if self.settings_locked {
-      Self::error(window, cx, "The settings file could not be read, so this change was not saved.");
+      Self::error(window, cx, tr(self.settings.language, "The settings file could not be read, so this change was not saved."));
       return;
     }
     if let Err(error) = self.settings.save(&self.data_dir.join("settings.json")) {
-      Self::error(window, cx, format!("Could not save settings: {error}"));
+      Self::error(window, cx, trf(self.settings.language, "Could not save settings: {}", &[&error.to_string()]));
     }
   }
 
@@ -246,14 +252,21 @@ impl Workspace {
         self.client = Some(Arc::new(Client::new(Credentials { issuer_id: account.issuer_id, key_id: account.key_id, private_key: pem })));
         self.load_apps(window, cx);
       }
-      (Err(error), _) => Self::error(window, cx, format!("Could not read the App Store Connect key from the Keychain: {error}")),
+      (Err(error), _) => {
+        Self::error(window, cx, trf(self.settings.language, "Could not read the App Store Connect key from the Keychain: {}", &[&error]))
+      }
       _ => {}
     }
     cx.notify();
   }
 
   pub fn choose_key_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-    let receiver = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: false, prompt: Some("Choose key".into()) });
+    let receiver = cx.prompt_for_paths(PathPromptOptions {
+      files: true,
+      directories: false,
+      multiple: false,
+      prompt: Some(tr(self.settings.language, "Choose key")),
+    });
     self.tasks.key_file = Some(cx.spawn_in(window, async move |this, cx| {
       if let Ok(Ok(Some(paths))) = receiver.await {
         if let Some(path) = paths.into_iter().next() {
@@ -268,7 +281,7 @@ impl Workspace {
     let pem = match std::fs::read_to_string(&path) {
       Ok(pem) => pem,
       Err(error) => {
-        self.login.error = Some(format!("Could not read {file_name}: {error}").into());
+        self.login.error = Some(trf(self.settings.language, "Could not read {}: {}", &[&file_name, &error.to_string()]));
         cx.notify();
         return;
       }
@@ -296,17 +309,18 @@ impl Workspace {
     }
     let issuer_id = read_input(&self.login.issuer, cx);
     let key_id = read_input(&self.login.key_id, cx);
+    let l = self.settings.language;
     let missing = if issuer_id.is_empty() {
-      Some("Enter your Issuer ID.")
+      Some(tr(l, "Enter your Issuer ID."))
     } else if key_id.is_empty() {
-      Some("Enter your Key ID.")
+      Some(tr(l, "Enter your Key ID."))
     } else if self.login.key.is_none() {
-      Some("Choose your .p8 private key file.")
+      Some(tr(l, "Choose your .p8 private key file."))
     } else {
       None
     };
     if let Some(message) = missing {
-      self.login.error = Some(message.into());
+      self.login.error = Some(message);
       cx.notify();
       return;
     }
@@ -340,13 +354,17 @@ impl Workspace {
 
   fn signed_in(&mut self, account: AppleAccount, pem: String, client: Client, window: &mut Window, cx: &mut Context<Self>) {
     self.settings.apple = Some(account);
+    self.settings.onboarded = true;
     self.save_settings(window, cx);
+    let l = self.settings.language;
     let secrets = self.secrets.clone();
     self.tasks.secrets = Some(cx.spawn_in(window, async move |this, cx| {
       let result = cx.background_spawn(async move { secrets.set(SecretKey::ApplePrivateKey, &pem) }).await;
       if let Err(error) = result {
         this
-          .update_in(cx, |_, window, cx| Self::error(window, cx, format!("Signed in, but the key could not be saved in the Keychain: {error}")))
+          .update_in(cx, |_, window, cx| {
+            Self::error(window, cx, trf(l, "Signed in, but the key could not be saved in the Keychain: {}", &[&error.to_string()]))
+          })
           .ok();
       }
     }));
@@ -356,10 +374,13 @@ impl Workspace {
   }
 
   pub fn sign_out(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    let l = self.settings.language;
     let secrets = self.secrets.clone();
     self.tasks.secrets = Some(cx.spawn_in(window, async move |this, cx| {
       if let Err(error) = cx.background_spawn(async move { secrets.delete(SecretKey::ApplePrivateKey) }).await {
-        this.update_in(cx, |_, window, cx| Self::error(window, cx, format!("The key could not be removed from the Keychain: {error}"))).ok();
+        this
+          .update_in(cx, |_, window, cx| Self::error(window, cx, trf(l, "The key could not be removed from the Keychain: {}", &[&error.to_string()])))
+          .ok();
       }
     }));
     self.settings.apple = None;
@@ -500,10 +521,10 @@ impl Workspace {
           this.saving = false;
           match result {
             Ok(true) => {
-              Self::success(window, cx, "Saved to App Store Connect.");
+              Self::success(window, cx, tr(this.settings.language, "Saved to App Store Connect."));
               this.load_snapshot(window, cx);
             }
-            Ok(false) => Self::success(window, cx, "Nothing changed."),
+            Ok(false) => Self::success(window, cx, tr(this.settings.language, "Nothing changed.")),
             Err(error) => Self::error(window, cx, error.to_string()),
           }
           cx.notify();
@@ -610,9 +631,10 @@ impl Workspace {
     let (Some(snapshot), Some(report)) = (self.ready_snapshot().cloned(), self.report.clone()) else { return };
     let provider = self.settings.ai.provider;
     if !self.has_key.get(&provider).copied().unwrap_or(false) {
-      Self::error(window, cx, format!("Add your {} API key in Settings first.", provider.label()));
+      Self::error(window, cx, trf(self.settings.language, "Add your {} API key in Settings first.", &[provider.label()]));
       return;
     }
+    let missing_key = trf(self.settings.language, "Add your {} API key in Settings first.", &[provider.label()]);
     let model = self.settings.ai.model(provider).to_owned();
     let declaration = self.privacy_declaration();
     let secrets = self.secrets.clone();
@@ -622,10 +644,7 @@ impl Workspace {
     self.tasks.ai = Some(cx.spawn_in(window, async move |this, cx| {
       let result = cx
         .background_spawn(async move {
-          let key = secrets
-            .get(SecretKey::ApiKey(provider))
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| format!("Add your {} API key in Settings first.", provider.label()))?;
+          let key = secrets.get(SecretKey::ApiKey(provider)).map_err(|error| error.to_string())?.ok_or_else(|| missing_key.to_string())?;
           // The rules are downloaded the first time they are needed.
           let playbook = if playbook.is_empty() { Playbook::refresh(&data_dir).unwrap_or(playbook) } else { playbook };
           let client = appforge_ai::Client::default();
@@ -675,7 +694,7 @@ impl Workspace {
               this.playbook = playbook;
               this.playbook_error = None;
               if announce {
-                Self::success(window, cx, "Rules updated from the playbook.");
+                Self::success(window, cx, tr(this.settings.language, "Rules updated from the playbook."));
               }
             }
             Err(error) => {
@@ -715,7 +734,7 @@ impl Workspace {
     }
     self.save_settings(window, cx);
     if key.is_empty() {
-      Self::success(window, cx, format!("{} settings saved.", provider.label()));
+      Self::success(window, cx, trf(self.settings.language, "{} settings saved.", &[provider.label()]));
       cx.notify();
       return;
     }
@@ -732,7 +751,7 @@ impl Workspace {
                 Provider::Anthropic => this.settings_form.anthropic_key.clone(),
               };
               set_input(&input, "", window, cx);
-              Self::success(window, cx, format!("{} API key saved in the Keychain.", provider.label()));
+              Self::success(window, cx, trf(this.settings.language, "{} API key saved in the Keychain.", &[provider.label()]));
             }
             Err(error) => Self::error(window, cx, error.to_string()),
           }
@@ -751,7 +770,7 @@ impl Workspace {
           match result {
             Ok(()) => {
               this.has_key.insert(provider, false);
-              Self::success(window, cx, format!("{} API key removed.", provider.label()));
+              Self::success(window, cx, trf(this.settings.language, "{} API key removed.", &[provider.label()]));
             }
             Err(error) => Self::error(window, cx, error.to_string()),
           }

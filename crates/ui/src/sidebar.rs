@@ -1,4 +1,5 @@
 use crate::{
+  i18n::tr,
   widgets::SIDEBAR_WIDTH,
   workspace::{Load, Workspace},
 };
@@ -16,6 +17,7 @@ use gpui_kit::{
 impl Workspace {
   pub(crate) fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
     let theme = cx.theme().clone();
+    let l = self.settings.language;
     let apps: Vec<_> = match &self.apps {
       Load::Ready(apps) => apps.clone(),
       _ => Vec::new(),
@@ -32,7 +34,7 @@ impl Workspace {
         .on_click(cx.listener(move |this, _, window, cx| this.select_app(id.clone(), window, cx)))
     }));
     let list = match &self.apps {
-      Load::Loading => list.child(div().px_2().text_sm().text_color(theme.muted_foreground).child("Loading apps…")),
+      Load::Loading => list.child(div().px_2().text_sm().text_color(theme.muted_foreground).child(tr(l, "Loading apps…"))),
       _ => list,
     };
     v_flex()
@@ -53,13 +55,13 @@ impl Workspace {
           .pb_1()
           .justify_between()
           .items_center()
-          .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).text_color(theme.muted_foreground).child("APP STORE"))
+          .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).text_color(theme.muted_foreground).child(tr(l, "APP STORE")))
           .child(
             Button::new("reload-apps")
               .icon(Icon::new(IconName::Redo))
               .ghost()
               .small()
-              .tooltip("Reload apps")
+              .tooltip(tr(l, "Reload apps"))
               .on_click(cx.listener(|this, _, window, cx| this.load_apps(window, cx))),
           ),
       )
@@ -72,13 +74,13 @@ impl Workspace {
           .items_center()
           .text_sm()
           .text_color(theme.muted_foreground)
-          .child("Google Play")
-          .child(Tag::secondary().small().child("Soon")),
+          .child(tr(l, "Google Play"))
+          .child(Tag::secondary().small().child(tr(l, "Soon"))),
       )
       .child(
         Button::new("open-settings")
           .icon(Icon::new(IconName::Settings))
-          .label("Settings")
+          .label(tr(l, "Settings"))
           .ghost()
           .w_full()
           .justify_start()
@@ -90,7 +92,7 @@ impl Workspace {
       )
       .child(
         Button::new("sign-out")
-          .label("Sign out")
+          .label(tr(l, "Sign out"))
           .ghost()
           .w_full()
           .justify_start()
