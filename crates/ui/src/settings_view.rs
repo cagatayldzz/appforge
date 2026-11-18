@@ -1,8 +1,8 @@
 use crate::{
   i18n::{tr, trf},
-  theme::FONT_SIZE_SM,
-  widgets::{centered, setting_row},
-  workspace::{SettingsPage, Workspace},
+  theme::{colors, FONT_SIZE_SM},
+  widgets::{app_avatar, centered, setting_row},
+  workspace::{Load, SettingsPage, Workspace},
 };
 use appforge_ai::Provider;
 use appforge_compliance::PLAYBOOK_REPOSITORY;
@@ -14,18 +14,18 @@ use gpui_kit::{
     scroll::ScrollableElement as _,
     select::Select,
     separator::Separator,
-    tag::Tag,
     v_flex, ActiveTheme, Icon, IconName, Sizable as _,
   },
   *,
 };
 
 /// How wide the fields in Settings get.
-const FIELD_WIDTH: f32 = 280.;
+const FIELD_WIDTH: f32 = 360.;
 
 impl Workspace {
-  /// One AI provider: its name with whether it is in use, then its model and key.
+  /// One AI provider: its name with whether it is in use, then its model and key, each under its label.
   fn provider_section(&mut self, provider: Provider, cx: &mut Context<Self>) -> impl IntoElement {
+    let c = colors(cx);
     let l = self.settings.language;
     let active = self.settings.ai.provider == provider;
     let has_key = self.has_key.get(&provider).copied().unwrap_or(false);
@@ -35,8 +35,9 @@ impl Workspace {
     };
     let status: SharedString =
       if has_key { trf(l, "{} saved in the Keychain. Type a new one to replace it.", &[key_name]) } else { trf(l, "No {} yet.", &[key_name]) };
+    // The provider that is in use shows a dot and its state; the others offer to become the one in use.
     let state = if active {
-      Tag::success().small().child(tr(l, "In use")).into_any_element()
+      h_flex().gap_1p5().items_center().child(div().size_2().rounded_full().bg(c.success)).child(tr(l, "In use")).into_any_element()
     } else {
       Button::new(SharedString::from(format!("use-{}", provider.label())))
         .label(trf(l, "Use {}", &[provider.label()]))
@@ -45,27 +46,118 @@ impl Workspace {
         .on_click(cx.listener(move |this, _, window, cx| this.set_provider(provider, window, cx)))
         .into_any_element()
     };
-    let mut key_actions = h_flex().gap_2().items_center().child(div().w(px(FIELD_WIDTH)).child(Input::new(key_input))).child(
+    let mut key_row = h_flex().gap_2().items_center().child(div().w(px(FIELD_WIDTH)).child(Input::new(key_input))).child(
       Button::new(SharedString::from(format!("save-{}", provider.label())))
         .label(tr(l, "Save"))
         .primary()
         .on_click(cx.listener(move |this, _, window, cx| this.save_ai(provider, window, cx))),
     );
     if has_key {
-      key_actions = key_actions.child(
+      key_row = key_row.child(
         Button::new(SharedString::from(format!("remove-{}", provider.label())))
           .label(tr(l, "Remove key"))
           .ghost()
           .on_click(cx.listener(move |this, _, window, cx| this.remove_key(provider, window, cx))),
       );
     }
+    let field = |label: SharedString, control: AnyElement, hint: Option<SharedString>| {
+      v_flex()
+        .gap_1p5()
+        .child(div().font_weight(FontWeight::MEDIUM).child(label))
+        .child(control)
+        .children(hint.map(|hint| div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(hint)))
+    };
     v_flex()
       .w_full()
-      .gap_1()
-      .child(h_flex().w_full().justify_between().items_center().child(div().font_weight(FontWeight::SEMIBOLD).child(provider.label())).child(state))
+      .gap_3()
+      .child(
+        h_flex().w_full().h_8().justify_between().items_center().child(div().font_weight(FontWeight::SEMIBOLD).child(provider.label())).child(state),
+      )
       .child(Separator::horizontal())
-      .child(setting_row(tr(l, "Model"), None, div().w(px(FIELD_WIDTH)).child(Input::new(model_input)), cx))
-      .child(setting_row(tr(l, "API key"), Some(status), key_actions, cx))
+      .child(
+        v_flex()
+          .gap_4()
+          .pt_1()
+          .child(field(tr(l, "Model"), div().w(px(FIELD_WIDTH)).child(Input::new(model_input)).into_any_element(), None))
+          .child(field(tr(l, "API key"), key_row.into_any_element(), Some(status))),
+      )
+  }
+
+  /// One row per app: where its source code is, with a button to choose or remove the folder.
+  fn code_folders_body(&mut self, cx: &mut Context<Self>) -> AnyElement {
+    let c = colors(cx);
+    let l = self.settings.language;
+    let apps = match &self.apps {
+      Load::Ready(apps) => apps.clone(),
+      _ => Vec::new(),
+    };
+    let intro = div()
+      .text_size(FONT_SIZE_SM)
+      .text_color(c.text_secondary)
+      .child(tr(l, "Choose the folder that holds each app's source code, so AppForge can read the project."));
+    if apps.is_empty() {
+      return v_flex()
+        .gap_3()
+        .child(intro)
+        .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "Loading apps…")))
+        .into_any_element();
+    }
+    let rows: Vec<AnyElement> = apps
+      .into_iter()
+      .map(|app| {
+        let folder = self.settings.code_folders.get(&app.id).cloned();
+        let missing = folder.as_ref().is_some_and(|folder| !folder.is_dir());
+        let shown: SharedString = match &folder {
+          Some(folder) => folder.display().to_string().into(),
+          None => tr(l, "Not set"),
+        };
+        let (choose_id, clear_id) = (app.id.clone(), app.id.clone());
+        let mut actions = h_flex().gap_2().child(
+          Button::new(SharedString::from(format!("choose-folder-{}", app.id)))
+            .icon(Icon::new(IconName::FolderOpen))
+            .label(if folder.is_some() { tr(l, "Change") } else { tr(l, "Choose folder") })
+            .outline()
+            .small()
+            .on_click(cx.listener(move |this, _, window, cx| this.choose_code_folder(choose_id.clone(), window, cx))),
+        );
+        if folder.is_some() {
+          actions = actions.child(
+            Button::new(SharedString::from(format!("clear-folder-{}", app.id)))
+              .label(tr(l, "Remove"))
+              .ghost()
+              .small()
+              .on_click(cx.listener(move |this, _, window, cx| this.clear_code_folder(&clear_id, window, cx))),
+          );
+        }
+        let path_color = if missing {
+          c.danger
+        } else if folder.is_some() {
+          c.text
+        } else {
+          c.text_secondary
+        };
+        h_flex()
+          .w_full()
+          .gap_4()
+          .py_3()
+          .items_center()
+          .border_b_1()
+          .border_color(c.border)
+          .child(app_avatar(&app.id, &app.name, true, false, self.icons.get(&app.id), cx).size_8())
+          .child(
+            v_flex()
+              .flex_1()
+              .min_w_0()
+              .gap_0p5()
+              .child(div().font_weight(FontWeight::MEDIUM).child(app.name.clone()))
+              .child(div().truncate().text_size(FONT_SIZE_SM).text_color(path_color).child(shown))
+              .children(missing.then(|| div().text_size(FONT_SIZE_SM).text_color(c.danger).child(tr(l, "This folder was not found.")))),
+          )
+          .child(actions)
+          .into_any_element()
+      })
+      .collect();
+    v_flex().gap_2().child(intro).child(v_flex().children(rows)).into_any_element()
   }
 
   fn settings_page_body(&mut self, cx: &mut Context<Self>) -> AnyElement {
@@ -96,11 +188,12 @@ impl Workspace {
       SettingsPage::AiProvider => {
         let sections: Vec<_> = Provider::ALL.iter().map(|provider| self.provider_section(*provider, cx).into_any_element()).collect();
         v_flex()
-          .gap_6()
+          .gap_8()
           .children(sections)
           .child(div().text_size(FONT_SIZE_SM).text_color(cx.theme().muted_foreground).child(tr(l, "More providers can be added later.")))
           .into_any_element()
       }
+      SettingsPage::CodeFolders => self.code_folders_body(cx),
       SettingsPage::Rules => v_flex()
         .child(setting_row(
           tr(l, "Rules"),

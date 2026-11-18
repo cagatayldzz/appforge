@@ -240,3 +240,25 @@ fn saving_a_review_detail_creates_it_when_missing_and_patches_it_otherwise() {
   assert_eq!(body["data"]["relationships"]["appStoreVersion"]["data"]["id"], "v1");
   assert_eq!(seen[1].method, "PATCH");
 }
+
+#[test]
+fn the_icon_comes_from_the_latest_build_and_is_downloaded_without_the_token() {
+  let builds = r#"{"data":[{"type":"builds","id":"b1","attributes":{"iconAssetToken":{"templateUrl":"{base}/image/{w}x{h}bb.{f}","width":1024,"height":1024}}}]}"#;
+  let (url, seen) = serve(&[("GET /v1/apps/100/builds", 200, builds), ("GET /image/128x128bb.png", 200, "ICONBYTES")]);
+  let icon = client(&url).app_icon("100", 128).unwrap();
+  assert_eq!(icon, Some(b"ICONBYTES".to_vec()));
+  let requests = seen.lock().unwrap();
+  assert!(requests[0].authorization.starts_with("Bearer "));
+  assert_eq!(requests[1].path, "/image/128x128bb.png");
+  assert_eq!(requests[1].authorization, "");
+}
+
+#[test]
+fn an_app_without_a_build_has_no_icon_and_an_odd_address_is_refused() {
+  let (url, _) = serve(&[("GET /v1/apps/100/builds", 200, r#"{"data":[]}"#)]);
+  assert_eq!(client(&url).app_icon("100", 128).unwrap(), None);
+  let odd = r#"{"data":[{"attributes":{"iconAssetToken":{"templateUrl":"http://example.invalid/{w}x{h}.{f}"}}}]}"#;
+  let (url, seen) = serve(&[("GET /v1/apps/100/builds", 200, odd)]);
+  assert!(matches!(client(&url).app_icon("100", 128), Err(Error::Unexpected(_))));
+  assert_eq!(seen.lock().unwrap().len(), 1, "the odd address must not be requested");
+}

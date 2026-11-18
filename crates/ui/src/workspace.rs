@@ -7,7 +7,7 @@ use crate::{
 use appforge_ai::Provider;
 use appforge_appstore::{App as StoreApp, AppInfoLocalization, AppSnapshot, Client, Credentials, ReviewDetail, VersionLocalization};
 use appforge_compliance::{analyze_with_ai, check, AiReview, Playbook, Report};
-use appforge_storage::{AppleAccount, Keychain, Language, PrivacyDeclaration, SecretKey, SecretStore, Settings};
+use appforge_storage::{AppleAccount, IconCache, Keychain, Language, PrivacyDeclaration, SecretKey, SecretStore, Settings};
 use gpui_kit::{
   component::{
     input::InputState,
@@ -26,6 +26,9 @@ use std::{
 
 /// The cached playbook is refreshed in the background when it is older than this.
 const PLAYBOOK_MAX_AGE_SECONDS: u64 = 7 * 24 * 60 * 60;
+
+/// The width, in pixels, of the icons asked for: they are drawn small, and twice that sharpens them on a Retina screen.
+const ICON_SIZE: u32 = 128;
 
 /// How long the window must be still before its place is written.
 const WINDOW_SAVE_DELAY: Duration = Duration::from_millis(500);
@@ -64,18 +67,20 @@ pub enum SettingsPage {
   General,
   Account,
   AiProvider,
+  CodeFolders,
   Rules,
   About,
 }
 
 impl SettingsPage {
-  pub const ALL: [SettingsPage; 5] = [Self::General, Self::Account, Self::AiProvider, Self::Rules, Self::About];
+  pub const ALL: [SettingsPage; 6] = [Self::General, Self::Account, Self::AiProvider, Self::CodeFolders, Self::Rules, Self::About];
 
   pub fn label(self) -> &'static str {
     match self {
       Self::General => "General",
       Self::Account => "Account",
       Self::AiProvider => "AI provider",
+      Self::CodeFolders => "Code folders",
       Self::Rules => "Rules",
       Self::About => "About",
     }
@@ -128,6 +133,8 @@ struct Tasks {
   ai: Option<Task<()>>,
   playbook: Option<Task<()>>,
   window: Option<Task<()>>,
+  icons: Option<Task<()>>,
+  folder: Option<Task<()>>,
 }
 
 pub struct Workspace {
@@ -140,6 +147,8 @@ pub struct Workspace {
   /// Reading the Keychain at startup.
   pub starting: bool,
   pub apps: Load<Vec<StoreApp>>,
+  /// The icon file of each app, by app id, for the apps whose icon is known.
+  pub icons: HashMap<String, PathBuf>,
   pub selected: Option<String>,
   pub snapshot: Load<AppSnapshot>,
   pub tab: DetailTab,
@@ -239,6 +248,7 @@ impl Workspace {
       client: None,
       starting: true,
       apps: Load::Idle,
+      icons: HashMap::new(),
       selected: None,
       snapshot: Load::Idle,
       tab: DetailTab::Information,
@@ -348,6 +358,36 @@ impl Workspace {
       _ => {}
     }
     cx.notify();
+  }
+
+  /// Asks for the folder that holds the source code of an app and remembers it.
+  pub fn choose_code_folder(&mut self, app_id: String, window: &mut Window, cx: &mut Context<Self>) {
+    let receiver = cx.prompt_for_paths(PathPromptOptions {
+      files: false,
+      directories: true,
+      multiple: false,
+      prompt: Some(tr(self.settings.language, "Choose folder")),
+    });
+    self.tasks.folder = Some(cx.spawn_in(window, async move |this, cx| {
+      if let Ok(Ok(Some(paths))) = receiver.await {
+        if let Some(path) = paths.into_iter().next() {
+          this
+            .update_in(cx, |this, window, cx| {
+              this.settings.code_folders.insert(app_id, path);
+              this.save_settings(window, cx);
+              cx.notify();
+            })
+            .ok();
+        }
+      }
+    }));
+  }
+
+  pub fn clear_code_folder(&mut self, app_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+    if self.settings.code_folders.remove(app_id).is_some() {
+      self.save_settings(window, cx);
+      cx.notify();
+    }
   }
 
   pub fn choose_key_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -477,6 +517,8 @@ impl Workspace {
     self.save_settings(window, cx);
     self.client = None;
     self.apps = Load::Idle;
+    self.icons.clear();
+    self.tasks.icons = None;
     self.selected = None;
     self.snapshot = Load::Idle;
     self.report = None;
@@ -499,6 +541,7 @@ impl Workspace {
           match result {
             Ok(apps) => {
               let first = apps.first().map(|app| app.id.clone());
+              this.load_icons(apps.iter().map(|app| app.id.clone()).collect(), window, cx);
               this.apps = Load::Ready(apps);
               if this.selected.is_none() {
                 if let Some(id) = first {
@@ -516,6 +559,47 @@ impl Workspace {
         .ok();
     }));
     cx.notify();
+  }
+
+  /// Shows the icons of the apps: first the ones kept on disk, so they appear at once, then the ones that are missing or old,
+  /// asked from App Store Connect. An app with no icon there keeps its letter.
+  fn load_icons(&mut self, ids: Vec<String>, window: &mut Window, cx: &mut Context<Self>) {
+    let Some(client) = self.client.clone() else { return };
+    let cache = IconCache::new(&self.data_dir);
+    self.tasks.icons = Some(cx.spawn_in(window, async move |this, cx| {
+      let kept = {
+        let (cache, ids) = (cache.clone(), ids.clone());
+        cx.background_spawn(async move { ids.into_iter().filter_map(|id| cache.path(&id).map(|path| (id, path))).collect::<Vec<_>>() }).await
+      };
+      this
+        .update(cx, |this, cx| {
+          this.icons.extend(kept);
+          cx.notify();
+        })
+        .ok();
+      let fetched = cx
+        .background_spawn(async move {
+          let mut fetched = Vec::new();
+          for id in ids.into_iter().filter(|id| !cache.is_fresh(id)) {
+            match client.app_icon(&id, ICON_SIZE) {
+              Ok(Some(bytes)) => match cache.store(&id, &bytes) {
+                Ok(path) => fetched.push((id, path)),
+                Err(error) => eprintln!("Could not keep the icon of app {id}: {error}"),
+              },
+              Ok(None) => {}
+              Err(error) => eprintln!("Could not get the icon of app {id}: {error}"),
+            }
+          }
+          fetched
+        })
+        .await;
+      this
+        .update(cx, |this, cx| {
+          this.icons.extend(fetched);
+          cx.notify();
+        })
+        .ok();
+    }));
   }
 
   pub fn select_app(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {

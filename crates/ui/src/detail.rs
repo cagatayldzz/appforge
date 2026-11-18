@@ -1,7 +1,7 @@
 use crate::{
   i18n::tr,
   theme::colors,
-  widgets::{area_field, centered, pair, section, strip, strip_tab, text_field},
+  widgets::{area_field, centered, pair, section, text_field},
   workspace::{locales, DetailTab, Load, Workspace},
 };
 use appforge_appstore::App;
@@ -47,27 +47,6 @@ impl Workspace {
   pub(crate) fn render_detail(&mut self, app: App, cx: &mut Context<Self>) -> impl IntoElement {
     let c = colors(cx);
     let l = self.settings.language;
-    let mut tabs = Vec::new();
-    for tab in DetailTab::ALL {
-      let strip_tab = strip_tab(SharedString::from(format!("tab-{}", tab.label())), tr(l, tab.label()), self.tab == tab, cx);
-      tabs.push(strip_tab.on_click(cx.listener(move |this, _, _, cx| {
-        this.tab = tab;
-        cx.notify();
-      })));
-    }
-    let controls = h_flex()
-      .gap_2()
-      .px_3()
-      .items_center()
-      .child(
-        Button::new("reload-snapshot")
-          .icon(Icon::new(IconName::RefreshCw))
-          .ghost()
-          .small()
-          .tooltip(tr(l, "Reload"))
-          .on_click(cx.listener(|this, _, window, cx| this.load_snapshot(window, cx))),
-      )
-      .children(self.save_control(cx));
     let body = match &self.snapshot {
       Load::Ready(_) => match self.tab {
         DetailTab::Information => self.render_information(&app, cx).into_any_element(),
@@ -95,17 +74,15 @@ impl Workspace {
         .child(tr(l, "Loading from App Store Connect…"))
         .into_any_element(),
     };
-    // The tabs and the app stay in place; only the page under them scrolls.
-    v_flex()
-      .flex_1()
-      .min_h_0()
-      .overflow_hidden()
-      .child(strip(cx).children(tabs).child(div().flex_1()).child(controls))
-      .child(v_flex().id("detail-scroll").flex_1().min_h_0().overflow_y_scrollbar().child(centered(v_flex().py_6().gap_6().child(body))))
+    // The pages are listed in the sidebar, so the page says which one it is; it scrolls under that heading.
+    let heading = div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, self.tab.label()));
+    v_flex().flex_1().min_h_0().overflow_hidden().child(
+      v_flex().id("detail-scroll").flex_1().min_h_0().overflow_y_scrollbar().child(centered(v_flex().py_6().gap_6().child(heading).child(body))),
+    )
   }
 
-  /// The button in the tab strip that saves the page. The Analysis tab has none.
-  fn save_control(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
+  /// The button that saves the page, shown in the sidebar. The Analysis page has none.
+  pub(crate) fn save_control(&self, cx: &mut Context<Self>) -> Option<Button> {
     let l = self.settings.language;
     let has_version = self.ready_snapshot().is_some_and(|snapshot| snapshot.version.is_some());
     let tab = self.tab;

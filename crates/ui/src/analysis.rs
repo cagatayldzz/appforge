@@ -1,6 +1,7 @@
 use crate::{
   i18n::{tr, trf},
-  widgets::{finding_card, page_title},
+  theme::{colors, FONT_SIZE_SM},
+  widgets::{finding_card, section, setting_row},
   workspace::{AiState, Workspace},
 };
 use appforge_compliance::{Finding, Severity, Verdict, PLAYBOOK_REPOSITORY};
@@ -56,6 +57,7 @@ impl Workspace {
 
   pub(crate) fn render_analysis(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
     let theme = cx.theme().clone();
+    let c = colors(cx);
     let l = self.settings.language;
     let Some(report) = self.report.clone() else { return v_flex().into_any_element() };
     let (verdict, color) = match report.verdict() {
@@ -69,9 +71,8 @@ impl Workspace {
       .gap_4()
       .items_center()
       .p_4()
-      .rounded_md()
-      .border_1()
-      .border_color(theme.border)
+      .rounded_lg()
+      .bg(c.surface_alt)
       .child(div().text_color(color).text_size(rems(2.5)).font_weight(FontWeight::BOLD).child(report.score().to_string()))
       .child(v_flex().gap_1().child(div().font_weight(FontWeight::SEMIBOLD).text_color(color).child(verdict)).child(
         div().text_sm().text_color(theme.muted_foreground).child(trf(
@@ -122,15 +123,19 @@ impl Workspace {
       (Some(fetched), false) => trf(l, "Updated {}", &[&ago(l, fetched)]),
       (None, false) => tr(l, "Downloaded"),
     };
-    v_flex()
+    let readiness = v_flex()
       .gap_4()
-      .child(page_title(tr(l, "Review readiness"), tr(l, "Based on the data saved in App Store Connect and your App Privacy answers. Apple's reviewers also test the app itself, so no check can promise approval."), cx))
+      .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(
+        l,
+        "Based on the data saved in App Store Connect and your App Privacy answers. Apple's reviewers also test the app itself, so no check can promise approval.",
+      )))
       .child(summary)
-      .child(findings)
-      .child(div().pt_4().text_lg().font_weight(FontWeight::SEMIBOLD).child(tr(l, "AI analysis")))
-      .child(div().text_sm().text_color(theme.muted_foreground).child(ai_hint))
+      .child(findings);
+    let ai = v_flex()
+      .gap_3()
+      .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(ai_hint))
       .child(
-        h_flex().gap_2().child(
+        h_flex().child(
           Button::new("run-ai")
             .icon(Icon::new(IconName::Bot))
             .label(trf(l, "Analyze with {}", &[provider.label()]))
@@ -140,25 +145,28 @@ impl Workspace {
             .on_click(cx.listener(|this, _, window, cx| this.run_ai(window, cx))),
         ),
       )
-      .child(ai_body)
-      .child(
-        h_flex()
-          .pt_4()
-          .gap_2()
-          .items_center()
-          .text_sm()
-          .text_color(theme.muted_foreground)
-          .child(trf(l, "Rules: App Store Compliance Playbook · {}", &[&playbook_status]))
-          .child(Button::new("open-playbook").label(tr(l, "View")).ghost().small().on_click(|_, _, cx| cx.open_url(PLAYBOOK_REPOSITORY)))
-          .child(
-            Button::new("update-playbook")
-              .label(tr(l, "Update rules"))
-              .ghost()
-              .small()
-              .loading(self.playbook_busy)
-              .on_click(cx.listener(|this, _, window, cx| this.refresh_playbook(true, window, cx))),
-          ),
-      )
+      .child(ai_body);
+    let rules = setting_row(
+      tr(l, "App Store Compliance Playbook"),
+      Some(playbook_status),
+      h_flex()
+        .gap_2()
+        .child(Button::new("open-playbook").label(tr(l, "View")).outline().small().on_click(|_, _, cx| cx.open_url(PLAYBOOK_REPOSITORY)))
+        .child(
+          Button::new("update-playbook")
+            .label(tr(l, "Update rules"))
+            .outline()
+            .small()
+            .loading(self.playbook_busy)
+            .on_click(cx.listener(|this, _, window, cx| this.refresh_playbook(true, window, cx))),
+        ),
+      cx,
+    );
+    v_flex()
+      .gap_8()
+      .child(section(tr(l, "Review readiness"), readiness))
+      .child(section(tr(l, "AI analysis"), ai))
+      .child(section(tr(l, "Rules"), rules))
       .into_any_element()
   }
 }

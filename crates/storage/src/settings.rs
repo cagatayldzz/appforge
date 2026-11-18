@@ -1,6 +1,10 @@
 use appforge_ai::Provider;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fs, io, path::Path};
+use std::{
+  collections::BTreeMap,
+  fs, io,
+  path::{Path, PathBuf},
+};
 
 /// The App Store Connect API key that is signed in. The private key itself lives in the Keychain.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -108,6 +112,8 @@ pub struct Settings {
   pub ai: AiSettings,
   /// Privacy answers per App Store Connect app id.
   pub privacy: BTreeMap<String, PrivacyDeclaration>,
+  /// The folder that holds each app's source code, by App Store Connect app id.
+  pub code_folders: BTreeMap<String, PathBuf>,
   /// The window as it was left, so the next launch opens the same way.
   pub window: Option<WindowState>,
 }

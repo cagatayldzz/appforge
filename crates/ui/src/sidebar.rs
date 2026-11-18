@@ -5,15 +5,14 @@ use crate::{
   i18n::{tr, trf},
   theme::{colors, FONT_SIZE, FONT_SIZE_SM},
   widgets::{app_avatar, list_row, rail_button, state_badge, ACTIVITY_BAR_WIDTH, SIDEBAR_WIDTH},
-  workspace::{Load, SettingsPage, Workspace},
+  workspace::{DetailTab, Load, SettingsPage, Workspace},
 };
+use appforge_compliance::Verdict;
 use gpui_kit::{
   component::{
     button::{Button, ButtonVariants as _},
     h_flex,
     scroll::ScrollableElement as _,
-    status_bar::StatusBar,
-    tag::Tag,
     tooltip::Tooltip,
     v_flex, Icon, IconName, Sizable as _,
   },
@@ -51,7 +50,7 @@ impl Workspace {
           .flex_none()
           .rounded_md()
           .cursor_pointer()
-          .child(app_avatar(&app.id, &app.name, selected).size_10())
+          .child(app_avatar(&app.id, &app.name, selected, true, self.icons.get(&app.id), cx).size_10())
           .tooltip(move |window, cx| Tooltip::new(name.clone()).build(window, cx))
           .on_click(cx.listener(move |this, _, window, cx| {
             this.show_settings = false;
@@ -97,25 +96,15 @@ impl Workspace {
         .into_any_element()
     };
     // The top of the column says what the main area shows: the pages of Settings, the app that is open, or all apps.
-    let (header, rows) = if self.show_settings {
-      (title(tr(l, "Settings"), None), self.settings_rows(cx))
+    let (header, rows, actions) = if self.show_settings {
+      (title(tr(l, "Settings"), None), self.settings_rows(cx), None)
     } else if let Some(app) = self.selected_app().filter(|_| !self.show_all_apps) {
-      (self.app_identity(&app, cx), Vec::new())
+      (self.app_identity(&app, cx), self.page_rows(cx), Some(self.page_actions(cx)))
     } else {
-      (title(tr(l, "Apps"), Some(self.reload_button(cx).into_any_element())), Vec::new())
+      (title(tr(l, "Apps"), Some(self.reload_button(cx).into_any_element())), Vec::new(), None)
     };
-    let footer = h_flex()
-      .flex_none()
-      .px_4()
-      .py_3()
-      .justify_between()
-      .items_center()
-      .border_t_1()
-      .border_color(c.border)
-      .text_size(FONT_SIZE_SM)
-      .text_color(c.text_secondary)
-      .child(tr(l, "Google Play"))
-      .child(Tag::secondary().small().child(tr(l, "Soon")));
+    // Reload and Save sit at the bottom of the column, under a line.
+    let footer = actions.map(|actions| v_flex().flex_none().border_t_1().border_color(c.border).child(actions));
     v_flex()
       .w(px(SIDEBAR_WIDTH))
       .h_full()
@@ -124,11 +113,11 @@ impl Workspace {
       .border_r_1()
       .border_color(c.border)
       .child(header)
-      .child(v_flex().id("sidebar-list").flex_1().min_h_0().px_2().gap_0p5().overflow_y_scrollbar().children(rows))
-      .child(footer)
+      .child(v_flex().id("sidebar-list").flex_1().min_h_0().px_2().pt_2().gap_0p5().overflow_y_scrollbar().children(rows))
+      .children(footer)
   }
 
-  fn reload_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
+  pub(crate) fn reload_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     Button::new("reload-apps")
       .icon(Icon::new(IconName::RefreshCw))
@@ -142,29 +131,93 @@ impl Workspace {
   fn app_identity(&self, app: &appforge_appstore::App, cx: &mut Context<Self>) -> AnyElement {
     let c = colors(cx);
     let l = self.settings.language;
-    let mut details = h_flex().flex_wrap().gap_x_2().gap_y_0p5().items_center().text_size(FONT_SIZE_SM).text_color(c.text_secondary);
+    // Where this version stands: its number, then its state at Apple, one under the other.
+    let mut details = v_flex().gap_1().text_size(FONT_SIZE_SM).text_color(c.text_secondary);
     if let Some(version) = self.ready_snapshot().and_then(|snapshot| snapshot.version.as_ref()) {
       details = details.child(trf(l, "Version {}", &[&version.version_string])).child(state_badge(&version.state, &c));
     }
-    h_flex()
+    // The review score, in the color of the verdict; it opens the Analysis page.
+    let score = self.report.as_ref().map(|report| {
+      let color = match report.verdict() {
+        Verdict::NotReady => c.danger,
+        Verdict::NeedsAttention => c.warning,
+        Verdict::LooksReady => c.success,
+      };
+      let tooltip = trf(l, "Open {}", &[&tr(l, DetailTab::Analysis.label())]);
+      let open = self.tab == DetailTab::Analysis;
+      v_flex()
+        .id("score-badge")
+        .flex_none()
+        .items_center()
+        .px_3()
+        .py_1()
+        .rounded_lg()
+        .cursor_pointer()
+        .bg(color.opacity(if open { 0.28 } else { 0.14 }))
+        .hover(move |badge| badge.bg(color.opacity(0.28)))
+        .child(div().text_color(color).text_size(rems(1.5)).font_weight(FontWeight::BOLD).child(report.score().to_string()))
+        .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "Score")))
+        .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
+        .on_click(cx.listener(|this, _, _, cx| {
+          this.tab = DetailTab::Analysis;
+          cx.notify();
+        }))
+    });
+    v_flex()
       .w_full()
       .flex_none()
-      .gap_3()
-      .px_4()
-      .py_4()
-      .items_center()
+      .gap_4()
+      .p_4()
       .border_b_1()
       .border_color(c.border)
-      .child(app_avatar(&app.id, &app.name, true).size_10())
       .child(
-        v_flex()
-          .flex_1()
-          .min_w_0()
-          .gap_0p5()
-          .child(div().truncate().text_size(FONT_SIZE).font_weight(FontWeight::SEMIBOLD).child(app.name.clone()))
-          .child(div().truncate().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(app.bundle_id.clone()))
-          .child(details),
+        h_flex().gap_3().items_center().child(app_avatar(&app.id, &app.name, true, false, self.icons.get(&app.id), cx).size_10()).child(
+          v_flex()
+            .flex_1()
+            .min_w_0()
+            .child(div().truncate().text_size(FONT_SIZE).font_weight(FontWeight::SEMIBOLD).child(app.name.clone()))
+            .child(div().truncate().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(app.bundle_id.clone())),
+        ),
       )
+      .child(h_flex().w_full().items_center().justify_between().gap_3().child(details).children(score))
+      .into_any_element()
+  }
+
+  /// The pages of the open app, one under the other.
+  fn page_rows(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    let l = self.settings.language;
+    DetailTab::ALL
+      .iter()
+      .map(|tab| {
+        let tab = *tab;
+        list_row(SharedString::from(format!("page-{}", tab.label())), self.tab == tab, cx)
+          .py_2()
+          .child(tr(l, tab.label()))
+          .on_click(cx.listener(move |this, _, _, cx| {
+            this.tab = tab;
+            cx.notify();
+          }))
+          .into_any_element()
+      })
+      .collect()
+  }
+
+  /// Reload and Save of the open app. The Analysis page has no Save.
+  fn page_actions(&self, cx: &mut Context<Self>) -> AnyElement {
+    let l = self.settings.language;
+    h_flex()
+      .gap_2()
+      .px_4()
+      .py_3()
+      .child(
+        Button::new("reload-snapshot")
+          .icon(Icon::new(IconName::RefreshCw))
+          .label(tr(l, "Reload"))
+          .outline()
+          .small()
+          .on_click(cx.listener(|this, _, window, cx| this.load_snapshot(window, cx))),
+      )
+      .children(self.save_control(cx).map(|save| save.flex_1()))
       .into_any_element()
   }
 
@@ -184,22 +237,5 @@ impl Workspace {
           .into_any_element()
       })
       .collect()
-  }
-
-  /// The thin bar at the bottom of the main area: the open app on the left, the account on the right.
-  pub(crate) fn render_status_bar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-    let c = colors(cx);
-    let l = self.settings.language;
-    let mut bar = StatusBar::new().bg(c.surface_alt).border_color(c.border).text_color(c.text_secondary);
-    if let Some(app) = self.selected_app().filter(|_| !self.show_settings) {
-      bar = bar.left(app.bundle_id.clone());
-      if let Some(version) = self.ready_snapshot().and_then(|snapshot| snapshot.version.as_ref()) {
-        bar = bar.left(trf(l, "Version {}", &[&version.version_string]));
-      }
-    }
-    if let Some(account) = &self.settings.apple {
-      bar = bar.right(trf(l, "Signed in with key {}.", &[&account.key_id]));
-    }
-    bar
   }
 }

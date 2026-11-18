@@ -26,8 +26,10 @@ impl Render for Workspace {
     } else if self.client.is_none() {
       self.render_login(cx).into_any_element()
     } else {
-      let main = v_flex().flex_1().h_full().min_w_0().min_h_0().overflow_hidden().child(self.render_main(cx)).child(self.render_status_bar(cx));
-      h_flex().flex_1().min_h_0().child(self.render_rail(cx)).child(self.render_sidebar(cx)).child(main).into_any_element()
+      // The grid of all apps takes the whole width; every other page has the sidebar next to it.
+      let sidebar = (!self.showing_all_apps()).then(|| self.render_sidebar(cx));
+      let main = v_flex().flex_1().h_full().min_w_0().min_h_0().overflow_hidden().child(self.render_main(cx));
+      h_flex().flex_1().min_h_0().child(self.render_rail(cx)).children(sidebar).child(main).into_any_element()
     };
     let c = colors(cx);
     v_flex()
@@ -42,13 +44,18 @@ impl Render for Workspace {
 }
 
 impl Workspace {
+  /// Whether the main area shows the grid of all apps: asked for with the Apps button, or no app is open yet.
+  pub(crate) fn showing_all_apps(&self) -> bool {
+    !self.show_settings && matches!(&self.apps, Load::Ready(apps) if !apps.is_empty()) && (self.show_all_apps || self.selected_app().is_none())
+  }
+
   fn render_main(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let content = if self.show_settings {
       self.render_settings(cx).into_any_element()
     } else {
       match (&self.apps, self.selected_app()) {
-        (Load::Ready(apps), _) if self.show_all_apps && !apps.is_empty() => self.render_apps(cx).into_any_element(),
+        (Load::Ready(_), _) if self.showing_all_apps() => self.render_apps(cx).into_any_element(),
         (Load::Ready(_), Some(app)) => self.render_detail(app, cx).into_any_element(),
         (Load::Ready(apps), None) if apps.is_empty() => self
           .render_message(

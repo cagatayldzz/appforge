@@ -1,5 +1,7 @@
 //! Small pieces shared by several screens.
 
+use std::path::PathBuf;
+
 use crate::{
   i18n::{tr, trf},
   theme::{avatar_color, colors, Colors, FONT_SIZE, FONT_SIZE_SM},
@@ -12,9 +14,8 @@ use gpui_kit::{
     input::{Input, InputState, Textarea, TextareaState},
     label::Label,
     separator::Separator,
-    tag::Tag,
     tooltip::Tooltip,
-    v_flex, ActiveTheme, Icon, IconName, Sizable as _,
+    v_flex, ActiveTheme, Icon, IconName,
   },
   prelude::FluentBuilder as _,
   *,
@@ -48,13 +49,6 @@ pub fn text_field(label: impl Into<SharedString>, input: &Entity<InputState>, li
 pub fn area_field(label: impl Into<SharedString>, input: &Entity<TextareaState>, limit: Option<usize>, cx: &App) -> impl IntoElement {
   let length = input.read(cx).value().chars().count();
   labelled(label.into(), counter(length, limit, cx), Textarea::new(input))
-}
-
-pub fn page_title(title: impl Into<SharedString>, subtitle: impl Into<SharedString>, cx: &App) -> impl IntoElement {
-  v_flex()
-    .gap_1()
-    .child(div().text_2xl().font_weight(FontWeight::SEMIBOLD).child(title.into()))
-    .child(div().text_sm().text_color(cx.theme().muted_foreground).child(subtitle.into()))
 }
 
 /// Centers `child` in a column of at most `CONTENT_MAX_WIDTH`, so every page lines up.
@@ -127,22 +121,28 @@ pub fn rail_button(
     .on_click(on_click)
 }
 
-/// An app's avatar: its first letter on a tinted square, in a color that is always the same for the same app.
-pub fn app_avatar(id: &str, name: &str, selected: bool) -> Div {
+/// An app's avatar: its icon when it is known, else its first letter on a tinted square in a color that is always the same
+/// for the same app. The chosen app has a ring around its icon (when `ring`) or a filled square for its letter.
+pub fn app_avatar(id: &str, name: &str, selected: bool, ring: bool, icon: Option<&PathBuf>, cx: &App) -> Div {
   let color = avatar_color(id);
-  let letter: String = name.chars().take(1).flat_map(char::to_uppercase).collect();
-  div()
-    .size_8()
-    .flex()
-    .flex_none()
-    .items_center()
-    .justify_center()
-    .rounded_md()
-    .text_size(FONT_SIZE)
-    .font_weight(FontWeight::SEMIBOLD)
-    .when(selected, |avatar| avatar.bg(color).text_color(white()))
-    .when(!selected, |avatar| avatar.bg(color.opacity(0.2)).text_color(color))
-    .child(letter)
+  let accent = colors(cx).accent;
+  let base = div().size_8().flex().flex_none().items_center().justify_center().rounded_lg();
+  match icon {
+    Some(path) => base
+      .border_2()
+      .border_color(if selected && ring { accent } else { gpui_kit::transparent_black() })
+      .overflow_hidden()
+      .child(img(path.clone()).size_full().rounded_md().object_fit(ObjectFit::Cover)),
+    None => {
+      let letter: String = name.chars().take(1).flat_map(char::to_uppercase).collect();
+      base
+        .text_size(FONT_SIZE)
+        .font_weight(FontWeight::SEMIBOLD)
+        .when(selected, |avatar| avatar.bg(color).text_color(white()))
+        .when(!selected, |avatar| avatar.bg(color.opacity(0.2)).text_color(color))
+        .child(letter)
+    }
+  }
 }
 
 /// One row of a sidebar list: chosen rows are tinted, others light up when hovered.
@@ -159,31 +159,6 @@ pub fn list_row(id: impl Into<ElementId>, selected: bool, cx: &App) -> Stateful<
     .text_size(FONT_SIZE)
     .when(selected, |row| row.bg(c.selected))
     .when(!selected, |row| row.hover(move |row| row.bg(c.hover)))
-}
-
-/// The strip that holds the tabs of a page: gray, with a line under it.
-pub fn strip(cx: &App) -> Div {
-  let c = colors(cx);
-  h_flex().h_10().w_full().flex_none().items_center().bg(c.surface_alt).border_b_1().border_color(c.border)
-}
-
-/// One tab of the strip: a divider on its right; the shown tab is white with an accent line on top.
-/// The caller adds the click handler.
-pub fn strip_tab(id: impl Into<ElementId>, label: impl Into<SharedString>, shown: bool, cx: &App) -> Stateful<Div> {
-  let c = colors(cx);
-  h_flex()
-    .id(id)
-    .relative()
-    .h_full()
-    .px_4()
-    .items_center()
-    .border_r_1()
-    .border_color(c.border)
-    .text_size(FONT_SIZE)
-    .cursor_pointer()
-    .when(shown, |tab| tab.bg(c.background).text_color(c.text).child(div().absolute().top_0().left_0().right_0().h_0p5().bg(c.accent)))
-    .when(!shown, |tab| tab.text_color(c.text_secondary).hover(|tab| tab.bg(c.hover)))
-    .child(label.into())
 }
 
 /// "PREPARE_FOR_SUBMISSION" as "Prepare for submission".
@@ -204,13 +179,24 @@ pub fn state_badge(state: &str, c: &Colors) -> Div {
   h_flex().gap_1p5().items_center().child(div().size_2().rounded_full().bg(color)).child(div().text_color(c.text).child(state_label(state)))
 }
 
-pub fn severity_tag(severity: Severity, language: Language) -> Tag {
-  let tag = match severity {
-    Severity::Critical => Tag::danger(),
-    Severity::Warning => Tag::warning(),
-    Severity::Info => Tag::info(),
+/// How serious a finding is: the name in the color of its severity on a light tint of it. The Kit's tags are hard to read
+/// in the dark theme, where their text and fill are nearly the same color.
+pub fn severity_badge(severity: Severity, language: Language, cx: &App) -> Div {
+  let c = colors(cx);
+  let color = match severity {
+    Severity::Critical => c.danger,
+    Severity::Warning => c.warning,
+    Severity::Info => c.info,
   };
-  tag.small().child(tr(language, severity.label()))
+  div()
+    .px_1p5()
+    .py_0p5()
+    .rounded_md()
+    .bg(color.opacity(0.16))
+    .text_color(color)
+    .text_size(FONT_SIZE_SM)
+    .font_weight(FontWeight::SEMIBOLD)
+    .child(tr(language, severity.label()))
 }
 
 /// One finding: severity, title, guideline, what is wrong and how to fix it. `action` is an optional button, for example "Fix".
@@ -223,7 +209,7 @@ pub fn finding_card(finding: &Finding, action: Option<AnyElement>, language: Lan
     .gap_x_2()
     .gap_y_1()
     .items_center()
-    .child(severity_tag(finding.severity, language))
+    .child(severity_badge(finding.severity, language, cx))
     .child(div().font_weight(FontWeight::SEMIBOLD).child(finding.title.clone()));
   if !finding.guideline.is_empty() {
     heading = heading.child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(language, "Guideline {}", &[&finding.guideline])));

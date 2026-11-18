@@ -25,10 +25,17 @@ impl Workspace {
       Load::Ready(apps) => apps.clone(),
       _ => Vec::new(),
     };
-    let heading = v_flex()
-      .gap_1()
-      .child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, "Apps")))
-      .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "{} apps", &[&apps.len().to_string()])));
+    let heading = h_flex()
+      .w_full()
+      .justify_between()
+      .items_start()
+      .child(
+        v_flex()
+          .gap_1()
+          .child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, "Apps")))
+          .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "{} apps", &[&apps.len().to_string()]))),
+      )
+      .child(self.reload_button(cx));
     let cards: Vec<AnyElement> = apps
       .into_iter()
       .map(|app| {
@@ -43,7 +50,7 @@ impl Workspace {
           .cursor_pointer()
           .hover(move |card| card.bg(c.hover).border_color(c.control_border))
           .child(
-            h_flex().gap_3().items_center().child(app_avatar(&app.id, &app.name, true).size_10()).child(
+            h_flex().gap_3().items_center().child(app_avatar(&app.id, &app.name, true, false, self.icons.get(&app.id), cx).size_10()).child(
               v_flex()
                 .flex_1()
                 .min_w_0()

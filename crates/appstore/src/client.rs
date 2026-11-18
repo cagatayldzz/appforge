@@ -10,6 +10,8 @@ use std::{
 
 pub const DEFAULT_BASE_URL: &str = "https://api.appstoreconnect.apple.com";
 const PAGE_SIZE: usize = 200;
+/// The largest icon file taken from the answer.
+const MAX_ICON_BYTES: u64 = 2 * 1024 * 1024;
 
 pub struct Client {
   credentials: Credentials,
@@ -91,6 +93,26 @@ impl Client {
   pub fn apps(&self) -> Result<Vec<App>, Error> {
     let items = self.get_all(&format!("/v1/apps?limit={PAGE_SIZE}&fields[apps]=name,bundleId,sku,primaryLocale"))?;
     Ok(items.iter().map(parse_app).collect())
+  }
+
+  /// The icon of an app as an image file about `size` pixels wide. App Store Connect serves it with the latest build of the
+  /// app, so an app that has no build yet has none (`None`).
+  pub fn app_icon(&self, app_id: &str, size: u32) -> Result<Option<Vec<u8>>, Error> {
+    let path = format!("/v1/apps/{app_id}/builds?limit=1&sort=-uploadedDate&fields[builds]=iconAssetToken");
+    let Some(page) = self.get_optional(&path)? else { return Ok(None) };
+    let Some(template) = page["data"][0]["attributes"]["iconAssetToken"]["templateUrl"].as_str() else { return Ok(None) };
+    let url = template.replace("{w}", &size.to_string()).replace("{h}", &size.to_string()).replace("{f}", "png");
+    // The address comes from the answer: it must be a secure web address, and the token is never sent to it.
+    if !url.starts_with("https://") && !url.starts_with(&self.base_url) {
+      return Err(Error::Unexpected("the icon address is not a secure web address".into()));
+    }
+    let network = |error: ureq::Error| Error::Network(error.to_string());
+    let mut response = self.agent.get(&url).call().map_err(network)?;
+    let status = response.status().as_u16();
+    if status >= 400 {
+      return Err(Error::Api { status, message: "The icon could not be downloaded".into() });
+    }
+    response.body_mut().with_config().limit(MAX_ICON_BYTES).read_to_vec().map(Some).map_err(network)
   }
 
   /// Reads everything about `app`: App Information, the listing of its current version, screenshots and review details.

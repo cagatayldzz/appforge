@@ -83,3 +83,16 @@ fn the_window_state_is_kept_and_old_settings_without_it_still_load() {
   assert_eq!(Settings::load(&path).unwrap().window, settings.window);
   fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn code_folders_are_kept_per_app_and_old_settings_have_none() {
+  let dir = temporary_dir("code-folders");
+  let path = dir.join("settings.json");
+  fs::write(&path, r#"{"onboarded":true}"#).unwrap();
+  assert!(Settings::load(&path).unwrap().code_folders.is_empty());
+  let mut settings = Settings::default();
+  settings.code_folders.insert("100".into(), "/projects/hexumi".into());
+  settings.save(&path).unwrap();
+  assert_eq!(Settings::load(&path).unwrap().code_folders.get("100"), Some(&std::path::PathBuf::from("/projects/hexumi")));
+  fs::remove_dir_all(dir).unwrap();
+}

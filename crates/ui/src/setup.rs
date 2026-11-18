@@ -16,7 +16,6 @@ use gpui_kit::{
     select::Select,
     separator::Separator,
     sidebar::{Sidebar, SidebarMenu},
-    tag::Tag,
     v_flex, ActiveTheme, Icon, IconName, Sizable as _,
   },
   *,
@@ -61,18 +60,9 @@ impl Workspace {
         ))
     });
     let header = v_flex().w_full().gap_6().px_4().pt_5().pb_3().child(brand).children(notes);
-    let footer = v_flex()
-      .w_full()
-      .gap_4()
-      .p_4()
-      .child(Separator::horizontal())
-      .child(v_flex().gap_1p5().child(div().text_xs().text_color(muted).child(tr(l, "Language"))).child(Select::new(&self.language_select).w_full()))
-      .child(
-        h_flex()
-          .justify_between()
-          .items_center()
-          .child(Label::new(tr(l, "Google Play")).text_sm())
-          .child(Tag::secondary().small().child(tr(l, "Coming soon"))),
+    let footer =
+      v_flex().w_full().gap_4().p_4().child(Separator::horizontal()).child(
+        v_flex().gap_1p5().child(div().text_xs().text_color(muted).child(tr(l, "Language"))).child(Select::new(&self.language_select).w_full()),
       );
     let sidebar = div()
       .w(px(SIDEBAR_WIDTH))
