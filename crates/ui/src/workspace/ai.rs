@@ -6,6 +6,12 @@ use gpui_kit::component::{
   h_flex, v_flex,
 };
 
+struct AiAnalysisNotice;
+
+fn analysis_progress(message: SharedString, window: &mut Window, cx: &mut App) {
+  window.push_notification(Notification::info(message).id::<AiAnalysisNotice>().autohide(false), cx);
+}
+
 impl Workspace {
   /// Counts what an AI request used and keeps the totals on disk.
   pub(crate) fn record_usage(&mut self, provider: Provider, model: &str, usage: appforge_ai::Usage, window: &mut Window, cx: &mut Context<Self>) {
@@ -117,8 +123,9 @@ impl Workspace {
     let guidelines = self.guidelines.clone();
     let data_dir = self.data_dir.clone();
     self.ai = AiState::Running;
+    analysis_progress(tr(language, "projectAnalysisPreparing"), window, cx);
     self.tasks.ai = Some(cx.spawn_in(window, async move |this, cx| {
-      let result = cx
+      let prepared = cx
         .background_spawn(async move {
           let key = secrets.get(SecretKey::ApiKey(provider)).map_err(|error| error.to_string())?.ok_or_else(|| missing_key.to_string())?;
           // The rules are downloaded the first time they are needed.
@@ -127,16 +134,33 @@ impl Workspace {
             .map(|folder| appforge_project::summarize(&folder))
             .transpose()
             .map_err(|error| trf(language, "couldNotReadThe", &[&error.to_string()]).to_string())?;
-          let client = appforge_ai::Client::default();
-          let language_name = match language {
-            Language::English => "English",
-            Language::Turkish => "Turkish",
-          };
-          let context = Some((language_name, project.as_ref().map(|summary| summary.text.as_str())));
-          analyze_project_with_ai(&client, provider, &key, &model, &snapshot, &declaration, &report, &playbook, &guidelines, context)
-            .map(|(review, usage)| (review, playbook, usage))
+          Ok((key, playbook, project))
         })
         .await;
+      let result = match prepared {
+        Ok((key, playbook, project)) => {
+          if this
+            .update_in(cx, |this, window, cx| {
+              analysis_progress(trf(this.settings.language, "projectAnalysisWaiting", &[provider.label()]), window, cx);
+            })
+            .is_err()
+          {
+            return;
+          }
+          cx.background_spawn(async move {
+            let client = appforge_ai::Client::default();
+            let language_name = match language {
+              Language::English => "English",
+              Language::Turkish => "Turkish",
+            };
+            let context = Some((language_name, project.as_ref().map(|summary| summary.text.as_str())));
+            analyze_project_with_ai(&client, provider, &key, &model, &snapshot, &declaration, &report, &playbook, &guidelines, context)
+              .map(|(review, usage)| (review, playbook, usage))
+          })
+          .await
+        }
+        Err(error) => Err(error),
+      };
       this
         .update_in(cx, |this, window, cx| {
           this.tasks.ai = None;
@@ -144,7 +168,7 @@ impl Workspace {
             if let Ok((_, _, usage)) = result {
               this.record_usage(provider, &used, usage, window, cx);
             }
-            this.ai = AiState::Idle;
+            this.reset_ai_analysis(window, cx);
             cx.notify();
             return;
           }
@@ -154,11 +178,15 @@ impl Workspace {
               this.playbook = playbook;
               let count = review.findings.iter().filter(|finding| !finding.fix.trim().is_empty()).count().to_string();
               this.ai = AiState::Done(review);
-              Self::success(window, cx, trf(this.settings.language, "projectAnalysisFinished", &[&count]));
+              window.push_notification(
+                Notification::success(trf(this.settings.language, "projectAnalysisFinished", &[&count])).id::<AiAnalysisNotice>(),
+                cx,
+              );
             }
             Err(error) => {
               this.ai = AiState::Failed(error.clone().into());
-              Self::error(window, cx, error);
+              window
+                .push_notification(Notification::error(trf(this.settings.language, "projectAnalysisFailed", &[&error])).id::<AiAnalysisNotice>(), cx);
             }
           }
           cx.notify();
@@ -166,6 +194,12 @@ impl Workspace {
         .ok();
     }));
     cx.notify();
+  }
+
+  pub(super) fn reset_ai_analysis(&mut self, window: &mut Window, cx: &mut App) {
+    self.tasks.ai = None;
+    self.ai = AiState::Idle;
+    window.remove_notification::<AiAnalysisNotice>(cx);
   }
 
   pub(super) fn refresh_playbook_if_stale(&mut self, window: &mut Window, cx: &mut Context<Self>) {

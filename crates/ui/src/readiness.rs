@@ -4,7 +4,7 @@ use crate::{
   i18n::{tr, translated_text, trf},
   product_page::{store_info, store_link},
   theme::colors,
-  widgets::{card, section},
+  widgets::{card, page_columns, section},
   workspace::{DetailTab, Load, Workspace},
 };
 use appforge_compliance::{Category, Severity};
@@ -15,11 +15,10 @@ use gpui_kit::{
 };
 
 impl Workspace {
-  pub(crate) fn render_readiness(&self, cx: &mut Context<Self>) -> impl IntoElement {
+  pub(crate) fn render_readiness(&self, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let c = colors(cx);
-    let mut page = v_flex().gap_4();
-    let Some(snapshot) = self.ready_snapshot() else { return page };
+    let Some(snapshot) = self.ready_snapshot() else { return v_flex() };
     let distribution = self.active_data().map(|data| &data.distribution);
     let release_status = match (snapshot.version.as_ref(), distribution) {
       (None, _) => tr(l, "thisAppHasNoIos"),
@@ -28,7 +27,7 @@ impl Workspace {
       (_, Some(Load::Failed(message))) => message.clone(),
       _ => tr(l, "loadingFromAppStore"),
     };
-    page = page.child(section(
+    let requirements = section(
       tr(l, "submissionRequirements"),
       v_flex()
         .gap_3()
@@ -54,7 +53,8 @@ impl Workspace {
           div(),
           &c,
         )),
-    ));
+    );
+    let mut checks = v_flex().gap_3();
     for (category, tab) in
       [(Category::AppInformation, DetailTab::Information), (Category::AppReview, DetailTab::Review), (Category::AppPrivacy, DetailTab::Privacy)]
     {
@@ -82,9 +82,9 @@ impl Workspace {
       if count == 0 {
         findings = findings.child(div().text_sm().text_color(c.text_secondary).child(tr(l, "noChecklistFindings")));
       }
-      page = page.child(card(tr(l, tab.label()), None, Some(self.readiness_link(tab, cx).into_any_element()), findings, &c));
+      checks = checks.child(card(tr(l, tab.label()), None, Some(self.readiness_link(tab, cx).into_any_element()), findings, &c));
     }
-    page.child(section(
+    let conditions = section(
       tr(l, "conditionalRequirements"),
       v_flex().gap_2().child(div().text_sm().text_color(c.text_secondary).child(tr(l, "verifyMarketRequirements"))).child(
         h_flex()
@@ -97,7 +97,8 @@ impl Workspace {
           ))
           .child(self.readiness_link(DetailTab::Analysis, cx)),
       ),
-    ))
+    );
+    v_flex().gap_6().child(page_columns(wide, v_flex().gap_6().child(requirements).child(conditions), checks))
   }
 
   fn readiness_link(&self, tab: DetailTab, cx: &mut Context<Self>) -> Button {

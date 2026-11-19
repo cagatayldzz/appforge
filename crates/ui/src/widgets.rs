@@ -140,6 +140,24 @@ pub(crate) fn centered_with_width(child: impl IntoElement, width: impl Into<Leng
   h_flex().w_full().justify_center().child(div().w_full().min_w_0().max_w(width.into()).px_6().child(child))
 }
 
+/// Pages get a second column only when both columns have room beside the navigation.
+pub(crate) fn has_room_for_columns(window: &Window) -> bool {
+  window.viewport_size().width >= px(ACTIVITY_BAR_WIDTH + SIDEBAR_WIDTH) + window.rem_size() * 65.
+}
+
+pub(crate) fn page_columns(wide: bool, primary: impl IntoElement, secondary: impl IntoElement) -> Div {
+  if wide {
+    h_flex()
+      .w_full()
+      .gap_6()
+      .items_start()
+      .child(div().flex_basis(relative(0.56)).min_w_0().child(primary))
+      .child(div().flex_1().min_w_0().child(secondary))
+  } else {
+    v_flex().w_full().gap_6().child(primary).child(secondary)
+  }
+}
+
 /// A titled group of fields: a heading with a line under it, then the fields. No boxes, so pages stay calm.
 pub fn section(title: impl Into<SharedString>, body: impl IntoElement) -> Div {
   v_flex()
@@ -163,10 +181,12 @@ pub fn card(title: impl Into<SharedString>, hint: Option<SharedString>, action: 
       h_flex()
         .w_full()
         .gap_3()
+        .flex_wrap()
         .items_center()
         .child(
           v_flex()
             .flex_1()
+            .flex_basis(rems(10.))
             .min_w_0()
             .child(div().font_weight(FontWeight::SEMIBOLD).child(title.into()))
             .children(hint.map(|hint| div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(hint))),
@@ -186,7 +206,8 @@ pub fn setting_row(title: impl Into<SharedString>, description: Option<SharedStr
   let c = colors(cx);
   h_flex()
     .w_full()
-    .gap_6()
+    .gap_3()
+    .flex_wrap()
     .py_3()
     .items_center()
     .justify_between()
@@ -195,12 +216,13 @@ pub fn setting_row(title: impl Into<SharedString>, description: Option<SharedStr
     .child(
       v_flex()
         .flex_1()
+        .flex_basis(rems(12.))
         .min_w_0()
         .gap_0p5()
         .child(div().font_weight(FontWeight::MEDIUM).child(title.into()))
         .children(description.map(|text| div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(text))),
     )
-    .child(div().flex_shrink_0().child(control))
+    .child(div().max_w_full().child(control))
 }
 
 /// A square icon button of the activity bar. The Kit's `Button` fixes its icon at a small size, so this draws the icon itself.

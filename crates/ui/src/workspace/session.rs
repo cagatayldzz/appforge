@@ -191,7 +191,7 @@ impl Workspace {
     self.settings.apple = None;
     self.save_settings(window, cx);
     self.client = None;
-    self.tasks.ai = None;
+    self.reset_ai_analysis(window, cx);
     self.tasks.save = None;
     self.tasks.store_write = None;
     self.saving = false;
@@ -206,7 +206,6 @@ impl Workspace {
     self.tasks.draft = None;
     self.drafting = None;
     self.report = None;
-    self.ai = AiState::Idle;
     self.show_settings = false;
     self.tasks.apps = None;
     cx.notify();

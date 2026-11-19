@@ -4,8 +4,8 @@ use crate::{
   i18n::{tr, trf},
   theme::colors,
   widgets::{
-    area_field, area_field_with_action, centered, centered_with_width, pair, required, required_mark, section, text_field, text_field_with_action,
-    url_field,
+    area_field, area_field_with_action, centered_with_width, page_columns, pair, required, required_mark, section, text_field,
+    text_field_with_action, url_field,
   },
   workspace::{DetailTab, Load, Workspace},
 };
@@ -50,7 +50,7 @@ impl Workspace {
     )
   }
 
-  pub(crate) fn render_detail(&mut self, app: App, cx: &mut Context<Self>) -> impl IntoElement {
+  pub(crate) fn render_detail(&mut self, app: App, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
     let c = colors(cx);
     let l = self.settings.language;
     let body = if self.tab == DetailTab::CustomerReviews {
@@ -58,14 +58,14 @@ impl Workspace {
     } else {
       match self.active_data().map(|data| &data.snapshot) {
         Some(Load::Ready(_)) => match self.tab {
-          DetailTab::Readiness => self.render_readiness(cx).into_any_element(),
+          DetailTab::Readiness => self.render_readiness(wide, cx).into_any_element(),
           DetailTab::ProductPage => self.render_product_page(&app, cx).into_any_element(),
-          DetailTab::Distribution => self.render_distribution(cx),
+          DetailTab::Distribution => self.render_distribution(wide, cx),
           DetailTab::CustomerReviews => self.render_customer_reviews(cx),
-          DetailTab::Information => self.render_information(&app, cx).into_any_element(),
-          DetailTab::Review => self.render_review(cx).into_any_element(),
-          DetailTab::Privacy => self.render_privacy(&app, cx).into_any_element(),
-          DetailTab::Analysis => self.render_analysis(cx).into_any_element(),
+          DetailTab::Information => self.render_information(&app, wide, cx).into_any_element(),
+          DetailTab::Review => self.render_review(wide, cx).into_any_element(),
+          DetailTab::Privacy => self.render_privacy(&app, wide, cx).into_any_element(),
+          DetailTab::Analysis => self.render_analysis(wide, cx).into_any_element(),
         },
         Some(Load::Failed(message)) => v_flex()
           .gap_3()
@@ -105,11 +105,12 @@ impl Workspace {
       None => title.into_any_element(),
     };
     let content = v_flex().pt_6().pb_6().gap_6().child(heading).children(self.render_ai_tasks(cx)).child(body);
-    let content = match self.tab {
-      DetailTab::ProductPage => centered_with_width(content, rems(72.)),
-      DetailTab::Distribution => centered_with_width(content, rems(60.)),
-      _ => centered(content),
+    let max_width = match self.tab {
+      DetailTab::ProductPage | DetailTab::CustomerReviews => rems(90.),
+      _ if wide => rems(86.),
+      _ => rems(60.),
     };
+    let content = centered_with_width(content, max_width);
     v_flex().flex_1().min_h_0().overflow_hidden().child(v_flex().id("detail-scroll").size_full().overflow_y_scrollbar().child(content))
   }
 
@@ -135,14 +136,14 @@ impl Workspace {
     )
   }
 
-  fn render_information(&mut self, app: &App, cx: &mut Context<Self>) -> impl IntoElement {
+  fn render_information(&mut self, app: &App, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let has_version = self.ready_snapshot().is_some_and(|snapshot| snapshot.version.is_some());
     let picker = self.locale_picker(cx);
     let theme = cx.theme().clone();
     let forms = &self.forms;
-    let mut page = v_flex().gap_6().children(picker).child(self.render_general(app, cx));
-    page = page.child(section(
+    let general = self.render_general(app, cx);
+    let mut page = v_flex().gap_6().child(section(
       tr(l, "basics"),
       pair(
         text_field_with_action(required(tr(l, "appName")), &forms.name, NAME_LIMIT, self.field_generate_button(ListingField::Name, cx), cx),
@@ -197,10 +198,10 @@ impl Workspace {
     } else {
       page = page.child(div().text_sm().text_color(theme.muted_foreground).child(tr(l, "thisAppHasNo")));
     }
-    page
+    v_flex().gap_6().children(picker).child(page_columns(wide, page, general))
   }
 
-  fn render_review(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+  fn render_review(&mut self, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let snapshot = self.ready_snapshot();
     let has_version = snapshot.is_some_and(|snapshot| snapshot.version.is_some());
@@ -236,7 +237,8 @@ impl Workspace {
         text_field(required(tr(l, "demoPassword")), &forms.demo_password, None, cx),
       ));
     }
-    page
+    let account = v_flex()
+      .gap_6()
       .child(section(
         tr(l, "contact"),
         v_flex()
@@ -247,11 +249,12 @@ impl Workspace {
           ))
           .child(pair(text_field(required(tr(l, "phone")), &forms.phone, None, cx), text_field(required(tr(l, "email")), &forms.email, None, cx))),
       ))
-      .child(section(tr(l, "signInHeading"), sign_in))
-      .child(section(tr(l, "notesForTheReviewer"), area_field(tr(l, "notes"), &forms.notes, None, cx)))
+      .child(section(tr(l, "signInHeading"), sign_in));
+    let notes = section(tr(l, "notesForTheReviewer"), area_field(tr(l, "notes"), &forms.notes, None, cx));
+    page.child(page_columns(wide, account, notes))
   }
 
-  fn render_privacy(&mut self, app: &App, cx: &mut Context<Self>) -> impl IntoElement {
+  fn render_privacy(&mut self, app: &App, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let declaration = self.privacy_draft(cx);
     let url = app_privacy_url(app);
@@ -263,6 +266,44 @@ impl Workspace {
         cx.notify();
       }))
     };
+    let answers = section(
+      tr(l, "yourAnswers"),
+      v_flex()
+        .gap_3()
+        .child(
+          h_flex()
+            .gap_1()
+            .items_center()
+            .child(toggle(
+              "p-confirmed",
+              tr(l, "iAnsweredAppPrivacy"),
+              declaration.confirmed_in_app_store_connect,
+              |d, v| d.confirmed_in_app_store_connect = v,
+              cx,
+            ))
+            .child(required_mark(cx)),
+        )
+        .child(toggle("p-collects", tr(l, "theAppCollectsData"), declaration.collects_data, |d, v| d.collects_data = v, cx))
+        .child(toggle("p-tracking", tr(l, "theAppTracksUsers"), declaration.uses_tracking, |d, v| d.uses_tracking = v, cx))
+        .child(toggle("p-att", tr(l, "theAppShowsThe"), declaration.shows_tracking_prompt, |d, v| d.shows_tracking_prompt = v, cx))
+        .child(toggle("p-accounts", tr(l, "peopleCanCreateAn"), declaration.has_accounts, |d, v| d.has_accounts = v, cx))
+        .child(toggle("p-deletion", tr(l, "accountsCanBeDeleted"), declaration.account_deletion_in_app, |d, v| d.account_deletion_in_app = v, cx))
+        .child(toggle("p-login", tr(l, "aReviewerMustSign"), declaration.requires_login_to_review, |d, v| d.requires_login_to_review = v, cx))
+        .child(pair(
+          text_field(tr(l, "dataTypesCollected"), &forms.data_types, None, cx),
+          text_field(tr(l, "thirdPartySdks"), &forms.sdks, None, cx),
+        )),
+    );
+    let policy = v_flex()
+      .gap_6()
+      .child(section(
+        tr(l, "privacyPolicyUrl"),
+        pair(
+          url_field("open-privacy-url", required(tr(l, "privacyPolicyUrl")), &forms.privacy_url, l, cx),
+          url_field("open-privacy-choices", tr(l, "privacyChoicesUrl"), &forms.privacy_choices, l, cx),
+        ),
+      ))
+      .child(section(tr(l, "productPagePreview"), self.render_privacy_preview(&declaration, cx)));
     v_flex()
       .gap_6()
       .child(Alert::info("privacy-api", tr(l, "applesApiDoesNot")))
@@ -276,41 +317,6 @@ impl Workspace {
         ),
       )
       .children(picker)
-      .child(section(
-        tr(l, "privacyPolicyUrl"),
-        pair(
-          url_field("open-privacy-url", required(tr(l, "privacyPolicyUrl")), &forms.privacy_url, l, cx),
-          url_field("open-privacy-choices", tr(l, "privacyChoicesUrl"), &forms.privacy_choices, l, cx),
-        ),
-      ))
-      .child(section(tr(l, "productPagePreview"), self.render_privacy_preview(&declaration, cx)))
-      .child(section(
-        tr(l, "yourAnswers"),
-        v_flex()
-          .gap_3()
-          .child(
-            h_flex()
-              .gap_1()
-              .items_center()
-              .child(toggle(
-                "p-confirmed",
-                tr(l, "iAnsweredAppPrivacy"),
-                declaration.confirmed_in_app_store_connect,
-                |d, v| d.confirmed_in_app_store_connect = v,
-                cx,
-              ))
-              .child(required_mark(cx)),
-          )
-          .child(toggle("p-collects", tr(l, "theAppCollectsData"), declaration.collects_data, |d, v| d.collects_data = v, cx))
-          .child(toggle("p-tracking", tr(l, "theAppTracksUsers"), declaration.uses_tracking, |d, v| d.uses_tracking = v, cx))
-          .child(toggle("p-att", tr(l, "theAppShowsThe"), declaration.shows_tracking_prompt, |d, v| d.shows_tracking_prompt = v, cx))
-          .child(toggle("p-accounts", tr(l, "peopleCanCreateAn"), declaration.has_accounts, |d, v| d.has_accounts = v, cx))
-          .child(toggle("p-deletion", tr(l, "accountsCanBeDeleted"), declaration.account_deletion_in_app, |d, v| d.account_deletion_in_app = v, cx))
-          .child(toggle("p-login", tr(l, "aReviewerMustSign"), declaration.requires_login_to_review, |d, v| d.requires_login_to_review = v, cx))
-          .child(pair(
-            text_field(tr(l, "dataTypesCollected"), &forms.data_types, None, cx),
-            text_field(tr(l, "thirdPartySdks"), &forms.sdks, None, cx),
-          )),
-      ))
+      .child(page_columns(wide, answers, policy))
   }
 }

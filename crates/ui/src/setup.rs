@@ -97,6 +97,7 @@ impl Workspace {
       v_flex()
         .w_full()
         .flex_shrink_0()
+        .items_center()
         .child(Separator::horizontal())
         .child(div().w_full().max_w(px(SETUP_CONTENT_WIDTH)).px_10().py_4().child(actions))
     });
@@ -107,7 +108,7 @@ impl Workspace {
         .min_w_0()
         .min_h_0()
         .overflow_hidden()
-        .child(v_flex().id("setup-content").flex_1().min_h_0().overflow_y_scrollbar().children(main_progress).child(content))
+        .child(v_flex().id("setup-content").flex_1().min_h_0().items_center().overflow_y_scrollbar().children(main_progress).child(content))
         .children(bar),
     )
   }

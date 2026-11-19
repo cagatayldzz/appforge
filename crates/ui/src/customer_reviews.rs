@@ -93,6 +93,10 @@ fn filter_menu<T: Clone + 'static>(
 
 impl Workspace {
   pub(crate) fn load_customer_reviews(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    self.refresh_customer_reviews(false, window, cx);
+  }
+
+  pub(crate) fn refresh_customer_reviews(&mut self, announce: bool, window: &mut Window, cx: &mut Context<Self>) {
     let (Some(client), Some(app)) = (self.client.clone(), self.selected.clone()) else { return };
     let Some(data) = self.app_data.get_mut(&app) else { return };
     if data.reviews_task.is_some() {
@@ -104,6 +108,10 @@ impl Workspace {
     let target = app.clone();
     let version = data.review_version.clone();
     let needs_versions = data.review_versions.is_none();
+    let notice = crate::workspace::refresh::Refresh::Reviews;
+    if announce {
+      notice.start(&app, self.settings.language, window, cx);
+    }
     data.reviews_task = Some(cx.spawn_in(window, async move |this, cx| {
       let (result, versions) = cx
         .background_spawn(async move {
@@ -117,6 +125,9 @@ impl Workspace {
         .await;
       this
         .update_in(cx, |this, window, cx| {
+          if announce {
+            notice.finish(&app, this.settings.language, &result, window, cx);
+          }
           if this.require_apple_sign_in(&result, window, cx) {
             return;
           }
@@ -137,7 +148,7 @@ impl Workspace {
               if !matches!(data.reviews, Load::Ready(_)) {
                 data.reviews = Load::Failed(error.to_string().into());
               }
-              if active {
+              if active && !announce {
                 Self::error(window, cx, error.to_string());
               }
             }

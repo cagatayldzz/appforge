@@ -4,7 +4,7 @@ use crate::{
   forms::{read_input, set_input},
   i18n::{tr, trf},
   theme::{colors, Colors, FONT_SIZE_SM},
-  widgets::{card, state_badge},
+  widgets::{card, page_columns, state_badge},
   workspace::{Load, Workspace},
 };
 use appforge_appstore::{Client, Error};
@@ -87,6 +87,10 @@ impl Change {
 
 impl Workspace {
   pub(crate) fn load_distribution(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    self.refresh_distribution(false, window, cx);
+  }
+
+  pub(crate) fn refresh_distribution(&mut self, announce: bool, window: &mut Window, cx: &mut Context<Self>) {
     let (Some(client), Some(snapshot)) = (self.client.clone(), self.ready_snapshot()) else { return };
     let app = snapshot.app.id.clone();
     let version = snapshot.version.clone();
@@ -98,6 +102,10 @@ impl Workspace {
       data.distribution = Load::Loading;
     }
     let target = app.clone();
+    let notice = crate::workspace::refresh::Refresh::Distribution;
+    if announce {
+      notice.start(&app, self.settings.language, window, cx);
+    }
     data.distribution_task = Some(cx.spawn_in(window, async move |this, cx| {
       let result = cx
         .background_spawn(async move {
@@ -106,6 +114,9 @@ impl Workspace {
         .await;
       this
         .update_in(cx, |this, window, cx| {
+          if announce {
+            notice.finish(&app, this.settings.language, &result, window, cx);
+          }
           if this.require_apple_sign_in(&result, window, cx) {
             return;
           }
@@ -118,7 +129,7 @@ impl Workspace {
               if !matches!(data.distribution, Load::Ready(_)) {
                 data.distribution = Load::Failed(error.to_string().into());
               }
-              if active {
+              if active && !announce {
                 Self::error(window, cx, error.to_string());
               }
             }
@@ -277,7 +288,7 @@ impl Workspace {
     )
   }
 
-  pub(crate) fn render_distribution(&self, cx: &mut Context<Self>) -> AnyElement {
+  pub(crate) fn render_distribution(&self, wide: bool, cx: &mut Context<Self>) -> AnyElement {
     let l = self.settings.language;
     let data = match self.active_data().map(|data| &data.distribution) {
       Some(Load::Ready(data)) => data,
@@ -480,6 +491,8 @@ impl Workspace {
           )
           .children(action),
       );
-    v_flex().gap_4().child(banner).child(builds).child(review).child(release).child(versions).into_any_element()
+    let submission = v_flex().gap_4().child(builds).child(review);
+    let releases = v_flex().gap_4().child(release).child(versions);
+    v_flex().gap_4().child(banner).child(page_columns(wide, submission, releases)).into_any_element()
   }
 }

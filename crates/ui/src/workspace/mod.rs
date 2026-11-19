@@ -6,6 +6,7 @@ use crate::{
 };
 mod ai;
 mod apps;
+pub(crate) mod refresh;
 mod save_preview;
 mod saving;
 mod session;

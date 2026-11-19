@@ -3,7 +3,7 @@
 use crate::{
   i18n::{tr, trf},
   theme::{colors, FONT_SIZE_SM},
-  widgets::{app_avatar, centered, setting_row},
+  widgets::{app_avatar, centered_with_width, page_columns, setting_row},
   workspace::{SettingsPage, Workspace},
 };
 use appforge_ai::Provider;
@@ -83,7 +83,7 @@ impl Workspace {
         v_flex()
           .gap_4()
           .pt_1()
-          .child(field(tr(l, "model"), div().w(px(FIELD_WIDTH)).child(Select::new(model_select)).into_any_element(), Some(price_hint)))
+          .child(field(tr(l, "model"), div().w(px(FIELD_WIDTH)).max_w_full().child(Select::new(model_select)).into_any_element(), Some(price_hint)))
           .child(field(tr(l, "apiKey"), key_row.into_any_element(), Some(status))),
       )
   }
@@ -252,14 +252,14 @@ impl Workspace {
     v_flex().gap_2().child(intro).child(v_flex().children(rows)).into_any_element()
   }
 
-  fn settings_page_body(&mut self, cx: &mut Context<Self>) -> AnyElement {
+  fn settings_page_body(&mut self, wide: bool, cx: &mut Context<Self>) -> AnyElement {
     let l = self.settings.language;
     match self.settings_page {
       SettingsPage::General => v_flex()
         .child(setting_row(
           tr(l, "language"),
           Some(tr(l, "chooseTheLanguageOf")),
-          div().w(px(FIELD_WIDTH)).child(Select::new(&self.language_select)),
+          div().w(px(FIELD_WIDTH)).max_w_full().child(Select::new(&self.language_select)),
           cx,
         ))
         .into_any_element(),
@@ -278,10 +278,10 @@ impl Workspace {
           .into_any_element()
       }
       SettingsPage::AiProvider => {
-        let sections: Vec<_> = Provider::ALL.iter().map(|provider| self.provider_section(*provider, cx).into_any_element()).collect();
+        let [first, second] = Provider::ALL.map(|provider| self.provider_section(provider, cx).into_any_element());
         v_flex()
           .gap_8()
-          .children(sections)
+          .child(page_columns(wide, first, second))
           .child(self.usage_section(cx))
           .child(div().text_size(FONT_SIZE_SM).text_color(cx.theme().muted_foreground).child(tr(l, "moreProvidersCanBe")))
           .into_any_element()
@@ -299,9 +299,10 @@ impl Workspace {
         .into_any_element(),
       SettingsPage::About => {
         let data_dir = self.data_dir.clone();
-        v_flex()
-          .child(self.render_updates(cx))
-          .child(setting_row(
+        page_columns(
+          wide,
+          self.render_updates(cx),
+          setting_row(
             trf(l, "appforgeVersion", &[env!("CARGO_PKG_VERSION")]),
             Some(tr(l, "settingsAndNotesAre")),
             Button::new("settings-data-folder")
@@ -310,20 +311,28 @@ impl Workspace {
               .outline()
               .on_click(move |_, _, cx| cx.reveal_path(&data_dir)),
             cx,
-          ))
-          .into_any_element()
+          ),
+        )
+        .into_any_element()
       }
     }
   }
 
-  pub(crate) fn render_settings(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+  pub(crate) fn render_settings(&mut self, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let muted = cx.theme().muted_foreground;
     let heading = v_flex().gap_1().child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, self.settings_page.label()))).children(
       (self.settings_page == SettingsPage::AiProvider).then(|| div().text_size(FONT_SIZE_SM).text_color(muted).child(tr(l, "aiAnalysisUsesYour"))),
     );
-    let body = self.settings_page_body(cx);
-    v_flex().id("settings").flex_1().min_h_0().overflow_y_scrollbar().child(centered(v_flex().py_6().gap_4().child(heading).child(body)))
+    let split = wide && matches!(self.settings_page, SettingsPage::AiProvider | SettingsPage::About);
+    let body = self.settings_page_body(split, cx);
+    let width = if split { rems(86.) } else { rems(62.) };
+    v_flex()
+      .id("settings")
+      .flex_1()
+      .min_h_0()
+      .overflow_y_scrollbar()
+      .child(centered_with_width(v_flex().py_6().gap_4().child(heading).child(body), width))
   }
 }
 

@@ -128,8 +128,7 @@ impl Workspace {
       self.review_territory = None;
       self.review_rating = None;
       self.review_status = Default::default();
-      self.ai = AiState::Idle;
-      self.tasks.ai = None;
+      self.reset_ai_analysis(window, cx);
       self.report = None;
       self.app_data.entry(id).or_default();
       self.fill_snapshot_forms(window, cx);
@@ -184,6 +183,10 @@ impl Workspace {
   }
 
   pub fn load_snapshot(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    self.refresh_snapshot(None, window, cx);
+  }
+
+  pub(crate) fn refresh_snapshot(&mut self, from: Option<DetailTab>, window: &mut Window, cx: &mut Context<Self>) {
     let (Some(client), Some(app)) = (self.client.clone(), self.selected_app()) else { return };
     let id = app.id.clone();
     let data = self.app_data.entry(id.clone()).or_default();
@@ -193,10 +196,17 @@ impl Workspace {
     if !matches!(data.snapshot, Load::Ready(_)) {
       data.snapshot = Load::Loading;
     }
+    let notice = from.map(|_| super::refresh::Refresh::AppDetails);
+    if let Some(notice) = notice {
+      notice.start(&id, self.settings.language, window, cx);
+    }
     data.snapshot_task = Some(cx.spawn_in(window, async move |this, cx| {
       let result = cx.background_spawn(async move { client.snapshot(&app) }).await;
       this
         .update_in(cx, |this, window, cx| {
+          if let Some(notice) = notice {
+            notice.finish(&id, this.settings.language, &result, window, cx);
+          }
           if this.require_apple_sign_in(&result, window, cx) {
             return;
           }
@@ -213,6 +223,9 @@ impl Workspace {
               data.snapshot = Load::Ready(snapshot);
               if active {
                 this.fill_snapshot_forms(window, cx);
+                if matches!(from, Some(DetailTab::Readiness | DetailTab::Distribution)) {
+                  this.refresh_distribution(true, window, cx);
+                }
                 this.ensure_app_page(window, cx);
               }
             }
@@ -221,7 +234,9 @@ impl Workspace {
                 data.snapshot = Load::Failed(error.to_string().into());
               }
               if active && this.tab != DetailTab::CustomerReviews {
-                Self::error(window, cx, error.to_string());
+                if notice.is_none() {
+                  Self::error(window, cx, error.to_string());
+                }
                 this.ensure_app_page(window, cx);
               }
             }

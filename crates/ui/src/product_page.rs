@@ -30,7 +30,7 @@ struct Media {
 #[derive(Default)]
 pub(crate) struct MediaLoad {
   assets: Load<Vec<Media>>,
-  task: Option<Task<()>>,
+  pub(crate) task: Option<Task<()>>,
 }
 
 pub(crate) fn store_link(id: &'static str, label: SharedString, url: String) -> Button {
@@ -63,7 +63,7 @@ fn display_name(value: &str) -> String {
 }
 
 impl Workspace {
-  fn product_localization(&self) -> Option<&str> {
+  pub(crate) fn product_localization(&self) -> Option<&str> {
     self.ready_snapshot()?.version_localizations.iter().find(|item| item.locale == self.locale).map(|item| item.id.as_str())
   }
 
@@ -77,6 +77,11 @@ impl Workspace {
       return;
     }
     entry.assets = Load::Loading;
+    let notice = crate::workspace::refresh::Refresh::ProductMedia;
+    let notice_id = format!("{app}-{locale}");
+    if refresh {
+      notice.start(&notice_id, self.settings.language, window, cx);
+    }
     let target = locale.clone();
     entry.task = Some(cx.spawn_in(window, async move |this, cx| {
       let result = cx
@@ -108,6 +113,9 @@ impl Workspace {
         .await;
       this
         .update_in(cx, |this, window, cx| {
+          if refresh {
+            notice.finish(&notice_id, this.settings.language, &result, window, cx);
+          }
           if this.require_apple_sign_in(&result, window, cx) {
             return;
           }
@@ -126,6 +134,9 @@ impl Workspace {
 
   pub(crate) fn render_product_page(&self, app: &StoreApp, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
+    let locale = self.product_localization();
+    let entry = locale.and_then(|locale| self.active_data()?.product_assets.get(locale));
+    let loading = entry.is_some_and(|entry| entry.task.is_some());
     let mut page = v_flex().gap_4().child(
       h_flex().gap_3().flex_wrap().items_center().justify_between().children(self.locale_picker(cx)).child(
         h_flex().gap_2().flex_wrap().child(store_link("manage-product-media", tr(l, "manageProductPage"), store_version(app))).child(
@@ -134,15 +145,16 @@ impl Workspace {
             .icon(Icon::new(IconName::RefreshCw))
             .small()
             .outline()
-            .disabled(self.product_localization().is_none())
+            .loading(loading)
+            .disabled(locale.is_none() || loading)
             .on_click(cx.listener(|this, _, window, cx| this.load_product_assets(true, window, cx))),
         ),
       ),
     );
-    let Some(locale) = self.product_localization() else {
+    if locale.is_none() {
       return page.child(Alert::info("no-product-locale", tr(l, "noProductLocalization")));
-    };
-    match self.active_data().and_then(|data| data.product_assets.get(locale)).map(|entry| &entry.assets) {
+    }
+    match entry.map(|entry| &entry.assets) {
       Some(Load::Ready(media)) => {
         let header = media.iter().filter(|item| item.asset.kind == "PRODUCT_PAGE_HEADER_ASSET");
         page = page.child(section(tr(l, "headerAndSearchResults"), self.media_strip(header, "header", true, cx)));

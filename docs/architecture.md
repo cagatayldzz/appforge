@@ -24,6 +24,8 @@ apps/appforge → app → ui → compliance → appstore
 | `updater` | Checks GitHub releases, verifies and stages macOS app bundles, and replaces the installed bundle on restart. The UI runs its blocking calls on background tasks. |
 | `app` | Startup: the window (opened the way it was left), key bindings and the menu. |
 
+Detail pages use the content width beside the two navigation rails to choose between one and two columns. Forms keep the editable sections together and place related reference information beside them when space allows. Media and review lists can use a wider frame. The all-apps grid adapts its column count to the full area beside the activity bar.
+
 ## Code map (`crates/ui/src`)
 
 For all crates in one list, run `scripts/code-map.sh`: every source file with its line count and the first line of its `//!` header (about 3,000 tokens). Keep that header true when a file's job changes; a file without one shows as `NO HEADER`.

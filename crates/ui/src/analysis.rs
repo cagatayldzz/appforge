@@ -3,7 +3,7 @@
 use crate::{
   i18n::{tr, translated_text, trf},
   theme::{colors, FONT_SIZE_SM},
-  widgets::{setting_row, severity_badge},
+  widgets::{page_columns, setting_row, severity_badge},
   workspace::{AiState, DetailTab, Workspace},
 };
 use appforge_compliance::{Category, Finding, Severity, Verdict, PLAYBOOK_REPOSITORY};
@@ -227,7 +227,7 @@ impl Workspace {
     )
   }
 
-  pub(crate) fn render_analysis(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+  pub(crate) fn render_analysis(&mut self, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
     let theme = cx.theme().clone();
     let c = colors(cx);
     let l = self.settings.language;
@@ -270,7 +270,7 @@ impl Workspace {
       )
       .children(todo)
       .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "basedOnTheData")));
-    let tabs = h_flex().gap_1().children(AnalysisTab::ALL.map(|option| {
+    let tabs = h_flex().gap_1().flex_wrap().children(AnalysisTab::ALL.map(|option| {
       let label = match option {
         AnalysisTab::Checklist => format!("{} · {}", tr(l, option.label()), report.findings.len()),
         AnalysisTab::Ai if !ai_findings.is_empty() => format!("{} · {}", tr(l, option.label()), ai_findings.len()),
@@ -317,7 +317,12 @@ impl Workspace {
         .into_any_element()
       }
     };
-    v_flex().gap_5().child(summary).child(tabs).child(content).into_any_element()
+    let findings = v_flex().gap_5().child(tabs).child(content);
+    if wide {
+      page_columns(true, findings, summary).into_any_element()
+    } else {
+      v_flex().gap_5().child(summary).child(findings).into_any_element()
+    }
   }
 
   fn render_ai_tab(&self, findings: &[Finding], provider: appforge_ai::Provider, has_key: bool, cx: &mut Context<Self>) -> Div {
