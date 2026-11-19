@@ -1,357 +1,97 @@
-//! Interface translations. Source text is English and is the lookup key, so code stays readable; a missing
-//! entry falls back to English. `{}` in a text is a placeholder that `trf` fills in order.
+//! Interface translations, kept in `crates/ui/locales/<language>.json` as flat `"key": "text"` objects, for example
+//! `"createAccount": "Create Account"`. Code passes the key to `tr`/`trf`; `en.json` holds the English wording. `{}` in a
+//! text is a placeholder that `trf` fills in order, and both languages use the same placeholders.
+//!
+//! English text that comes from another crate (the rule categories and severities of `compliance`) is not a key: `tr` finds
+//! it by its English wording in `en.json` and returns the text of the language asked for. Anything unknown is shown as it is.
+//!
+//! To add a language: add a `locales/xx.json`, a `Language` variant in `storage`, and a line in `source`.
 
 use appforge_storage::Language;
 use gpui_kit::SharedString;
-use std::{collections::HashMap, sync::OnceLock};
+use serde::{
+  de::{MapAccess, Visitor},
+  Deserialize, Deserializer,
+};
+use std::{collections::HashMap, fmt, sync::OnceLock};
 
-/// English text and its Turkish translation. Both sides use the same `{}` placeholders in the same order.
-pub const TURKISH: &[(&str, &str)] = &[
-  ("App Store Connect rejected your session. Confirm your IDs and choose a valid .p8 key to sign in again.", "App Store Connect oturumunuzu reddetti. Yeniden giriş yapmak için kimlik bilgilerinizi kontrol edin ve geçerli bir .p8 anahtarı seçin."),
-  ("No draft for this field. Add relevant details to the listing or project README and try again.", "Bu alan için taslak üretilemedi. Mağaza metnine veya proje README dosyasına ilgili bilgileri ekleyip tekrar deneyin."),
-  ("No alternative was generated. The current text was kept.", "Yeni bir öneri üretilmedi. Mevcut metin korundu."),
-  ("Generate {}", "{} üret"),
-  ("Generate", "Üret"),
-  ("Generate a draft for this field using the listing and project summary.", "Mağaza metinleri ve proje özeti kullanılarak bu alan için bir taslak üretilecek."),
-  ("The draft was skipped because the app, language, or field changed.", "Uygulama, dil veya alan değiştiği için taslak uygulanmadı."),
-  ("Safety", "Güvenlik"),
-  ("Performance", "Performans"),
-  ("Business", "İş ve Ödemeler"),
-  ("Design", "Tasarım"),
-  ("Legal", "Hukuk"),
-  ("Loading Apple rules…", "Apple kuralları yükleniyor…"),
-  ("No rules downloaded yet.", "Henüz kural indirilmedi."),
-  ("{} rules", "{} madde"),
-  ("No matching rules.", "Eşleşen madde yok."),
-  ("Open rule", "Maddeyi aç"),
-  ("Search by rule number or topic", "Madde numarası veya konu ara"),
-  ("Last checked {}", "Son kontrol {}"),
-  ("View Apple rule", "Apple kuralını gör"),
-  ("Apple guidelines checked.", "Apple kılavuzu kontrol edildi."),
-  ("View on Apple", "Apple’da aç"),
-  ("Added rules", "Eklenen maddeler"),
-  ("Changed rules", "Değişen maddeler"),
-  ("Removed rules", "Kaldırılan maddeler"),
-  ("{} matching rules", "{} eşleşen madde"),
-  ("Apple App Review Guidelines", "Apple App Review Kılavuzu"),
-  ("Delete your public reply to this review?", "Bu yoruma verdiğiniz herkese açık yanıt silinsin mi?"),
-  ("This reply will appear publicly on the App Store.", "Bu yanıt App Store’da herkese açık görünecek."),
-  ("Delete reply", "Yanıtı sil"),
-  ("Publish reply", "Yanıtı yayımla"),
-  ("Reply", "Yanıtla"),
-  ("Edit reply", "Yanıtı düzenle"),
-  ("Your reply", "Yanıtınız"),
-  ("No customer reviews.", "Henüz kullanıcı yorumu yok."),
-  ("All", "Tümü"),
-  ("Unanswered", "Yanıtsız"),
-  ("Answered", "Yanıtlı"),
-  ("{} reviews", "{} yorum"),
-  ("{} of {} reviews", "{} / {} yorum"),
-  ("{} unanswered", "{} yanıtsız"),
-  ("No reviews match these filters.", "Bu filtrelere uyan yorum yok."),
-  ("Clear filters", "Filtreleri temizle"),
-  ("Ratings and Reviews", "Puanlar ve Yorumlar"),
-  ("Release", "Yayın"),
-  ("Builds", "Derlemeler"),
-  ("Phased release", "Kademeli yayın"),
-  ("Scheduled release", "Planlanmış yayın"),
-  ("Selected build", "Seçili derleme"),
-  ("No matching builds.", "Eşleşen derleme yok."),
-  ("iOS versions", "iOS sürümleri"),
-  ("{} items in this submission", "Bu gönderimde {} öğe var"),
-  ("Release this version", "Bu sürümü yayınla"),
-  ("Withdraw submission", "Gönderimi geri çek"),
-  ("Submit for review", "İncelemeye gönder"),
-  ("Add to review draft", "İnceleme taslağına ekle"),
-  ("Resume phased release", "Kademeli yayına devam et"),
-  ("Pause phased release", "Kademeli yayını duraklat"),
-  ("Enable phased release", "Kademeli yayını etkinleştir"),
-  ("Schedule release", "Yayını planla"),
-  ("Release after approval", "Onaydan sonra yayınla"),
-  ("Manual release", "Manuel yayın"),
-  ("Select build", "Derleme seç"),
-  ("Create iOS version", "iOS sürümü oluştur"),
-  ("Distribution", "Dağıtım"),
-  // App screens: structure
-  ("Apps", "Uygulamalar"),
-  ("Write with AI", "Yapay zekâ ile yaz"),
-  ("Writes the subtitle, description, keywords, promotional text and what's new. Uses {}.", "Alt başlığı, açıklamayı, anahtar kelimeleri, tanıtım metnini ve yenilikleri yazar. {} kullanır."),
-  ("Writes the subtitle, description, keywords, promotional text and what's new.", "Alt başlığı, açıklamayı, anahtar kelimeleri, tanıtım metnini ve yenilikleri yazar."),
-  ("AI is not connected", "Yapay zekâ bağlı değil"),
-  ("Add a {} API key in Settings to write the listing with AI.", "Mağaza sayfasını yapay zekâ ile yazmak için Ayarlar'dan bir {} API anahtarı ekle."),
-  ("Open Settings", "Ayarları aç"),
-  ("Choose the project folder", "Proje klasörünü seç"),
-  ("AppForge reads the README and the project files of {} to write the listing. Choose the folder that holds its source code.", "AppForge, mağaza sayfasını yazmak için {} uygulamasının README ve proje dosyalarını okur. Kaynak kodunun bulunduğu klasörü seç."),
-  ("Cancel", "Vazgeç"),
-  ("Could not read the project folder: {}", "Proje klasörü okunamadı: {}"),
-  ("The draft is ready. Read it, then press Save. It used {} tokens (about {}).", "Taslak hazır. Oku, sonra Kaydet'e bas. {} token harcadı (yaklaşık {})."),
-  ("Could not get the app icons: {}", "Uygulama ikonları alınamadı: {}"),
-  ("Price per million tokens: {} in, {} out. Only low-cost models are offered. Prices can change, so check the provider's price page.", "Milyon token fiyatı: {} giriş, {} çıkış. Yalnızca düşük maliyetli modeller sunulur. Fiyatlar değişebilir, sağlayıcının fiyat sayfasına bak."),
-  ("Code folders", "Kod klasörleri"),
-  ("Choose the folder that holds each app's source code, so AppForge can read the project.", "Her uygulamanın kaynak kodunun bulunduğu klasörü seç, AppForge projeyi okuyabilsin."),
-  ("Not set", "Ayarlanmadı"),
-  ("Choose folder", "Klasör seç"),
-  ("Change", "Değiştir"),
-  ("Remove", "Kaldır"),
-  ("This folder was not found.", "Bu klasör bulunamadı."),
-  ("Score", "Puan"),
-  ("App Store Compliance Playbook", "App Store Uyum Rehberi"),
-  ("{} apps", "{} uygulama"),
-  ("Basics", "Temel bilgiler"),
-  ("Links", "Bağlantılar"),
-  ("Version {}", "Sürüm {}"),
-  ("Saving sends your changes to App Store Connect.", "Kaydedince değişikliklerin App Store Connect'e gönderilir."),
-  ("Your answers stay on this Mac. The privacy policy URL is sent to App Store Connect.", "Yanıtların bu Mac'te kalır. Gizlilik politikası URL'si App Store Connect'e gönderilir."),
-  // Welcome
-  ("Welcome to AppForge", "AppForge'a hoş geldin"),
-  ("Get your App Store apps ready for review, from one calm window.", "App Store uygulamalarını incelemeye hazırla, tek ve sakin bir pencereden."),
-  ("Edit your listing", "Mağaza sayfanı düzenle"),
-  ("Change names, descriptions, keywords and review notes, and save them straight to App Store Connect.", "Ad, açıklama, anahtar kelime ve inceleme notlarını değiştir, doğrudan App Store Connect'e kaydet."),
-  ("Check review readiness", "İncelemeye hazır mı, kontrol et"),
-  ("See what could get your app rejected, based on Apple's guidelines, before you submit.", "Göndermeden önce, Apple'ın kurallarına göre uygulamanın nerede reddedilebileceğini gör."),
-  ("Ask an AI to double-check", "Yapay zekâya bir kez daha baktır"),
-  ("Optional. Use your own Claude or OpenAI key; your keys stay in the macOS Keychain.", "İsteğe bağlı. Kendi Claude veya OpenAI anahtarını kullan; anahtarların macOS Anahtar Zinciri'nde kalır."),
-  ("Language", "Dil"),
-  ("Get started", "Başla"),
-  ("Ready", "Hazır"),
-  ("How Apple shows it", "Apple'da böyle görünür"),
-  ("Click here", "Buraya tıkla"),
-  ("Open the key page", "Anahtar sayfasını aç"),
-  ("Opens in your browser. If it asks you to sign in, use your Apple ID. The path is Users and Access, Integrations, Team Keys.", "Tarayıcında açılır. Giriş isterse Apple Kimliğinle gir. Yol: Users and Access, Integrations, Team Keys."),
-  ("{} of {} done", "{} / {} tamamlandı"),
-  ("Mark as done", "Tamamlandı olarak işaretle"),
-  ("Tick each step as you finish it on Apple's site.", "Apple'ın sitesinde bitirdiğin her adımı işaretle."),
-  ("Stays on this Mac", "Bu Mac'te kalır"),
-  ("Your key is stored in the macOS Keychain and is never sent anywhere except Apple.", "Anahtarın macOS Anahtar Zinciri'nde saklanır ve Apple dışında hiçbir yere gönderilmez."),
-  ("Generate a key", "Anahtar oluştur"),
-  ("Click Generate API Key. If you already have keys, click the + next to Active instead.", "Generate API Key'e tıkla. Zaten anahtarın varsa bunun yerine Active yanındaki + düğmesine tıkla."),
-  ("or", "veya"),
-  ("Click Download next to the new key.", "Yeni anahtarın yanındaki Download'a tıkla."),
-  ("Confirm the download", "İndirmeyi onayla"),
-  ("Apple warns that a key can be downloaded only once. Click Download and keep the file in a safe place.", "Apple, bir anahtarın yalnızca bir kez indirilebileceğini hatırlatır. Download'a tıkla ve dosyayı güvenli bir yerde sakla."),
-  ("Need access?", "Erişim mi gerekiyor?"),
-  ("Can't see Integrations or Generate API Key? Only the Account Holder or an Admin can create keys. Ask them to give you access.", "Integrations veya Generate API Key görünmüyor mu? Anahtarı yalnızca Account Holder veya Admin oluşturabilir. Ondan sana erişim vermesini iste."),
-  ("Copy the name", "Adı kopyala"),
-  ("Step {} of {}", "Adım {} / {}"),
-  ("Name it and choose a role", "Adlandır ve rol seç"),
-  ("Download the key", "Anahtarı indir"),
-  ("Why an API key?", "Neden API anahtarı?"),
-  ("Apple does not allow password sign-in for tools, so AppForge uses an API key instead.", "Apple araçlara parolayla girişe izin vermediği için AppForge bunun yerine bir API anahtarı kullanır."),
-  ("Connecting your account takes about two minutes.", "Hesabını bağlamak yaklaşık iki dakika sürer."),
-  // Sign-in guide
-  ("Connect to App Store Connect", "App Store Connect'e bağlan"),
-  ("Sign in", "Giriş yap"),
-  ("Create an API key on Apple's website", "Apple'ın sitesinde bir API anahtarı oluştur"),
-  ("AppForge talks to App Store Connect with a key that you create once. It takes about two minutes.", "AppForge, bir kez oluşturduğun bir anahtarla App Store Connect ile konuşur. Yaklaşık iki dakika sürer."),
-  ("Name it \"AppForge\", open Select Roles, choose App Manager and click Generate.", "Adını \"AppForge\" yap, Select Roles'u aç, App Manager'ı seç ve Generate'e tıkla."),
-  ("Open App Store Connect", "App Store Connect'i aç"),
-  ("I have the key file", "Anahtar dosyam hazır"),
-  ("Continue", "Devam"),
-  ("Back", "Geri"),
-  ("Could not save the AI usage: {}", "Yapay zekâ kullanımı kaydedilemedi: {}"),
-  ("Nothing was counted yet.", "Henüz bir kullanım sayılmadı."),
-  ("Counted since {}", "{} tarihinden beri sayılıyor"),
-  ("Requests", "İstek"),
-  ("Tokens", "Token"),
-  ("{} in · {} out", "{} giriş · {} çıkış"),
-  ("Estimated cost", "Tahmini maliyet"),
-  ("{} requests", "{} istek"),
-  ("Reset", "Sıfırla"),
-  ("AI usage", "Yapay zekâ kullanımı"),
-  ("Costs are estimates from the list prices of the models when each request was made.", "Maliyetler, her istek yapıldığında modelin liste fiyatından hesaplanan tahminlerdir."),
-  ("Reset AI usage?", "Yapay zekâ kullanımı sıfırlansın mı?"),
-  ("The counted requests, tokens and costs are cleared and counting starts again from zero. This cannot be undone.", "Sayılan istek, token ve maliyetler silinir ve sayım sıfırdan başlar. Bu işlem geri alınamaz."),
+const ENGLISH: &str = include_str!("../locales/en.json");
+const TURKISH: &str = include_str!("../locales/tr.json");
 
-  ("Show fewer", "Daha az göster"),
-  ("Show all ({})", "Tümünü göster ({})"),
-  ("Open version", "Açık sürüm"),
-  ("Pick the build that goes with this version.", "Bu sürümle gidecek derlemeyi seçin."),
-  ("No build is selected yet.", "Henüz derleme seçilmedi."),
-  ("Nothing was submitted for this version yet.", "Bu sürüm için henüz gönderim yapılmadı."),
-  ("How this version goes live after approval.", "Sürümün onaydan sonra nasıl yayınlanacağı."),
-  ("Scheduled for {}", "Planlanan yayın: {}"),
-  ("Approved. Release it when you are ready.", "Onaylandı. Hazır olduğunuzda yayınlayın."),
-  ("In review at Apple. Nothing to do until it finishes.", "Apple incelemesinde. Bitene kadar yapılacak bir şey yok."),
-  ("Next: select a build.", "Sıradaki adım: derleme seçin."),
-  ("Next: add this version to a review draft, then submit it.", "Sıradaki adım: sürümü inceleme taslağına ekleyin, sonra gönderin."),
-  ("Next: submit the draft for review.", "Sıradaki adım: taslağı incelemeye gönderin."),
-  ("This version is live. Create a new version for the next update.", "Bu sürüm yayında. Sonraki güncelleme için yeni sürüm oluşturun."),
+/// The entries of a file in file order, duplicates kept, so a test can see them.
+struct Entries(Vec<(String, String)>);
 
-  ("Open in browser", "Tarayıcıda aç"),
-  ("Back to {}", "{} sayfasına dön"),
-  ("Copy two values from the same page", "Aynı sayfadan iki değeri kopyala"),
-  ("Issuer ID", "Issuer ID"),
-  ("Key ID", "Key ID"),
-  ("A long code with dashes, shown at the top of the key list, above the keys.", "Tire içeren uzun bir kod; anahtar listesinin üstünde gösterilir."),
-  ("A short code of 10 letters and digits, in the \"Key ID\" column of your AppForge key.", "10 harf ve rakamdan oluşan kısa bir kod; AppForge anahtarının \"Key ID\" sütununda."),
-  ("Add the key file you downloaded", "İndirdiğin anahtar dosyasını ekle"),
-  ("Private key (.p8)", "Özel anahtar (.p8)"),
-  ("Choose .p8 file", ".p8 dosyası seç"),
-  ("Choose another file", "Başka dosya seç"),
-  ("No file chosen", "Dosya seçilmedi"),
-  ("The file is named AuthKey_<Key ID>.p8, usually in your Downloads folder. It is stored in the macOS Keychain and never leaves this Mac.", "Dosyanın adı AuthKey_<Key ID>.p8'dir ve genellikle İndirilenler klasöründedir. macOS Anahtar Zinciri'nde saklanır ve bu Mac'ten çıkmaz."),
-  ("Enter both the Issuer ID and the Key ID to continue.", "Devam etmek için Issuer ID ve Key ID'yi gir."),
-  ("Enter your Issuer ID.", "Issuer ID'ni gir."),
-  ("Enter your Key ID.", "Key ID'ni gir."),
-  ("Choose your .p8 private key file.", ".p8 özel anahtar dosyanı seç."),
-  ("Could not read {}: {}", "{} okunamadı: {}"),
-  ("Google Play", "Google Play"),
-  ("Coming soon", "Yakında"),
-  ("Soon", "Yakında"),
-  // Shell and sidebar
-  ("Opening your Keychain…", "Anahtar Zinciri açılıyor…"),
-  ("No apps found", "Uygulama bulunamadı"),
-  ("This App Store Connect account has no apps yet. Create one in App Store Connect, then reload.", "Bu App Store Connect hesabında henüz uygulama yok. App Store Connect'te bir tane oluştur, sonra yenile."),
-  ("Could not load your apps", "Uygulamaların yüklenemedi"),
-  ("Select an app", "Bir uygulama seç"),
-  ("Choose an app on the left to see and edit its information.", "Bilgilerini görmek ve düzenlemek için soldan bir uygulama seç."),
-  ("Loading apps…", "Uygulamalar yükleniyor…"),
-  ("APP STORE", "APP STORE"),
-  ("Reload apps", "Uygulamaları yenile"),
-  ("Settings", "Ayarlar"),
-  ("Sign out", "Çıkış yap"),
-  ("Choose key", "Anahtarı seç"),
-  // Tabs
-  ("App Information", "Uygulama Bilgileri"),
-  ("App Review", "Uygulama İncelemesi"),
-  ("App Privacy", "Uygulama Gizliliği"),
-  ("Analysis", "Analiz"),
-  // App screens
-  ("Try again", "Tekrar dene"),
-  ("Loading from App Store Connect…", "App Store Connect'ten yükleniyor…"),
-  ("Reload", "Yenile"),
-  ("Save to App Store Connect", "App Store Connect'e kaydet"),
-  ("Save", "Kaydet"),
-  ("{} · version {} · {}", "{} · sürüm {} · {}"),
-  ("App name", "Uygulama adı"),
-  ("Subtitle", "Alt başlık"),
-  ("Store listing", "Mağaza sayfası"),
-  ("Description", "Açıklama"),
-  ("Keywords", "Anahtar kelimeler"),
-  ("Promotional text", "Tanıtım metni"),
-  ("Support URL", "Destek URL'si"),
-  ("Marketing URL", "Pazarlama URL'si"),
-  ("What's new in this version", "Bu sürümde yenilikler"),
-  ("This app has no iOS version in preparation, so the store listing cannot be edited. Create a version in App Store Connect.", "Bu uygulamanın hazırlanmakta olan bir iOS sürümü yok, bu yüzden mağaza sayfası düzenlenemez. App Store Connect'te bir sürüm oluştur."),
-  ("This app has no iOS version in preparation, so App Review information cannot be saved.", "Bu uygulamanın hazırlanmakta olan bir iOS sürümü yok, bu yüzden inceleme bilgileri kaydedilemez."),
-  ("This version is no longer editable at Apple, so saving may be refused.", "Bu sürüm Apple tarafında artık düzenlenemiyor, kaydetme reddedilebilir."),
-  ("Nothing is stored for App Review yet. Saving creates it.", "İnceleme için henüz bir şey kayıtlı değil. Kaydedince oluşturulur."),
-  ("Contact", "İletişim"),
-  ("First name", "Ad"),
-  ("Last name", "Soyad"),
-  ("Phone", "Telefon"),
-  ("Email", "E-posta"),
-  ("Sign-in", "Giriş"),
-  ("Sign-in required to review the app", "Uygulamayı incelemek için giriş gerekli"),
-  ("Demo user name", "Demo kullanıcı adı"),
-  ("Demo password", "Demo parola"),
-  ("Notes for the reviewer", "İnceleyen kişi için notlar"),
-  ("Notes", "Notlar"),
-  ("Apple's API does not expose the App Privacy (nutrition label) answers, so they are edited in App Store Connect. The privacy policy URL below is saved through the API. The answers on this page stay on your Mac and feed the Analysis.", "Apple'ın API'si App Privacy (gizlilik etiketi) yanıtlarını sunmaz, bu yüzden bunlar App Store Connect'te düzenlenir. Aşağıdaki gizlilik politikası URL'si API ile kaydedilir. Bu sayfadaki yanıtlar Mac'inde kalır ve Analiz'de kullanılır."),
-  ("Open App Privacy in App Store Connect", "App Privacy'yi App Store Connect'te aç"),
-  ("Privacy policy URL", "Gizlilik politikası URL'si"),
-  ("Your answers", "Yanıtların"),
-  ("I answered App Privacy in App Store Connect", "App Privacy'yi App Store Connect'te yanıtladım"),
-  ("The app collects data from users", "Uygulama kullanıcılardan veri topluyor"),
-  ("The app tracks users across other companies' apps or sites", "Uygulama kullanıcıları diğer şirketlerin uygulama ve sitelerinde takip ediyor"),
-  ("The app shows the App Tracking Transparency prompt", "Uygulama App Tracking Transparency istemini gösteriyor"),
-  ("People can create an account in the app", "Kişiler uygulamada hesap oluşturabiliyor"),
-  ("Accounts can be deleted inside the app", "Hesaplar uygulama içinden silinebiliyor"),
-  ("A reviewer must sign in to reach the main features", "İnceleyen kişinin ana özelliklere ulaşmak için giriş yapması gerekiyor"),
-  ("Data types collected", "Toplanan veri türleri"),
-  ("Third-party SDKs", "Üçüncü taraf SDK'ler"),
-  // Analysis
-  ("Checklist", "Kontrol listesi"),
-  ("How to fix", "Nasıl düzeltilir"),
-  ("Go to", "Git"),
-  ("Summary", "Özet"),
-  ("Review readiness", "İncelemeye hazırlık"),
-  ("Based on the data saved in App Store Connect and your App Privacy answers. Apple's reviewers also test the app itself, so no check can promise approval.", "App Store Connect'te kayıtlı verilere ve App Privacy yanıtlarına dayanır. Apple'ın inceleyicileri uygulamanın kendisini de test eder, bu yüzden hiçbir kontrol onayı garanti edemez."),
-  ("Not ready for review", "İncelemeye hazır değil"),
-  ("Almost ready", "Neredeyse hazır"),
-  ("Looks ready", "Hazır görünüyor"),
-  ("{} critical · {} · {}", "{} kritik · {} · {}"),
-  ("{} warning", "{} uyarı"),
-  ("{} warnings", "{} uyarı"),
-  ("{} tip", "{} ipucu"),
-  ("{} tips", "{} ipucu"),
-  ("No issues found in the saved data.", "Kayıtlı verilerde sorun bulunamadı."),
-  ("{} is reading your app and the rules…", "{} uygulamanı ve kuralları okuyor…"),
-  ("The AI found nothing more to add.", "Yapay zekâ eklenecek başka bir şey bulamadı."),
-  ("Sends the listing text, the review notes and your privacy answers to {} together with the rules below. Demo passwords and contact details are never sent.", "Mağaza metnini, inceleme notlarını ve gizlilik yanıtlarını aşağıdaki kurallarla birlikte {} servisine gönderir. Demo parolalar ve iletişim bilgileri asla gönderilmez."),
-  ("Add a {} API key in Settings to run the AI analysis.", "Yapay zekâ analizini çalıştırmak için Ayarlar'dan bir {} API anahtarı ekle."),
-  ("Not downloaded yet", "Henüz indirilmedi"),
-  ("Updated {}", "{} güncellendi"),
-  ("Downloaded", "İndirildi"),
-  ("just now", "az önce"),
-  ("{} min ago", "{} dk önce"),
-  ("{} h ago", "{} sa önce"),
-  ("{} days ago", "{} gün önce"),
-  ("AI analysis", "Yapay zekâ analizi"),
-  ("Analyze with {}", "{} ile analiz et"),
-  ("Rules: App Store Compliance Playbook · {}", "Kurallar: App Store Compliance Playbook · {}"),
-  ("View", "Görüntüle"),
-  ("Update rules", "Kuralları güncelle"),
-  ("Open {}", "{} sayfasını aç"),
-  ("Guideline {}", "Kural {}"),
-  ("Fix: {}", "Çözüm: {}"),
-  ("Critical", "Kritik"),
-  ("Warning", "Uyarı"),
-  ("Tip", "İpucu"),
-  // Settings
-  ("General", "Genel"),
-  ("Choose the language of AppForge. The App Store listing you edit keeps its own languages.", "AppForge'un dilini seç. Düzenlediğin App Store sayfası kendi dillerini korur."),
-  ("Account", "Hesap"),
-  ("Signed in with key {}.", "{} anahtarıyla giriş yapıldı."),
-  ("Not signed in.", "Giriş yapılmadı."),
-  ("AI analysis uses your own API key. Keys are kept in this Mac's Keychain, never in a file.", "Yapay zekâ analizi kendi API anahtarını kullanır. Anahtarlar bu Mac'in Anahtar Zinciri'nde tutulur, hiçbir dosyada değil."),
-  ("AI provider", "Yapay zekâ sağlayıcısı"),
-  ("More providers can be added later.", "Daha fazla sağlayıcı sonra eklenebilir."),
-  ("Rules", "Kurallar"),
-  ("The Analysis reads the App Store Compliance Playbook. AppForge downloads it from GitHub and refreshes it weekly; you can also update it from the Analysis page.", "Analiz, App Store Compliance Playbook'u okur. AppForge bunu GitHub'dan indirir ve haftalık yeniler; Analiz sayfasından da güncelleyebilirsin."),
-  ("Open the playbook on GitHub", "Playbook'u GitHub'da aç"),
-  ("About", "Hakkında"),
-  ("AppForge version {}", "AppForge sürüm {}"),
-  ("Settings and notes are stored in the data folder. API keys are in the Keychain, never in a file.", "Ayarlar ve notlar veri klasöründe saklanır. API anahtarları Anahtar Zinciri'ndedir, hiçbir dosyada değil."),
-  ("Show data folder", "Veri klasörünü göster"),
-  ("In use", "Kullanımda"),
-  ("Use {}", "{} kullan"),
-  ("Remove key", "Anahtarı kaldır"),
-  ("Model", "Model"),
-  ("API key", "API anahtarı"),
-  ("{} saved in the Keychain. Type a new one to replace it.", "{} Anahtar Zinciri'nde kayıtlı. Değiştirmek için yenisini yaz."),
-  ("No {} yet.", "Henüz {} yok."),
-  // Notifications
-  ("Saved to App Store Connect.", "App Store Connect'e kaydedildi."),
-  ("Nothing changed.", "Hiçbir şey değişmedi."),
-  ("Rules updated from the playbook.", "Kurallar playbook'tan güncellendi."),
-  ("Add your {} API key in Settings first.", "Önce Ayarlar'dan {} API anahtarını ekle."),
-  ("{} settings saved.", "{} ayarları kaydedildi."),
-  ("{} API key saved in the Keychain.", "{} API anahtarı Anahtar Zinciri'ne kaydedildi."),
-  ("{} API key removed.", "{} API anahtarı kaldırıldı."),
-  ("Signed in, but the key could not be saved in the Keychain: {}", "Giriş yapıldı ama anahtar Anahtar Zinciri'ne kaydedilemedi: {}"),
-  ("The key could not be removed from the Keychain: {}", "Anahtar Anahtar Zinciri'nden kaldırılamadı: {}"),
-  ("Could not save settings: {}", "Ayarlar kaydedilemedi: {}"),
-  ("The settings file could not be read, so this change was not saved.", "Ayar dosyası okunamadığı için bu değişiklik kaydedilmedi."),
-  ("Could not read the App Store Connect key from the Keychain: {}", "App Store Connect anahtarı Anahtar Zinciri'nden okunamadı: {}"),
-];
+impl<'de> Deserialize<'de> for Entries {
+  fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+    struct Collect;
+    impl<'de> Visitor<'de> for Collect {
+      type Value = Entries;
 
-fn table() -> &'static HashMap<&'static str, &'static str> {
-  static TABLE: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
-  TABLE.get_or_init(|| TURKISH.iter().copied().collect())
-}
+      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("an object of text keys and text values")
+      }
 
-/// `text` in `language`. A text without a translation is shown in English.
-pub fn tr(language: Language, text: &'static str) -> SharedString {
-  match language {
-    Language::English => SharedString::new_static(text),
-    Language::Turkish => SharedString::new_static(table().get(text).copied().unwrap_or(text)),
+      fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Entries, A::Error> {
+        let mut entries = Vec::new();
+        while let Some(entry) = map.next_entry::<String, String>()? {
+          entries.push(entry);
+        }
+        Ok(Entries(entries))
+      }
+    }
+    deserializer.deserialize_map(Collect)
   }
 }
 
+/// One language, read once. The texts live for the whole run, so `tr` hands out `&'static str` without copying.
+struct Catalog {
+  entries: Vec<(&'static str, &'static str)>,
+  by_key: HashMap<&'static str, &'static str>,
+  /// The English wording of each key, to the text of this language: for English that comes from another crate.
+  from_english: HashMap<&'static str, &'static str>,
+}
+
+fn source(language: Language) -> &'static str {
+  match language {
+    Language::English => ENGLISH,
+    Language::Turkish => TURKISH,
+  }
+}
+
+fn catalog(language: Language) -> &'static Catalog {
+  static ENGLISH_CATALOG: OnceLock<Catalog> = OnceLock::new();
+  static TURKISH_CATALOG: OnceLock<Catalog> = OnceLock::new();
+  let cell = match language {
+    Language::English => &ENGLISH_CATALOG,
+    Language::Turkish => &TURKISH_CATALOG,
+  };
+  cell.get_or_init(|| {
+    let Entries(parsed) = serde_json::from_str(source(language)).expect("the locale file is valid JSON of text keys and values");
+    let leak = |text: String| -> &'static str { Box::leak(text.into_boxed_str()) };
+    let entries: Vec<(&'static str, &'static str)> = parsed.into_iter().map(|(key, text)| (leak(key), leak(text))).collect();
+    let by_key: HashMap<&'static str, &'static str> = entries.iter().copied().collect();
+    let from_english = match language {
+      Language::English => entries.iter().map(|(_, text)| (*text, *text)).collect(),
+      _ => catalog(Language::English).entries.iter().filter_map(|(key, text)| by_key.get(key).map(|translated| (*text, *translated))).collect(),
+    };
+    Catalog { entries, by_key, from_english }
+  })
+}
+
+/// Every `(key, text)` of a language in file order, duplicate keys included. For tests and tools.
+pub fn entries(language: Language) -> &'static [(&'static str, &'static str)] {
+  &catalog(language).entries
+}
+
+/// The text of `key` in `language`. Unknown text is shown as it is.
+pub fn tr(language: Language, key: &'static str) -> SharedString {
+  let catalog = catalog(language);
+  SharedString::new_static(catalog.by_key.get(key).or_else(|| catalog.from_english.get(key)).copied().unwrap_or(key))
+}
+
 /// `text` in `language`, with each `{}` replaced by the next of `args`.
-pub fn trf(language: Language, text: &'static str, args: &[&str]) -> SharedString {
-  let template = tr(language, text);
+pub fn trf(language: Language, key: &'static str, args: &[&str]) -> SharedString {
+  let template = tr(language, key);
   let mut parts = template.split("{}");
   let mut out = String::from(parts.next().unwrap_or_default());
   for (part, arg) in parts.zip(args.iter().copied().chain(std::iter::repeat(""))) {

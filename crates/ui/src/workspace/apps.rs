@@ -90,7 +90,7 @@ impl Workspace {
         .update_in(cx, |this, window, cx| {
           // One notice, and only when not a single icon could be had: a failure for one app is not worth interrupting for.
           if let (true, Some(error)) = (fetched.is_empty(), failure) {
-            Self::warning(window, cx, trf(this.settings.language, "Could not get the app icons: {}", &[&error]));
+            Self::warning(window, cx, trf(this.settings.language, "couldNotGetThe", &[&error]));
           }
           this.icons.extend(fetched);
           cx.notify();

@@ -91,3 +91,27 @@ fn a_missing_folder_or_a_file_is_an_error() {
   assert!(summarize(&root.join("file.txt")).is_err());
   fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn recent_commit_subjects_are_added_so_release_notes_have_something_to_go_on() {
+  let root = temporary_dir("commits");
+  write(&root, "README.md", "An app.");
+  let git =
+    |args: &[&str]| std::process::Command::new("git").arg("-C").arg(&root).args(args).output().map(|output| output.status.success()).unwrap_or(false);
+  // Without Git on this machine there is nothing to check.
+  if !git(&["init", "-q"]) {
+    return;
+  }
+  assert!(git(&["add", "."]));
+  assert!(git(&["-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "Add the hint button"]));
+  let summary = summarize(&root).unwrap();
+  assert!(summary.text.contains("RECENT CHANGES"), "{}", summary.text);
+  assert!(summary.text.contains("- Add the hint button"));
+}
+
+#[test]
+fn a_folder_without_git_has_no_recent_changes_section() {
+  let root = temporary_dir("no-git");
+  write(&root, "README.md", "An app.");
+  assert!(!summarize(&root).unwrap().text.contains("RECENT CHANGES"));
+}

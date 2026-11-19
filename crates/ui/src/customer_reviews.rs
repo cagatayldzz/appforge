@@ -36,9 +36,9 @@ impl ReviewStatus {
 
   fn label(self) -> &'static str {
     match self {
-      Self::All => "All",
-      Self::Unanswered => "Unanswered",
-      Self::Answered => "Answered",
+      Self::All => "all",
+      Self::Unanswered => "unanswered",
+      Self::Answered => "answered",
     }
   }
 
@@ -100,7 +100,7 @@ impl Workspace {
   pub(crate) fn render_customer_reviews(&self, cx: &mut Context<Self>) -> AnyElement {
     let l = self.settings.language;
     match self.active_data().map(|data| &data.reviews) {
-      Some(Load::Ready(reviews)) if reviews.is_empty() => div().child(tr(l, "No customer reviews.")).into_any_element(),
+      Some(Load::Ready(reviews)) if reviews.is_empty() => div().child(tr(l, "noCustomerReviews")).into_any_element(),
       Some(Load::Ready(reviews)) => self.reviews_page(reviews, cx).into_any_element(),
       Some(Load::Failed(message)) => v_flex()
         .gap_3()
@@ -108,13 +108,13 @@ impl Workspace {
         .child(
           h_flex().child(
             Button::new("retry-customer-reviews")
-              .label(tr(l, "Try again"))
+              .label(tr(l, "tryAgain"))
               .outline()
               .on_click(cx.listener(|this, _, window, cx| this.load_customer_reviews(window, cx))),
           ),
         )
         .into_any_element(),
-      _ => h_flex().gap_2().child(Spinner::new()).child(tr(l, "Loading from App Store Connect…")).into_any_element(),
+      _ => h_flex().gap_2().child(Spinner::new()).child(tr(l, "loadingFromAppStore")).into_any_element(),
     }
   }
 
@@ -129,8 +129,8 @@ impl Workspace {
       v_flex()
         .gap_3()
         .items_start()
-        .child(div().text_color(c.text_secondary).child(tr(l, "No reviews match these filters.")))
-        .child(Button::new("clear-review-filters").label(tr(l, "Clear filters")).outline().small().on_click(cx.listener(|this, _, _, cx| {
+        .child(div().text_color(c.text_secondary).child(tr(l, "noReviewsMatchThese")))
+        .child(Button::new("clear-review-filters").label(tr(l, "clearFilters")).outline().small().on_click(cx.listener(|this, _, _, cx| {
           this.review_status = ReviewStatus::All;
           this.review_rating = None;
           cx.notify();
@@ -140,9 +140,9 @@ impl Workspace {
       v_flex().gap_3().children(visible.iter().map(|review| self.review_card(review, cx)).collect::<Vec<_>>()).into_any_element()
     };
     let count = if filtered {
-      trf(l, "{} of {} reviews", &[&visible.len().to_string(), &reviews.len().to_string()])
+      trf(l, "ofReviews", &[&visible.len().to_string(), &reviews.len().to_string()])
     } else {
-      trf(l, "{} reviews", &[&reviews.len().to_string()])
+      trf(l, "reviews", &[&reviews.len().to_string()])
     };
     v_flex()
       .gap_5()
@@ -221,10 +221,10 @@ impl Workspace {
           .w_40()
           .child(div().text_3xl().font_weight(FontWeight::SEMIBOLD).child(format!("{average:.1}")))
           .child(stars(average.round() as u64, &c))
-          .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "{} reviews", &[&reviews.len().to_string()])))
+          .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "reviews", &[&reviews.len().to_string()])))
           .child(div().text_size(FONT_SIZE_SM).text_color(if unanswered > 0 { c.warning } else { c.success }).child(trf(
             l,
-            "{} unanswered",
+            "unansweredCount",
             &[&unanswered.to_string()],
           ))),
       )
@@ -236,7 +236,7 @@ impl Workspace {
     let c = colors(cx);
     let target = review.clone();
     let reply = Button::new(SharedString::from(format!("reply-{}", review.id)))
-      .label(tr(l, if review.response.is_some() { "Edit reply" } else { "Reply" }))
+      .label(tr(l, if review.response.is_some() { "editReply" } else { "reply" }))
       .small()
       .outline()
       .disabled(self.store_write_busy || self.saving)
@@ -266,14 +266,14 @@ impl Workspace {
           .rounded_md()
           .bg(c.surface)
           .child(
-            h_flex().gap_2().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "Your reply")).child(state_badge(&response.state, &c)),
+            h_flex().gap_2().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "yourReply")).child(state_badge(&response.state, &c)),
           )
           .child(SharedString::from(response.body.clone())),
       );
       let target = review.clone();
       actions = actions.child(
         Button::new(SharedString::from(format!("delete-reply-{}", review.id)))
-          .label(tr(l, "Delete reply"))
+          .label(tr(l, "deleteReply"))
           .small()
           .outline()
           .disabled(self.store_write_busy || self.saving)
@@ -318,18 +318,17 @@ impl Workspace {
         .gap_2()
         .justify_end()
         .w_full()
-        .child(Button::new("cancel-reply").label(tr(l, "Cancel")).outline().on_click(|_, window, cx| window.close_dialog(cx)))
+        .child(Button::new("cancel-reply").label(tr(l, "cancel")).outline().on_click(|_, window, cx| window.close_dialog(cx)))
         .child(Button::new("confirm-reply").label(tr(l, label)).primary().on_click(move |_, window, cx| {
           let input = field_for_save.as_ref().map_or_else(String::new, |field| read_area(field, cx));
           window.close_dialog(cx);
           workspace.update(cx, |this, cx| this.apply_store_change(change.clone(), input, window, cx));
         }));
-      let message =
-        if delete { tr(l, "Delete your public reply to this review?") } else { tr(l, "This reply will appear publicly on the App Store.") };
+      let message = if delete { tr(l, "deleteYourPublicReply") } else { tr(l, "thisReplyWillAppear") };
       dialog
         .title(tr(l, label))
         .child(
-          v_flex().gap_2().child(title.clone()).child(message).children(field.as_ref().map(|field| area_field(tr(l, "Your reply"), field, None, cx))),
+          v_flex().gap_2().child(title.clone()).child(message).children(field.as_ref().map(|field| area_field(tr(l, "yourReply"), field, None, cx))),
         )
         .footer(footer)
     });

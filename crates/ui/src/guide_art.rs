@@ -125,7 +125,7 @@ pub fn name_window_drawing(language: Language, name: &Entity<InputState>, cx: &A
     v_flex()
       .gap_1p5()
       .child(Label::new(apple("Name")))
-      .child(Input::new(name).small().suffix(Clipboard::new("copy-key-name").value("AppForge").tooltip(tr(language, "Copy the name"))))
+      .child(Input::new(name).small().suffix(Clipboard::new("copy-key-name").value("AppForge").tooltip(tr(language, "copyTheName"))))
       .child(Label::new(apple("Access")))
       .child(
         h_flex()
@@ -204,7 +204,7 @@ pub fn key_file_drawing(chosen: Option<&str>, language: Language) -> Div {
     .content(AttachmentContent::new().title(AttachmentTitle::new(file_name.clone())).description(AttachmentDescription::new("p8")));
   let mut row = h_flex().gap_3().items_center().child(file);
   if chosen.is_some() {
-    row = row.child(reveal(SharedString::from(format!("file-ok-{file_name}")), div().child(Tag::success().child(tr(language, "Ready")))));
+    row = row.child(reveal(SharedString::from(format!("file-ok-{file_name}")), div().child(Tag::success().child(tr(language, "ready")))));
   }
   row
 }

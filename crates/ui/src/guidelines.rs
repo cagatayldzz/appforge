@@ -56,7 +56,7 @@ impl Workspace {
               }
               this.guidelines_error = None;
               if manual {
-                Self::success(window, cx, tr(this.settings.language, "Apple guidelines checked."));
+                Self::success(window, cx, tr(this.settings.language, "appleGuidelinesChecked"));
               }
             }
             Err(error) => {
@@ -80,7 +80,7 @@ impl Workspace {
     let search = read_input(&self.guideline_search, cx).to_lowercase();
     let mut groups = v_flex().gap_2();
     let mut matches = 0;
-    for (prefix, name) in [('1', "Safety"), ('2', "Performance"), ('3', "Business"), ('4', "Design"), ('5', "Legal")] {
+    for (prefix, name) in [('1', "safety"), ('2', "performance"), ('3', "business"), ('4', "design"), ('5', "legal")] {
       let localized = tr(l, name);
       let rules: Vec<_> = self
         .guidelines
@@ -119,25 +119,25 @@ impl Workspace {
     }
     let count = if self.guidelines.rules.is_empty() {
       if self.guidelines_busy {
-        tr(l, "Loading Apple rules…")
+        tr(l, "loadingAppleRules")
       } else {
-        tr(l, "No rules downloaded yet.")
+        tr(l, "noRulesDownloadedYet")
       }
     } else if search.is_empty() {
-      trf(l, "{} rules", &[&matches.to_string()])
+      trf(l, "rulesCount", &[&matches.to_string()])
     } else if matches == 0 {
-      tr(l, "No matching rules.")
+      tr(l, "noMatchingRules")
     } else {
-      trf(l, "{} matching rules", &[&matches.to_string()])
+      trf(l, "matchingRules", &[&matches.to_string()])
     };
-    let status = if self.guidelines.checked_at > 0 { Some(trf(l, "Last checked {}", &[&ago(l, self.guidelines.checked_at)])) } else { None };
+    let status = if self.guidelines.checked_at > 0 { Some(trf(l, "lastChecked", &[&ago(l, self.guidelines.checked_at)])) } else { None };
     let toolbar = h_flex()
       .gap_2()
       .flex_wrap()
       .child(
         Button::new("refresh-apple-guidelines")
           .icon(Icon::new(IconName::RefreshCw))
-          .label(tr(l, "Update rules"))
+          .label(tr(l, "updateRules"))
           .small()
           .outline()
           .loading(self.guidelines_busy)
@@ -146,7 +146,7 @@ impl Workspace {
       .child(
         Button::new("open-apple-guidelines")
           .icon(Icon::new(IconName::ExternalLink))
-          .label(tr(l, "View on Apple"))
+          .label(tr(l, "viewOnApple"))
           .small()
           .ghost()
           .on_click(|_, _, cx| cx.open_url(GUIDELINES_URL)),
@@ -161,19 +161,19 @@ impl Workspace {
           .child(
             v_flex()
               .gap_1()
-              .child(div().font_weight(FontWeight::SEMIBOLD).child(tr(l, "Apple App Review Guidelines")))
+              .child(div().font_weight(FontWeight::SEMIBOLD).child(tr(l, "appleAppReviewGuidelines")))
               .children(status.map(|status| div().text_sm().text_color(muted).child(status))),
           )
           .child(toolbar),
       )
       .children(self.guidelines_error.as_ref().map(|error| Alert::error("apple-guidelines-error", error.clone())));
-    for (label, ids) in [("Added rules", &changes.added), ("Changed rules", &changes.modified), ("Removed rules", &changes.removed)] {
+    for (label, ids) in [("addedRules", &changes.added), ("changedRules", &changes.modified), ("removedRules", &changes.removed)] {
       if !ids.is_empty() {
         content = content.child(div().text_sm().child(format!("{} · {}", tr(l, label), ids.join(", "))));
       }
     }
     content
-      .child(text_field(tr(l, "Search by rule number or topic"), &self.guideline_search, None, cx))
+      .child(text_field(tr(l, "searchByRuleNumber"), &self.guideline_search, None, cx))
       .child(div().text_sm().text_color(muted).child(count))
       .child(groups)
   }
@@ -200,7 +200,7 @@ impl Workspace {
       .child(
         Button::new(SharedString::from(format!("apple-rule-{}", rule.number)))
           .icon(Icon::new(IconName::ExternalLink))
-          .label(tr(l, "Open rule"))
+          .label(tr(l, "openRule"))
           .ghost()
           .xsmall()
           .on_click(move |_, _, cx| cx.open_url(&url)),

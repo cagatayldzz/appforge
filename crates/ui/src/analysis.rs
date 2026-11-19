@@ -25,10 +25,10 @@ pub(crate) fn ago(l: Language, fetched_at: u64) -> SharedString {
   let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
   let seconds = now.saturating_sub(fetched_at);
   match seconds {
-    0..=59 => tr(l, "just now"),
-    60..=3599 => trf(l, "{} min ago", &[&(seconds / 60).to_string()]),
-    3600..=86_399 => trf(l, "{} h ago", &[&(seconds / 3600).to_string()]),
-    _ => trf(l, "{} days ago", &[&(seconds / 86_400).to_string()]),
+    0..=59 => tr(l, "justNow"),
+    60..=3599 => trf(l, "minAgo", &[&(seconds / 60).to_string()]),
+    3600..=86_399 => trf(l, "hoursAgo", &[&(seconds / 3600).to_string()]),
+    _ => trf(l, "daysAgo", &[&(seconds / 86_400).to_string()]),
   }
 }
 
@@ -51,9 +51,9 @@ impl AnalysisTab {
 
   fn label(self) -> &'static str {
     match self {
-      Self::Checklist => "Checklist",
-      Self::Ai => "AI analysis",
-      Self::Rules => "Rules",
+      Self::Checklist => "checklist",
+      Self::Ai => "aiAnalysis",
+      Self::Rules => "rules",
     }
   }
 }
@@ -108,14 +108,14 @@ impl Workspace {
       }));
     if !finding.guideline.is_empty() {
       header =
-        header.child(div().flex_shrink_0().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "Guideline {}", &[&finding.guideline])));
+        header.child(div().flex_shrink_0().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "guideline", &[&finding.guideline])));
     }
     let mut card = v_flex().w_full().p_3().gap_3().rounded_lg().border_1().border_color(c.border).child(header);
     if open {
       let source = self.guidelines.rule(&finding.guideline).map(|rule| {
         let url = rule.url();
         Button::new(SharedString::from(format!("guideline-{key}")))
-          .label(tr(l, "View Apple rule"))
+          .label(tr(l, "viewAppleRule"))
           .small()
           .ghost()
           .on_click(move |_, _, cx| cx.open_url(&url))
@@ -129,7 +129,7 @@ impl Workspace {
             .gap_1()
             .rounded_md()
             .bg(c.surface)
-            .child(div().text_size(FONT_SIZE_SM).font_weight(FontWeight::SEMIBOLD).text_color(c.text_secondary).child(tr(l, "How to fix")))
+            .child(div().text_size(FONT_SIZE_SM).font_weight(FontWeight::SEMIBOLD).text_color(c.text_secondary).child(tr(l, "howToFix")))
             .child(div().child(finding.fix.clone())),
         )
         .child(
@@ -138,7 +138,7 @@ impl Workspace {
             .gap_2()
             .child(
               Button::new(SharedString::from(format!("go-{key}")))
-                .label(trf(l, "Open {}", &[&tr(l, finding.category.label())]))
+                .label(trf(l, "openPage", &[&tr(l, finding.category.label())]))
                 .small()
                 .outline()
                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -201,7 +201,7 @@ impl Workspace {
         .gap_2()
         .items_center()
         .flex_wrap()
-        .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "Go to")))
+        .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "goTo")))
         .children(buttons),
     )
   }
@@ -212,9 +212,9 @@ impl Workspace {
     let l = self.settings.language;
     let Some(report) = self.report.clone() else { return v_flex().into_any_element() };
     let (verdict, color) = match report.verdict() {
-      Verdict::NotReady => (tr(l, "Not ready for review"), theme.danger),
-      Verdict::NeedsAttention => (tr(l, "Almost ready"), theme.warning),
-      Verdict::LooksReady => (tr(l, "Looks ready"), theme.success),
+      Verdict::NotReady => (tr(l, "notReadyForReview"), theme.danger),
+      Verdict::NeedsAttention => (tr(l, "almostReady"), theme.warning),
+      Verdict::LooksReady => (tr(l, "looksReady"), theme.success),
     };
     let provider = self.settings.ai.provider;
     let has_key = self.has_key.get(&provider).copied().unwrap_or(false);
@@ -238,20 +238,17 @@ impl Workspace {
           .child(v_flex().gap_1().child(div().font_weight(FontWeight::SEMIBOLD).text_color(color).child(verdict)).child(
             div().text_sm().text_color(theme.muted_foreground).child(trf(
               l,
-              "{} critical · {} · {}",
+              "criticalSummary",
               &[
                 &report.count(Severity::Critical).to_string(),
-                &count(l, report.count(Severity::Warning), "{} warning", "{} warnings"),
-                &count(l, report.count(Severity::Info), "{} tip", "{} tips"),
+                &count(l, report.count(Severity::Warning), "warningOne", "warningMany"),
+                &count(l, report.count(Severity::Info), "tipOne", "tipMany"),
               ],
             )),
           )),
       )
       .children(todo)
-      .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(
-        l,
-        "Based on the data saved in App Store Connect and your App Privacy answers. Apple's reviewers also test the app itself, so no check can promise approval.",
-      )));
+      .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "basedOnTheData")));
     let tabs = h_flex().gap_1().children(AnalysisTab::ALL.map(|option| {
       let label = match option {
         AnalysisTab::Checklist => format!("{} · {}", tr(l, option.label()), report.findings.len()),
@@ -270,25 +267,25 @@ impl Workspace {
     }));
     let content = match self.analysis_tab {
       AnalysisTab::Checklist if report.findings.is_empty() => {
-        div().text_sm().text_color(theme.muted_foreground).child(tr(l, "No issues found in the saved data.")).into_any_element()
+        div().text_sm().text_color(theme.muted_foreground).child(tr(l, "noIssuesFoundIn")).into_any_element()
       }
       AnalysisTab::Checklist => self.finding_groups("rule", &report.findings, cx).into_any_element(),
       AnalysisTab::Ai => self.render_ai_tab(ai_findings, provider, has_key, cx).into_any_element(),
       AnalysisTab::Rules => {
         let playbook_status: SharedString = match (self.playbook.fetched_at, self.playbook.is_empty()) {
-          (_, true) => tr(l, "Not downloaded yet"),
-          (Some(fetched), false) => trf(l, "Updated {}", &[&ago(l, fetched)]),
-          (None, false) => tr(l, "Downloaded"),
+          (_, true) => tr(l, "notDownloadedYet"),
+          (Some(fetched), false) => trf(l, "updated", &[&ago(l, fetched)]),
+          (None, false) => tr(l, "downloaded"),
         };
         setting_row(
-          tr(l, "App Store Compliance Playbook"),
+          tr(l, "appStoreCompliancePlaybook"),
           Some(playbook_status),
           h_flex()
             .gap_2()
-            .child(Button::new("open-playbook").label(tr(l, "View")).outline().small().on_click(|_, _, cx| cx.open_url(PLAYBOOK_REPOSITORY)))
+            .child(Button::new("open-playbook").label(tr(l, "view")).outline().small().on_click(|_, _, cx| cx.open_url(PLAYBOOK_REPOSITORY)))
             .child(
               Button::new("update-playbook")
-                .label(tr(l, "Update rules"))
+                .label(tr(l, "updateRules"))
                 .outline()
                 .small()
                 .loading(self.playbook_busy)
@@ -306,18 +303,14 @@ impl Workspace {
     let theme = cx.theme().clone();
     let c = colors(cx);
     let l = self.settings.language;
-    let hint: SharedString = if has_key {
-      trf(l, "Sends the listing text, the review notes and your privacy answers to {} together with the rules below. Demo passwords and contact details are never sent.", &[provider.label()])
-    } else {
-      trf(l, "Add a {} API key in Settings to run the AI analysis.", &[provider.label()])
-    };
+    let hint: SharedString = if has_key { trf(l, "sendsTheListingText", &[provider.label()]) } else { trf(l, "addAApiKeyIn", &[provider.label()]) };
     let run = h_flex()
       .gap_3()
       .items_center()
       .child(
         Button::new("run-ai")
           .icon(Icon::new(IconName::Bot))
-          .label(trf(l, "Analyze with {}", &[provider.label()]))
+          .label(trf(l, "analyzeWith", &[provider.label()]))
           .primary()
           .loading(matches!(self.ai, AiState::Running))
           .disabled(!has_key)
@@ -329,7 +322,7 @@ impl Workspace {
       AiState::Running => {
         v_flex().child(h_flex().gap_2().items_center().text_sm().text_color(theme.muted_foreground).child(Spinner::new()).child(trf(
           l,
-          "{} is reading your app and the rules…",
+          "isReadingYourApp",
           &[provider.label()],
         )))
       }
@@ -343,12 +336,12 @@ impl Workspace {
               .p_3()
               .rounded_lg()
               .bg(c.surface_alt)
-              .child(div().text_size(FONT_SIZE_SM).font_weight(FontWeight::SEMIBOLD).text_color(c.text_secondary).child(tr(l, "Summary")))
+              .child(div().text_size(FONT_SIZE_SM).font_weight(FontWeight::SEMIBOLD).text_color(c.text_secondary).child(tr(l, "summary")))
               .child(div().child(review.summary.clone())),
           );
         }
         if findings.is_empty() {
-          body = body.child(div().text_sm().text_color(theme.muted_foreground).child(tr(l, "The AI found nothing more to add.")));
+          body = body.child(div().text_sm().text_color(theme.muted_foreground).child(tr(l, "theAiFoundNothing")));
         } else {
           body = body.child(self.finding_groups("ai", findings, cx));
         }

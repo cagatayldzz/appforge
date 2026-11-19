@@ -23,7 +23,7 @@ impl Workspace {
     let apps = self.app_list();
     let all_apps = {
       let workspace = workspace.clone();
-      rail_button("rail-all-apps", IconName::LayoutDashboard, tr(l, "Apps"), self.show_all_apps && !self.show_settings, cx, move |_, _, cx| {
+      rail_button("rail-all-apps", IconName::LayoutDashboard, tr(l, "apps"), self.show_all_apps && !self.show_settings, cx, move |_, _, cx| {
         workspace.update(cx, |this, cx| {
           this.show_settings = false;
           this.show_all_apps = true;
@@ -51,7 +51,7 @@ impl Workspace {
           .into_any_element()
       })
       .collect();
-    let settings = rail_button("rail-settings", IconName::Settings, tr(l, "Settings"), self.show_settings, cx, move |_, _, cx| {
+    let settings = rail_button("rail-settings", IconName::Settings, tr(l, "settings"), self.show_settings, cx, move |_, _, cx| {
       workspace.update(cx, |this, cx| {
         this.show_settings = true;
         cx.notify();
@@ -89,11 +89,11 @@ impl Workspace {
     };
     // The top of the column says what the main area shows: the pages of Settings, the app that is open, or all apps.
     let (header, rows, actions) = if self.show_settings {
-      (title(tr(l, "Settings"), None), self.settings_rows(cx), None)
+      (title(tr(l, "settings"), None), self.settings_rows(cx), None)
     } else if let Some(app) = self.selected_app().filter(|_| !self.show_all_apps) {
       (self.app_identity(&app, cx), self.page_rows(cx), Some(self.page_actions(cx)))
     } else {
-      (title(tr(l, "Apps"), Some(self.reload_button(cx).into_any_element())), Vec::new(), None)
+      (title(tr(l, "apps"), Some(self.reload_button(cx).into_any_element())), Vec::new(), None)
     };
     // Reload and Save sit at the bottom of the column, under a line.
     let footer = actions.map(|actions| v_flex().flex_none().border_t_1().border_color(c.border).child(actions));
@@ -116,7 +116,7 @@ impl Workspace {
       .outline()
       .small()
       .loading(matches!(self.apps, Load::Loading))
-      .tooltip(tr(l, "Reload apps"))
+      .tooltip(tr(l, "reloadApps"))
       .on_click(cx.listener(|this, _, window, cx| this.load_apps(window, cx)))
   }
 
@@ -140,10 +140,10 @@ impl Workspace {
         .rounded_lg()
         .bg(color.opacity(0.14))
         .child(div().text_color(color).text_size(rems(1.25)).font_weight(FontWeight::BOLD).child(report.score().to_string()))
-        .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "Score")))
+        .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "score")))
     });
     // One tile: the score, the version and where it stands at Apple. It opens the Analysis page.
-    let tooltip = trf(l, "Open {}", &[&tr(l, DetailTab::Analysis.label())]);
+    let tooltip = trf(l, "openPage", &[&tr(l, DetailTab::Analysis.label())]);
     let open = self.tab == DetailTab::Analysis;
     let status = h_flex()
       .id("score-badge")
@@ -161,11 +161,7 @@ impl Workspace {
       .child(v_flex().flex_1().min_w_0().gap_1().text_size(FONT_SIZE_SM).children(version.map(|version| {
         v_flex()
           .gap_1()
-          .child(div().text_size(FONT_SIZE).font_weight(FontWeight::SEMIBOLD).text_color(c.text).child(trf(
-            l,
-            "Version {}",
-            &[&version.version_string],
-          )))
+          .child(div().text_size(FONT_SIZE).font_weight(FontWeight::SEMIBOLD).text_color(c.text).child(trf(l, "version", &[&version.version_string])))
           .child(div().text_color(c.text_secondary).child(state_badge(&version.state, &c)))
       })))
       .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
@@ -219,7 +215,7 @@ impl Workspace {
       DetailTab::Distribution => data.snapshot_task.is_some() || data.distribution_task.is_some(),
       _ => data.snapshot_task.is_some(),
     });
-    let reload = Button::new("reload-snapshot").icon(Icon::new(IconName::RefreshCw)).label(tr(l, "Reload")).loading(busy).outline().small().on_click(
+    let reload = Button::new("reload-snapshot").icon(Icon::new(IconName::RefreshCw)).label(tr(l, "reload")).loading(busy).outline().small().on_click(
       cx.listener(|this, _, window, cx| match this.tab {
         DetailTab::CustomerReviews => this.load_customer_reviews(window, cx),
         DetailTab::Distribution if this.ready_snapshot().is_some() => this.load_distribution(window, cx),

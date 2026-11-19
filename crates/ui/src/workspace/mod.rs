@@ -63,12 +63,12 @@ impl DetailTab {
 
   pub fn label(self) -> &'static str {
     match self {
-      Self::Distribution => "Distribution",
-      Self::CustomerReviews => "Ratings and Reviews",
-      Self::Information => "App Information",
-      Self::Review => "App Review",
-      Self::Privacy => "App Privacy",
-      Self::Analysis => "Analysis",
+      Self::Distribution => "distribution",
+      Self::CustomerReviews => "ratingsAndReviews",
+      Self::Information => "appInformation",
+      Self::Review => "appReview",
+      Self::Privacy => "appPrivacy",
+      Self::Analysis => "analysis",
     }
   }
 }
@@ -89,12 +89,12 @@ impl SettingsPage {
 
   pub fn label(self) -> &'static str {
     match self {
-      Self::General => "General",
-      Self::Account => "Account",
-      Self::AiProvider => "AI provider",
-      Self::CodeFolders => "Code folders",
-      Self::Rules => "Rules",
-      Self::About => "About",
+      Self::General => "general",
+      Self::Account => "account",
+      Self::AiProvider => "aiProvider",
+      Self::CodeFolders => "codeFolders",
+      Self::Rules => "rules",
+      Self::About => "about",
     }
   }
 }

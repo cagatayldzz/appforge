@@ -15,11 +15,11 @@ impl Workspace {
 
   pub fn save_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
     if self.settings_locked {
-      Self::error(window, cx, tr(self.settings.language, "The settings file could not be read, so this change was not saved."));
+      Self::error(window, cx, tr(self.settings.language, "theSettingsFileCould"));
       return;
     }
     if let Err(error) = self.settings.save(&self.data_dir.join("settings.json")) {
-      Self::error(window, cx, trf(self.settings.language, "Could not save settings: {}", &[&error.to_string()]));
+      Self::error(window, cx, trf(self.settings.language, "couldNotSaveSettings", &[&error.to_string()]));
     }
   }
 
@@ -52,7 +52,7 @@ impl Workspace {
       files: false,
       directories: true,
       multiple: false,
-      prompt: Some(tr(self.settings.language, "Choose folder")),
+      prompt: Some(tr(self.settings.language, "chooseFolder")),
     });
     self.tasks.folder = Some(cx.spawn_in(window, async move |this, cx| {
       if let Ok(Ok(Some(paths))) = receiver.await {

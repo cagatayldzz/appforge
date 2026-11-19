@@ -54,34 +54,24 @@ impl Workspace {
           .child(div().min_w_0().text_sm().text_color(palette.text_secondary).child(text)),
       )
     };
-    let content =
-      centered(
-        v_flex()
-          .pt_6()
-          .pb_6()
-          .gap_6()
-          .child(v_flex().gap_2().child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, "Welcome to AppForge"))).child(
-            div().text_sm().text_color(palette.text_secondary).child(tr(l, "Get your App Store apps ready for review, from one calm window.")),
-          ))
-          .child(feature(
-            IconName::FileText,
-            tr(l, "Edit your listing"),
-            tr(l, "Change names, descriptions, keywords and review notes, and save them straight to App Store Connect."),
-          ))
-          .child(feature(
-            IconName::CircleCheck,
-            tr(l, "Check review readiness"),
-            tr(l, "See what could get your app rejected, based on Apple's guidelines, before you submit."),
-          ))
-          .child(feature(
-            IconName::Bot,
-            tr(l, "Ask an AI to double-check"),
-            tr(l, "Optional. Use your own Claude or OpenAI key; your keys stay in the macOS Keychain."),
-          )),
-      );
+    let content = centered(
+      v_flex()
+        .pt_6()
+        .pb_6()
+        .gap_6()
+        .child(
+          v_flex()
+            .gap_2()
+            .child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, "welcomeToAppforge")))
+            .child(div().text_sm().text_color(palette.text_secondary).child(tr(l, "getYourAppStore"))),
+        )
+        .child(feature(IconName::FileText, tr(l, "editYourListing"), tr(l, "changeNamesDescriptionsKeywords")))
+        .child(feature(IconName::CircleCheck, tr(l, "checkReviewReadiness"), tr(l, "seeWhatCouldGet")))
+        .child(feature(IconName::Bot, tr(l, "askAnAiTo"), tr(l, "optionalUseYourOwn"))),
+    );
     let start = v_flex().gap_2().child(
       Button::new("welcome-start")
-        .label(tr(l, "Get started"))
+        .label(tr(l, "getStarted"))
         .primary()
         .w_full()
         .on_click(cx.listener(|this, _, window, cx| this.finish_welcome(window, cx))),

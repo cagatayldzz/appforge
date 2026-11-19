@@ -35,22 +35,17 @@ impl Workspace {
       Provider::OpenAi => (&self.settings_form.openai_key, &self.settings_form.openai_model, "OpenAI API key"),
       Provider::Anthropic => (&self.settings_form.anthropic_key, &self.settings_form.anthropic_model, "Anthropic API key"),
     };
-    let status: SharedString =
-      if has_key { trf(l, "{} saved in the Keychain. Type a new one to replace it.", &[key_name]) } else { trf(l, "No {} yet.", &[key_name]) };
+    let status: SharedString = if has_key { trf(l, "savedInTheKeychain", &[key_name]) } else { trf(l, "noYet", &[key_name]) };
     // The provider that is in use shows a dot and its state; the others offer to become the one in use.
     let price_hint: SharedString = match provider.model_info(self.settings.ai.model(provider)) {
-      Some(info) => trf(
-        l,
-        "Price per million tokens: {} in, {} out. Only low-cost models are offered. Prices can change, so check the provider's price page.",
-        &[&format!("${:.2}", info.input_per_million), &format!("${:.2}", info.output_per_million)],
-      ),
+      Some(info) => trf(l, "pricePerMillionTokens", &[&format!("${:.2}", info.input_per_million), &format!("${:.2}", info.output_per_million)]),
       None => SharedString::default(),
     };
     let state = if active {
-      h_flex().gap_1p5().items_center().child(div().size_2().rounded_full().bg(c.success)).child(tr(l, "In use")).into_any_element()
+      h_flex().gap_1p5().items_center().child(div().size_2().rounded_full().bg(c.success)).child(tr(l, "inUse")).into_any_element()
     } else {
       Button::new(SharedString::from(format!("use-{}", provider.label())))
-        .label(trf(l, "Use {}", &[provider.label()]))
+        .label(trf(l, "useProvider", &[provider.label()]))
         .outline()
         .small()
         .on_click(cx.listener(move |this, _, window, cx| this.set_provider(provider, window, cx)))
@@ -58,14 +53,14 @@ impl Workspace {
     };
     let mut key_row = h_flex().gap_2().items_center().child(div().w(px(FIELD_WIDTH)).child(Input::new(key_input))).child(
       Button::new(SharedString::from(format!("save-{}", provider.label())))
-        .label(tr(l, "Save"))
+        .label(tr(l, "save"))
         .primary()
         .on_click(cx.listener(move |this, _, window, cx| this.save_ai(provider, window, cx))),
     );
     if has_key {
       key_row = key_row.child(
         Button::new(SharedString::from(format!("remove-{}", provider.label())))
-          .label(tr(l, "Remove key"))
+          .label(tr(l, "removeKey"))
           .ghost()
           .on_click(cx.listener(move |this, _, window, cx| this.remove_key(provider, window, cx))),
       );
@@ -88,8 +83,8 @@ impl Workspace {
         v_flex()
           .gap_4()
           .pt_1()
-          .child(field(tr(l, "Model"), div().w(px(FIELD_WIDTH)).child(Select::new(model_select)).into_any_element(), Some(price_hint)))
-          .child(field(tr(l, "API key"), key_row.into_any_element(), Some(status))),
+          .child(field(tr(l, "model"), div().w(px(FIELD_WIDTH)).child(Select::new(model_select)).into_any_element(), Some(price_hint)))
+          .child(field(tr(l, "apiKey"), key_row.into_any_element(), Some(status))),
       )
   }
 
@@ -99,7 +94,7 @@ impl Workspace {
     let l = self.settings.language;
     let total = self.usage.total();
     let since: SharedString =
-      if self.usage.since == 0 { tr(l, "Nothing was counted yet.") } else { trf(l, "Counted since {}", &[&date_text(self.usage.since)]) };
+      if self.usage.since == 0 { tr(l, "nothingWasCountedYet") } else { trf(l, "countedSince", &[&date_text(self.usage.since)]) };
     let tile = |label: SharedString, value: String, detail: Option<String>| {
       v_flex()
         .flex_1()
@@ -116,13 +111,13 @@ impl Workspace {
     let tiles = h_flex()
       .w_full()
       .gap_3()
-      .child(tile(tr(l, "Requests"), total.requests.to_string(), None))
+      .child(tile(tr(l, "requests"), total.requests.to_string(), None))
       .child(tile(
-        tr(l, "Tokens"),
+        tr(l, "tokens"),
         tokens_text(total.tokens()),
-        Some(trf(l, "{} in · {} out", &[&tokens_text(total.input_tokens), &tokens_text(total.output_tokens)]).to_string()),
+        Some(trf(l, "inOut", &[&tokens_text(total.input_tokens), &tokens_text(total.output_tokens)]).to_string()),
       ))
-      .child(tile(tr(l, "Estimated cost"), cost_text(total.cost), None));
+      .child(tile(tr(l, "estimatedCost"), cost_text(total.cost), None));
     let rows = self.usage.models.iter().map(|entry| {
       let name = entry.provider.model_info(&entry.model).map_or(entry.model.as_str(), |info| info.label);
       h_flex()
@@ -133,13 +128,13 @@ impl Workspace {
         .border_color(c.border)
         .text_size(FONT_SIZE_SM)
         .child(div().flex_1().min_w_0().truncate().child(format!("{} · {name}", entry.provider.label())))
-        .child(div().text_color(c.text_secondary).child(trf(l, "{} requests", &[&entry.totals.requests.to_string()])))
+        .child(div().text_color(c.text_secondary).child(trf(l, "requestsCount", &[&entry.totals.requests.to_string()])))
         .child(div().w_20().text_right().text_color(c.text_secondary).child(tokens_text(entry.totals.tokens())))
         .child(div().w_20().text_right().font_weight(FontWeight::MEDIUM).child(cost_text(entry.totals.cost)))
     });
     let reset = Button::new("reset-ai-usage")
       .icon(Icon::new(IconName::Delete))
-      .label(tr(l, "Reset"))
+      .label(tr(l, "reset"))
       .outline()
       .small()
       .disabled(total.requests == 0)
@@ -155,7 +150,7 @@ impl Workspace {
           .items_center()
           .child(
             v_flex()
-              .child(div().font_weight(FontWeight::SEMIBOLD).child(tr(l, "AI usage")))
+              .child(div().font_weight(FontWeight::SEMIBOLD).child(tr(l, "aiUsage")))
               .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(since)),
           )
           .child(reset),
@@ -163,12 +158,7 @@ impl Workspace {
       .child(Separator::horizontal())
       .child(tiles)
       .children(rows)
-      .child(
-        div()
-          .text_size(FONT_SIZE_SM)
-          .text_color(c.text_secondary)
-          .child(tr(l, "Costs are estimates from the list prices of the models when each request was made.")),
-      )
+      .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "costsAreEstimatesFrom")))
   }
 
   /// Asks before the totals are cleared; clearing cannot be undone.
@@ -177,20 +167,17 @@ impl Workspace {
     let workspace = cx.entity();
     window.open_dialog(cx, move |dialog, _, _| {
       let workspace = workspace.clone();
-      dialog
-        .title(tr(l, "Reset AI usage?"))
-        .child(tr(l, "The counted requests, tokens and costs are cleared and counting starts again from zero. This cannot be undone."))
-        .footer(
-          h_flex()
-            .w_full()
-            .gap_2()
-            .justify_end()
-            .child(Button::new("cancel-reset-usage").label(tr(l, "Cancel")).outline().on_click(|_, window, cx| window.close_dialog(cx)))
-            .child(Button::new("confirm-reset-usage").label(tr(l, "Reset")).danger().on_click(move |_, window, cx| {
-              window.close_dialog(cx);
-              workspace.update(cx, |this, cx| this.reset_usage(window, cx));
-            })),
-        )
+      dialog.title(tr(l, "resetAiUsage")).child(tr(l, "theCountedRequestsTokens")).footer(
+        h_flex()
+          .w_full()
+          .gap_2()
+          .justify_end()
+          .child(Button::new("cancel-reset-usage").label(tr(l, "cancel")).outline().on_click(|_, window, cx| window.close_dialog(cx)))
+          .child(Button::new("confirm-reset-usage").label(tr(l, "reset")).danger().on_click(move |_, window, cx| {
+            window.close_dialog(cx);
+            workspace.update(cx, |this, cx| this.reset_usage(window, cx));
+          })),
+      )
     });
   }
 
@@ -199,15 +186,12 @@ impl Workspace {
     let c = colors(cx);
     let l = self.settings.language;
     let apps = self.app_list();
-    let intro = div()
-      .text_size(FONT_SIZE_SM)
-      .text_color(c.text_secondary)
-      .child(tr(l, "Choose the folder that holds each app's source code, so AppForge can read the project."));
+    let intro = div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "chooseTheFolderThat"));
     if apps.is_empty() {
       return v_flex()
         .gap_3()
         .child(intro)
-        .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "Loading apps…")))
+        .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "loadingApps")))
         .into_any_element();
     }
     let rows: Vec<AnyElement> = apps
@@ -217,13 +201,13 @@ impl Workspace {
         let missing = folder.as_ref().is_some_and(|folder| !folder.is_dir());
         let shown: SharedString = match &folder {
           Some(folder) => folder.display().to_string().into(),
-          None => tr(l, "Not set"),
+          None => tr(l, "notSet"),
         };
         let (choose_id, clear_id) = (app.id.clone(), app.id.clone());
         let mut actions = h_flex().gap_2().child(
           Button::new(SharedString::from(format!("choose-folder-{}", app.id)))
             .icon(Icon::new(IconName::FolderOpen))
-            .label(if folder.is_some() { tr(l, "Change") } else { tr(l, "Choose folder") })
+            .label(if folder.is_some() { tr(l, "change") } else { tr(l, "chooseFolder") })
             .outline()
             .small()
             .on_click(cx.listener(move |this, _, window, cx| this.choose_code_folder(choose_id.clone(), None, window, cx))),
@@ -231,7 +215,7 @@ impl Workspace {
         if folder.is_some() {
           actions = actions.child(
             Button::new(SharedString::from(format!("clear-folder-{}", app.id)))
-              .label(tr(l, "Remove"))
+              .label(tr(l, "remove"))
               .ghost()
               .small()
               .on_click(cx.listener(move |this, _, window, cx| this.clear_code_folder(&clear_id, window, cx))),
@@ -259,7 +243,7 @@ impl Workspace {
               .gap_0p5()
               .child(div().font_weight(FontWeight::MEDIUM).child(app.name.clone()))
               .child(div().truncate().text_size(FONT_SIZE_SM).text_color(path_color).child(shown))
-              .children(missing.then(|| div().text_size(FONT_SIZE_SM).text_color(c.danger).child(tr(l, "This folder was not found.")))),
+              .children(missing.then(|| div().text_size(FONT_SIZE_SM).text_color(c.danger).child(tr(l, "thisFolderWasNot")))),
           )
           .child(actions)
           .into_any_element()
@@ -273,22 +257,22 @@ impl Workspace {
     match self.settings_page {
       SettingsPage::General => v_flex()
         .child(setting_row(
-          tr(l, "Language"),
-          Some(tr(l, "Choose the language of AppForge. The App Store listing you edit keeps its own languages.")),
+          tr(l, "language"),
+          Some(tr(l, "chooseTheLanguageOf")),
           div().w(px(FIELD_WIDTH)).child(Select::new(&self.language_select)),
           cx,
         ))
         .into_any_element(),
       SettingsPage::Account => {
         let account = match &self.settings.apple {
-          Some(account) => trf(l, "Signed in with key {}.", &[&account.key_id]),
-          None => tr(l, "Not signed in."),
+          Some(account) => trf(l, "signedInWithKey", &[&account.key_id]),
+          None => tr(l, "notSignedIn"),
         };
         v_flex()
           .child(setting_row(
-            tr(l, "Account"),
+            tr(l, "account"),
             Some(account),
-            Button::new("settings-sign-out").label(tr(l, "Sign out")).outline().on_click(cx.listener(|this, _, window, cx| this.sign_out(window, cx))),
+            Button::new("settings-sign-out").label(tr(l, "signOut")).outline().on_click(cx.listener(|this, _, window, cx| this.sign_out(window, cx))),
             cx,
           ))
           .into_any_element()
@@ -299,7 +283,7 @@ impl Workspace {
           .gap_8()
           .children(sections)
           .child(self.usage_section(cx))
-          .child(div().text_size(FONT_SIZE_SM).text_color(cx.theme().muted_foreground).child(tr(l, "More providers can be added later.")))
+          .child(div().text_size(FONT_SIZE_SM).text_color(cx.theme().muted_foreground).child(tr(l, "moreProvidersCanBe")))
           .into_any_element()
       }
       SettingsPage::CodeFolders => self.code_folders_body(cx),
@@ -307,9 +291,9 @@ impl Workspace {
         .gap_4()
         .child(self.render_guidelines(cx))
         .child(setting_row(
-          tr(l, "App Store Compliance Playbook"),
-          Some(tr(l, "The Analysis reads the App Store Compliance Playbook. AppForge downloads it from GitHub and refreshes it weekly; you can also update it from the Analysis page.")),
-          Button::new("settings-playbook").label(tr(l, "Open the playbook on GitHub")).outline().on_click(|_, _, cx| cx.open_url(PLAYBOOK_REPOSITORY)),
+          tr(l, "appStoreCompliancePlaybook"),
+          Some(tr(l, "theAnalysisReadsThe")),
+          Button::new("settings-playbook").label(tr(l, "openThePlaybookOn")).outline().on_click(|_, _, cx| cx.open_url(PLAYBOOK_REPOSITORY)),
           cx,
         ))
         .into_any_element(),
@@ -317,11 +301,11 @@ impl Workspace {
         let data_dir = self.data_dir.clone();
         v_flex()
           .child(setting_row(
-            trf(l, "AppForge version {}", &[env!("CARGO_PKG_VERSION")]),
-            Some(tr(l, "Settings and notes are stored in the data folder. API keys are in the Keychain, never in a file.")),
+            trf(l, "appforgeVersion", &[env!("CARGO_PKG_VERSION")]),
+            Some(tr(l, "settingsAndNotesAre")),
             Button::new("settings-data-folder")
               .icon(Icon::new(IconName::FolderOpen))
-              .label(tr(l, "Show data folder"))
+              .label(tr(l, "showDataFolder"))
               .outline()
               .on_click(move |_, _, cx| cx.reveal_path(&data_dir)),
             cx,
@@ -335,12 +319,7 @@ impl Workspace {
     let l = self.settings.language;
     let muted = cx.theme().muted_foreground;
     let heading = v_flex().gap_1().child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, self.settings_page.label()))).children(
-      (self.settings_page == SettingsPage::AiProvider).then(|| {
-        div()
-          .text_size(FONT_SIZE_SM)
-          .text_color(muted)
-          .child(tr(l, "AI analysis uses your own API key. Keys are kept in this Mac's Keychain, never in a file."))
-      }),
+      (self.settings_page == SettingsPage::AiProvider).then(|| div().text_size(FONT_SIZE_SM).text_color(muted).child(tr(l, "aiAnalysisUsesYour"))),
     );
     let body = self.settings_page_body(cx);
     v_flex().id("settings").flex_1().min_h_0().overflow_y_scrollbar().child(centered(v_flex().py_6().gap_4().child(heading).child(body)))

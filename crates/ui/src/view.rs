@@ -2,7 +2,7 @@
 
 use crate::{
   i18n::tr,
-  theme::{colors, FONT_SIZE},
+  theme::{colors, FONT_SIZE, FONT_SIZE_SM},
   workspace::{Load, Workspace},
 };
 use gpui_kit::{
@@ -21,7 +21,7 @@ impl Render for Workspace {
         .justify_center()
         .gap_2()
         .child(Spinner::new())
-        .child(div().text_sm().text_color(theme.muted_foreground).child(tr(l, "Opening your Keychain…")))
+        .child(div().text_sm().text_color(theme.muted_foreground).child(tr(l, "openingYourKeychain")))
         .into_any_element()
     } else if self.client.is_none() && !self.settings.onboarded && !self.settings_locked {
       self.render_welcome(cx).into_any_element()
@@ -40,7 +40,16 @@ impl Render for Workspace {
       .text_color(theme.foreground)
       .text_size(FONT_SIZE)
       // The title bar is the drag area for moving the window.
-      .child(TitleBar::new().bg(c.rail).border_b_1().border_color(c.border))
+      .child(
+        TitleBar::new()
+          .bg(c.rail)
+          .border_b_1()
+          .border_color(c.border)
+          // The name sits in the middle of the band; the traffic lights stay at its left edge.
+          .child(
+            h_flex().flex_1().justify_center().text_size(FONT_SIZE_SM).font_weight(FontWeight::MEDIUM).text_color(c.text_secondary).child("AppForge"),
+          ),
+      )
       .child(body)
   }
 }
@@ -59,14 +68,10 @@ impl Workspace {
       match (&self.apps, self.selected_app()) {
         (Load::Ready(_), _) if self.showing_all_apps() => self.render_apps(cx).into_any_element(),
         (Load::Ready(_), Some(app)) => self.render_detail(app, cx).into_any_element(),
-        (Load::Ready(apps), None) if apps.is_empty() => self
-          .render_message(
-            tr(l, "No apps found"),
-            tr(l, "This App Store Connect account has no apps yet. Create one in App Store Connect, then reload."),
-            cx,
-          )
-          .into_any_element(),
-        (Load::Failed(message), _) => self.render_message(tr(l, "Could not load your apps"), message.clone(), cx).into_any_element(),
+        (Load::Ready(apps), None) if apps.is_empty() => {
+          self.render_message(tr(l, "noAppsFound"), tr(l, "thisAppStoreConnect"), cx).into_any_element()
+        }
+        (Load::Failed(message), _) => self.render_message(tr(l, "couldNotLoadYour"), message.clone(), cx).into_any_element(),
         (Load::Ready(_), None) => self.render_apps(cx).into_any_element(),
         _ => v_flex().flex_1().items_center().justify_center().child(Spinner::new()).into_any_element(),
       }

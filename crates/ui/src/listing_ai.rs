@@ -23,7 +23,7 @@ struct AiNotConnected;
 
 impl Workspace {
   pub(crate) fn field_generate_button(&self, field: ListingField, cx: &mut Context<Self>) -> Button {
-    let tooltip = trf(self.settings.language, "Generate {}", &[&tr(self.settings.language, field_label(field))]);
+    let tooltip = trf(self.settings.language, "generateField", &[&tr(self.settings.language, field_label(field))]);
     Button::new(SharedString::from(format!("generate-{}", field.key())))
       .icon(Icon::new(IconName::Bot))
       .ghost()
@@ -38,7 +38,7 @@ impl Workspace {
     let Some(app) = self.selected_app() else { return };
     let l = self.settings.language;
     let locale: SharedString = self.locale.clone().into();
-    let title = trf(l, "Generate {}", &[&tr(l, field_label(field))]);
+    let title = trf(l, "generateField", &[&tr(l, field_label(field))]);
     let model = self.model_in_use().map(SharedString::from);
     let workspace = cx.entity();
     window.open_dialog(cx, move |dialog, _, _| {
@@ -49,8 +49,8 @@ impl Workspace {
         .w_full()
         .justify_end()
         .gap_2()
-        .child(Button::new("cancel-field-generation").label(tr(l, "Cancel")).outline().on_click(|_, window, cx| window.close_dialog(cx)))
-        .child(Button::new("confirm-field-generation").label(tr(l, "Generate")).primary().on_click(move |_, window, cx| {
+        .child(Button::new("cancel-field-generation").label(tr(l, "cancel")).outline().on_click(|_, window, cx| window.close_dialog(cx)))
+        .child(Button::new("confirm-field-generation").label(tr(l, "generate")).primary().on_click(move |_, window, cx| {
           window.close_dialog(cx);
           workspace.update(cx, |this, cx| {
             if this.selected.as_ref() == Some(&app_id) && this.locale == target_locale.as_ref() {
@@ -60,13 +60,7 @@ impl Workspace {
         }));
       dialog
         .title(title.clone())
-        .child(
-          v_flex()
-            .gap_2()
-            .child(format!("{} · {locale}", app.name))
-            .children(model.clone())
-            .child(tr(l, "Generate a draft for this field using the listing and project summary.")),
-        )
+        .child(v_flex().gap_2().child(format!("{} · {locale}", app.name)).children(model.clone()).child(tr(l, "generateADraftFor")))
         .footer(footer)
     });
   }
@@ -109,9 +103,8 @@ impl Workspace {
           let key = secrets
             .get(SecretKey::ApiKey(provider))
             .map_err(|error| error.to_string())?
-            .ok_or_else(|| trf(l, "Add your {} API key in Settings first.", &[provider.label()]).to_string())?;
-          let summary = appforge_project::summarize(&folder)
-            .map_err(|error| trf(l, "Could not read the project folder: {}", &[&error.to_string()]).to_string())?;
+            .ok_or_else(|| trf(l, "addYourApiKey", &[provider.label()]).to_string())?;
+          let summary = appforge_project::summarize(&folder).map_err(|error| trf(l, "couldNotReadThe", &[&error.to_string()]).to_string())?;
           draft_listing_field(&Client::default(), provider, &key, &model, &current, &locale, &summary.text, field)
         })
         .await;
@@ -128,26 +121,23 @@ impl Workspace {
                 || this.locale != target_locale
                 || this.field_value(field, cx) != original
               {
-                Self::warning(window, cx, tr(l, "The draft was skipped because the app, language, or field changed."));
+                Self::warning(window, cx, tr(l, "theDraftWasSkipped"));
                 cx.notify();
                 return;
               }
               if draft.is_empty() || draft == original {
                 if original.is_empty() {
-                  Self::warning(window, cx, tr(l, "No draft for this field. Add relevant details to the listing or project README and try again."));
+                  let message = if field == ListingField::WhatsNew { "noReleaseNotesCould" } else { "noDraftForThis" };
+                  Self::warning(window, cx, tr(l, message));
                 } else {
-                  Self::success(window, cx, tr(l, "No alternative was generated. The current text was kept."));
+                  Self::success(window, cx, tr(l, "noAlternativeWasGenerated"));
                 }
                 cx.notify();
                 return;
               }
               this.apply_field_draft(field, &draft, window, cx);
               let price = provider.model_info(&used).map(|info| format!("${:.4}", info.cost(usage))).unwrap_or_default();
-              Self::success(
-                window,
-                cx,
-                trf(l, "The draft is ready. Read it, then press Save. It used {} tokens (about {}).", &[&usage.total().to_string(), &price]),
-              );
+              Self::success(window, cx, trf(l, "theDraftIsReady", &[&usage.total().to_string(), &price]));
             }
             Err(error) => Self::error(window, cx, error),
           }
@@ -184,10 +174,10 @@ impl Workspace {
   fn ask_to_connect_ai(&mut self, provider: Provider, window: &mut Window, cx: &mut Context<Self>) {
     let l = self.settings.language;
     let workspace = cx.entity();
-    let button_label = tr(l, "Open Settings");
-    let notification = Notification::warning(trf(l, "Add a {} API key in Settings to write the listing with AI.", &[provider.label()]))
+    let button_label = tr(l, "openSettings");
+    let notification = Notification::warning(trf(l, "addAApiKey", &[provider.label()]))
       .id::<AiNotConnected>()
-      .title(tr(l, "AI is not connected"))
+      .title(tr(l, "aiIsNotConnected"))
       .action(move |_, _, _| {
         let workspace = workspace.clone();
         Button::new("connect-ai").label(button_label.clone()).outline().small().on_click(move |_, window, cx| {
@@ -206,11 +196,7 @@ impl Workspace {
   fn ask_for_code_folder(&mut self, app_id: String, app_name: String, field: ListingField, window: &mut Window, cx: &mut Context<Self>) {
     let l = self.settings.language;
     let workspace = cx.entity();
-    let text = trf(
-      l,
-      "AppForge reads the README and the project files of {} to write the listing. Choose the folder that holds its source code.",
-      &[&app_name],
-    );
+    let text = trf(l, "appforgeReadsTheReadme", &[&app_name]);
     window.open_dialog(cx, move |dialog, _, _| {
       let (workspace, app_id) = (workspace.clone(), app_id.clone());
       // A plain dialog draws no buttons of its own, so the footer is built here.
@@ -218,15 +204,15 @@ impl Workspace {
         .w_full()
         .justify_end()
         .gap_2()
-        .child(Button::new("folder-cancel").label(tr(l, "Cancel")).outline().on_click(|_, window, cx| window.close_dialog(cx)))
-        .child(Button::new("folder-choose").icon(Icon::new(IconName::FolderOpen)).label(tr(l, "Choose folder")).primary().on_click(
+        .child(Button::new("folder-cancel").label(tr(l, "cancel")).outline().on_click(|_, window, cx| window.close_dialog(cx)))
+        .child(Button::new("folder-choose").icon(Icon::new(IconName::FolderOpen)).label(tr(l, "chooseFolder")).primary().on_click(
           move |_, window, cx| {
             window.close_dialog(cx);
             let app_id = app_id.clone();
             workspace.update(cx, |this, cx| this.choose_code_folder(app_id, Some(field), window, cx));
           },
         ));
-      dialog.title(tr(l, "Choose the project folder")).child(div().text_sm().child(text.clone())).footer(footer)
+      dialog.title(tr(l, "chooseTheProjectFolder")).child(div().text_sm().child(text.clone())).footer(footer)
     });
   }
 
@@ -239,11 +225,11 @@ impl Workspace {
 
 pub(crate) fn field_label(field: ListingField) -> &'static str {
   match field {
-    ListingField::Name => "App name",
-    ListingField::Subtitle => "Subtitle",
-    ListingField::Description => "Description",
-    ListingField::Keywords => "Keywords",
-    ListingField::PromotionalText => "Promotional text",
-    ListingField::WhatsNew => "What's new in this version",
+    ListingField::Name => "appName",
+    ListingField::Subtitle => "subtitle",
+    ListingField::Description => "description",
+    ListingField::Keywords => "keywords",
+    ListingField::PromotionalText => "promotionalText",
+    ListingField::WhatsNew => "whatsNewInThis",
   }
 }

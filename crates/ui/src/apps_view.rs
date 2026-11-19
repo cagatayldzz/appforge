@@ -27,10 +27,10 @@ impl Workspace {
       .w_full()
       .justify_between()
       .items_start()
-      .child(v_flex().gap_1().child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, "Apps"))).child(if loading {
+      .child(v_flex().gap_1().child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, "apps"))).child(if loading {
         Skeleton::new().h_3().w_20().into_any_element()
       } else {
-        div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "{} apps", &[&apps.len().to_string()])).into_any_element()
+        div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "appsCount", &[&apps.len().to_string()])).into_any_element()
       }))
       .child(self.reload_button(cx));
     let skeletons = (0..COLUMNS * 2).map(|n| skeleton_card(n, &c));

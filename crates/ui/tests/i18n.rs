@@ -1,5 +1,5 @@
 use appforge_storage::Language;
-use appforge_ui::i18n::{tr, trf, TURKISH};
+use appforge_ui::i18n::{entries, tr, trf};
 use std::{collections::HashSet, fs};
 
 /// Every `.rs` file under `src`, including the ones in subfolders such as `workspace/`.
@@ -58,7 +58,7 @@ fn used_texts() -> Vec<String> {
 
 #[test]
 fn every_text_used_in_the_interface_has_a_turkish_translation() {
-  let known: HashSet<&str> = TURKISH.iter().map(|(english, _)| *english).collect();
+  let known: HashSet<&str> = entries(Language::Turkish).iter().map(|(key, _)| *key).collect();
   let used = used_texts();
   assert!(used.len() > 100, "the scanner found only {} texts", used.len());
   let missing: Vec<String> = used.into_iter().filter(|text| !known.contains(text.as_str())).collect();
@@ -67,25 +67,46 @@ fn every_text_used_in_the_interface_has_a_turkish_translation() {
 
 #[test]
 fn translations_have_no_duplicates_and_keep_their_placeholders() {
-  let mut seen = HashSet::new();
-  for (english, turkish) in TURKISH {
-    assert!(seen.insert(*english), "duplicate entry: {english}");
-    assert!(!turkish.is_empty(), "empty translation: {english}");
-    assert_eq!(english.matches("{}").count(), turkish.matches("{}").count(), "placeholders differ: {english}");
+  for language in Language::ALL {
+    let mut seen = HashSet::new();
+    for (key, text) in entries(language) {
+      assert!(seen.insert(*key), "duplicate entry in {language:?}: {key}");
+      assert!(!text.is_empty(), "empty text in {language:?}: {key}");
+      let english = entries(Language::English).iter().find(|(english_key, _)| english_key == key).map(|(_, text)| *text);
+      assert_eq!(
+        english.map(|english| english.matches("{}").count()),
+        Some(text.matches("{}").count()),
+        "placeholders differ in {language:?}: {key}"
+      );
+    }
   }
 }
 
 #[test]
-fn english_is_the_source_and_unknown_text_falls_back_to_it() {
-  assert_eq!(tr(Language::English, "Settings"), "Settings");
-  assert_eq!(tr(Language::Turkish, "Settings"), "Ayarlar");
+fn every_language_file_has_the_same_keys() {
+  let keys = |language| entries(language).iter().map(|(key, _)| *key).collect::<HashSet<_>>();
+  assert_eq!(keys(Language::English), keys(Language::Turkish));
+}
+
+#[test]
+fn keys_give_the_text_of_the_language_and_unknown_text_is_shown_as_it_is() {
+  assert_eq!(tr(Language::English, "settings"), "Settings");
+  assert_eq!(tr(Language::Turkish, "settings"), "Ayarlar");
   assert_eq!(tr(Language::Turkish, "No translation for this text"), "No translation for this text");
 }
 
 #[test]
+fn english_text_from_the_compliance_crate_is_translated_by_its_wording() {
+  use appforge_compliance::{Category, Severity};
+  assert_eq!(tr(Language::Turkish, Severity::Critical.label()), "Kritik");
+  assert_eq!(tr(Language::English, Severity::Critical.label()), "Critical");
+  assert_eq!(tr(Language::Turkish, Category::AppPrivacy.label()), "Uygulama Gizliliği");
+}
+
+#[test]
 fn placeholders_are_filled_in_order() {
-  assert_eq!(trf(Language::English, "Open {}", &["Analysis"]), "Open Analysis");
-  assert_eq!(trf(Language::Turkish, "{} critical · {} · {}", &["1", "2 uyarı", "3 ipucu"]), "1 kritik · 2 uyarı · 3 ipucu");
+  assert_eq!(trf(Language::English, "openPage", &["Analysis"]), "Open Analysis");
+  assert_eq!(trf(Language::Turkish, "criticalSummary", &["1", "2 uyarı", "3 ipucu"]), "1 kritik · 2 uyarı · 3 ipucu");
 }
 
 #[test]

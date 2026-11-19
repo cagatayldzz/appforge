@@ -57,25 +57,18 @@ impl Workspace {
         .child(div().text_xs().text_color(muted).child(text))
     };
     let notes = (current > 0).then(|| {
-      v_flex()
-        .gap_5()
-        .child(note(
-          IconName::Info,
-          tr(l, "Why an API key?"),
-          tr(l, "Apple does not allow password sign-in for tools, so AppForge uses an API key instead."),
-        ))
-        .child(note(
-          IconName::HardDrive,
-          tr(l, "Stays on this Mac"),
-          tr(l, "Your key is stored in the macOS Keychain and is never sent anywhere except Apple."),
-        ))
+      v_flex().gap_5().child(note(IconName::Info, tr(l, "whyAnApiKey"), tr(l, "appleDoesNotAllow"))).child(note(
+        IconName::HardDrive,
+        tr(l, "staysOnThisMac"),
+        tr(l, "yourKeyIsStored"),
+      ))
     });
     let progress = v_flex()
       .w_full()
       .gap_2()
       .child(div().text_sm().font_weight(FontWeight::MEDIUM).text_color(muted).child(trf(
         l,
-        "Step {} of {}",
+        "stepOf",
         &[&(current + 1).to_string(), &STEP_TOTAL.to_string()],
       )))
       .child(Progress::new("setup-progress").xsmall().value((current + 1) as f32 / STEP_TOTAL as f32 * 100.));
@@ -90,7 +83,7 @@ impl Workspace {
       .gap_3()
       .p_4()
       .child(Separator::horizontal())
-      .child(v_flex().gap_1p5().child(div().text_xs().text_color(muted).child(tr(l, "Language"))).child(Select::new(&self.language_select).w_full()))
+      .child(v_flex().gap_1p5().child(div().text_xs().text_color(muted).child(tr(l, "language"))).child(Select::new(&self.language_select).w_full()))
       .children(sidebar_actions);
     let sidebar = div()
       .w(px(SIDEBAR_WIDTH))

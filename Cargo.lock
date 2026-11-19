@@ -261,6 +261,8 @@ dependencies = [
  "appforge-storage",
  "gpui-kit",
  "gpui-kit-assets",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

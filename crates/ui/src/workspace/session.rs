@@ -35,9 +35,7 @@ impl Workspace {
         self.client = Some(Arc::new(Client::new(Credentials { issuer_id: account.issuer_id, key_id: account.key_id, private_key: pem })));
         self.load_apps(window, cx);
       }
-      (Err(error), _) => {
-        Self::error(window, cx, trf(self.settings.language, "Could not read the App Store Connect key from the Keychain: {}", &[&error]))
-      }
+      (Err(error), _) => Self::error(window, cx, trf(self.settings.language, "couldNotReadTheApp", &[&error])),
       _ => {}
     }
     cx.notify();
@@ -48,7 +46,7 @@ impl Workspace {
       files: true,
       directories: false,
       multiple: false,
-      prompt: Some(tr(self.settings.language, "Choose key")),
+      prompt: Some(tr(self.settings.language, "chooseKey")),
     });
     self.tasks.key_file = Some(cx.spawn_in(window, async move |this, cx| {
       if let Ok(Ok(Some(paths))) = receiver.await {
@@ -64,7 +62,7 @@ impl Workspace {
     let pem = match std::fs::read_to_string(&path) {
       Ok(pem) => pem,
       Err(error) => {
-        self.login.error = Some(trf(self.settings.language, "Could not read {}: {}", &[&file_name, &error.to_string()]));
+        self.login.error = Some(trf(self.settings.language, "couldNotRead", &[&file_name, &error.to_string()]));
         cx.notify();
         return;
       }
@@ -94,11 +92,11 @@ impl Workspace {
     let key_id = read_input(&self.login.key_id, cx);
     let l = self.settings.language;
     let missing = if issuer_id.is_empty() {
-      Some(tr(l, "Enter your Issuer ID."))
+      Some(tr(l, "enterYourIssuerId"))
     } else if key_id.is_empty() {
-      Some(tr(l, "Enter your Key ID."))
+      Some(tr(l, "enterYourKeyId"))
     } else if self.login.key.is_none() {
-      Some(tr(l, "Choose your .p8 private key file."))
+      Some(tr(l, "chooseYourP8Private"))
     } else {
       None
     };
@@ -144,11 +142,7 @@ impl Workspace {
     self.tasks.secrets = Some(cx.spawn_in(window, async move |this, cx| {
       let result = cx.background_spawn(async move { secrets.set(SecretKey::ApplePrivateKey, &pem) }).await;
       if let Err(error) = result {
-        this
-          .update_in(cx, |_, window, cx| {
-            Self::error(window, cx, trf(l, "Signed in, but the key could not be saved in the Keychain: {}", &[&error.to_string()]))
-          })
-          .ok();
+        this.update_in(cx, |_, window, cx| Self::error(window, cx, trf(l, "signedInButThe", &[&error.to_string()]))).ok();
       }
     }));
     self.client = Some(Arc::new(client));
@@ -161,9 +155,7 @@ impl Workspace {
     let secrets = self.secrets.clone();
     self.tasks.secrets = Some(cx.spawn_in(window, async move |this, cx| {
       if let Err(error) = cx.background_spawn(async move { secrets.delete(SecretKey::ApplePrivateKey) }).await {
-        this
-          .update_in(cx, |_, window, cx| Self::error(window, cx, trf(l, "The key could not be removed from the Keychain: {}", &[&error.to_string()])))
-          .ok();
+        this.update_in(cx, |_, window, cx| Self::error(window, cx, trf(l, "theKeyCouldNot", &[&error.to_string()]))).ok();
       }
     }));
     self.clear_apple_session(window, cx);
@@ -189,8 +181,7 @@ impl Workspace {
       }
       self.login.step = 1;
       self.login.key = None;
-      self.login.error =
-        Some(tr(self.settings.language, "App Store Connect rejected your session. Confirm your IDs and choose a valid .p8 key to sign in again."));
+      self.login.error = Some(tr(self.settings.language, "appStoreConnectRejected"));
       cx.notify();
     }
     true

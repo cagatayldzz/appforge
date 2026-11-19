@@ -47,7 +47,7 @@ For all crates in one list, run `scripts/code-map.sh`: every source file with it
 | `settings_view.rs` | The pages of Settings. |
 | `widgets.rs`, `theme.rs` | Shared pieces (sections, rows, avatars, badges) and the palettes. |
 | `window_state.rs` | Opening the window the way it was left. |
-| `i18n.rs` | English and Türkçe texts. |
+| `i18n.rs`, `../locales/en.json`, `../locales/tr.json` | `tr` and `trf`. The texts are flat `"key": "text"` JSON files embedded at build time. |
 
 ## Window layout
 
@@ -74,7 +74,7 @@ App Information exposes AI generation inside each supported listing field. The c
 
 ## Languages
 
-The interface language (English or Türkçe) is `Settings.language`. Source text is English and is the key of `ui::i18n` (`tr`, `trf`); a text without a Turkish entry is shown in English, and a test in `crates/ui/tests/i18n.rs` fails when a used text has no entry. Placeholders in text fields, the rules and AI findings, model names and the words inside the drawings of Apple's page are not translated.
+The interface language (English or Türkçe) is `Settings.language`. Texts live in `crates/ui/locales/en.json` and `tr.json`, flat `"camelCaseKey": "text"` objects such as `"createAccount": "Create Account"`. Code passes the key to `tr`/`trf` (`tr(l, "createAccount")`); `en.json` is the English wording, so English can be reworded without touching code. English text that comes from another crate (the `compliance` severities and categories) is translated by its wording. Unknown text is shown as it is. `crates/ui/tests/i18n.rs` fails when a key used in code is missing, when the two files have different keys, or when a file has duplicates, empty texts or different `{}` placeholders. To add a language: a new `locales/xx.json`, a `Language` variant and a line in `i18n::source`. Add a new text by adding its key to both files and using the key in code. Placeholders in text fields, the rules and AI findings, model names and the words inside the drawings of Apple's page are not translated.
 
 ## Data directory
 

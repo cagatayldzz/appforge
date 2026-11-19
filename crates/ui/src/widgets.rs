@@ -68,17 +68,14 @@ pub fn url_field(id: &'static str, label: impl Into<SharedString>, input: &Entit
   let value = input.read(cx).value().to_string();
   let url = openable_url(&value);
   let length = value.chars().count();
-  let open = Button::new(id)
-    .icon(Icon::new(IconName::ExternalLink))
-    .ghost()
-    .xsmall()
-    .disabled(url.is_none())
-    .tooltip(tr(language, "Open in browser"))
-    .on_click(move |_, _, cx| {
-      if let Some(url) = &url {
-        cx.open_url(url);
-      }
-    });
+  let open =
+    Button::new(id).icon(Icon::new(IconName::ExternalLink)).ghost().xsmall().disabled(url.is_none()).tooltip(tr(language, "openInBrowser")).on_click(
+      move |_, _, cx| {
+        if let Some(url) = &url {
+          cx.open_url(url);
+        }
+      },
+    );
   labelled(label.into(), counter(length, None, cx), Input::new(input).suffix(open))
 }
 
@@ -100,7 +97,8 @@ pub(crate) fn text_field_with_action(
   labelled(label, counter(length, Some(limit), cx), Input::new(input).suffix(action))
 }
 
-/// The textarea reserves space at the right for the action and scrollbar.
+/// A textarea with its action beside the character counter above the field, so nothing sits over the text and the
+/// scrollbar stays at the far right edge of the field.
 pub(crate) fn area_field_with_action(
   label: SharedString,
   input: &Entity<TextareaState>,
@@ -109,11 +107,8 @@ pub(crate) fn area_field_with_action(
   cx: &App,
 ) -> impl IntoElement {
   let length = input.read(cx).value().chars().count();
-  labelled(
-    label,
-    counter(length, Some(limit), cx),
-    div().relative().child(Textarea::new(input).pr_9()).child(div().absolute().top_2().right_3().child(action)),
-  )
+  let header = h_flex().gap_2().items_center().child(action).children(counter(length, Some(limit), cx));
+  labelled(label, Some(header), Textarea::new(input))
 }
 
 /// Centers `child` in a column of at most `CONTENT_MAX_WIDTH`, so every page lines up.

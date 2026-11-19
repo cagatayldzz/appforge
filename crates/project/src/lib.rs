@@ -4,6 +4,7 @@
 use std::{
   fs, io,
   path::{Path, PathBuf},
+  process::Command,
 };
 
 /// The most characters of the whole description. A character is about a quarter of a token, so this is about 10,000 tokens.
@@ -16,6 +17,10 @@ const TREE_LIMIT: usize = 150;
 const TREE_DEPTH: usize = 3;
 /// How many files are looked at before the search stops, so that a huge folder is never walked to its end.
 const VISIT_LIMIT: usize = 20_000;
+
+/// The most recent commit subjects listed, and the most characters they take.
+const COMMIT_LIMIT: usize = 40;
+const COMMITS_TEXT_LIMIT: usize = 3_000;
 
 /// Folders that hold other people's code, builds or caches.
 const SKIPPED_FOLDERS: &[&str] = &[
@@ -158,6 +163,27 @@ fn walk(dir: &Path, root: &Path, depth: usize, state: &mut Walk) {
   }
 }
 
+/// What changed lately, as the subjects of the newest commits (since the last tag when there is one). This is what release
+/// notes can be written from. Read only; `None` when the folder is not a repository or Git is not installed.
+fn recent_changes(root: &Path) -> Option<String> {
+  let git = |args: &[&str]| -> Option<String> {
+    let output = Command::new("git").arg("-C").arg(root).args(args).env("GIT_TERMINAL_PROMPT", "0").output().ok()?;
+    output.status.success().then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+  };
+  let limit = format!("--max-count={COMMIT_LIMIT}");
+  let since_tag = git(&["describe", "--tags", "--abbrev=0"]).filter(|tag| !tag.is_empty()).map(|tag| format!("{tag}..HEAD"));
+  let mut log = vec!["log", "--no-merges", "--pretty=format:- %s", limit.as_str()];
+  if let Some(range) = since_tag.as_deref() {
+    log.push(range);
+  }
+  let mut subjects = git(&log).filter(|text| !text.is_empty());
+  if subjects.is_none() && since_tag.is_some() {
+    // Nothing since the last tag: the newest commits are still the best evidence there is.
+    subjects = git(&["log", "--no-merges", "--pretty=format:- %s", limit.as_str()]).filter(|text| !text.is_empty());
+  }
+  subjects.map(|text| text.chars().take(COMMITS_TEXT_LIMIT).collect())
+}
+
 /// Describes the folder `root`. Fails when it is not a folder that can be read.
 pub fn summarize(root: &Path) -> io::Result<ProjectSummary> {
   let metadata = fs::metadata(root)?;
@@ -179,6 +205,9 @@ pub fn summarize(root: &Path) -> io::Result<ProjectSummary> {
   for line in &state.tree {
     text.push_str(line);
     text.push('\n');
+  }
+  if let Some(changes) = recent_changes(root) {
+    text.push_str(&format!("\n--- RECENT CHANGES (git commit subjects, newest first) ---\n{changes}\n"));
   }
   let mut truncated = state.truncated;
   let sections = state

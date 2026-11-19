@@ -68,19 +68,15 @@ impl Workspace {
           .child(
             h_flex().child(
               Button::new("retry-snapshot")
-                .label(tr(l, "Try again"))
+                .label(tr(l, "tryAgain"))
                 .outline()
                 .on_click(cx.listener(|this, _, window, cx| this.load_snapshot(window, cx))),
             ),
           )
           .into_any_element(),
-        _ => h_flex()
-          .gap_2()
-          .items_center()
-          .text_color(c.text_secondary)
-          .child(Spinner::new())
-          .child(tr(l, "Loading from App Store Connect…"))
-          .into_any_element(),
+        _ => {
+          h_flex().gap_2().items_center().text_color(c.text_secondary).child(Spinner::new()).child(tr(l, "loadingFromAppStore")).into_any_element()
+        }
       }
     };
     // The pages are listed in the sidebar, so the page says which one it is; it scrolls under that heading.
@@ -96,7 +92,7 @@ impl Workspace {
             .label(tr(l, origin.label()))
             .outline()
             .small()
-            .tooltip(trf(l, "Back to {}", &[&tr(l, origin.label())]))
+            .tooltip(trf(l, "backTo", &[&tr(l, origin.label())]))
             .on_click(cx.listener(|this, _, window, cx| this.go_back(window, cx))),
         )
         .child(title)
@@ -114,16 +110,12 @@ impl Workspace {
     let has_version = self.ready_snapshot().is_some_and(|snapshot| snapshot.version.is_some());
     let tab = self.tab;
     let (id, label, enabled): (&'static str, SharedString, bool) = match tab {
-      DetailTab::Information => ("save-information", tr(l, "Save"), true),
-      DetailTab::Review => ("save-review", tr(l, "Save"), has_version),
-      DetailTab::Privacy => ("save-privacy", tr(l, "Save"), true),
+      DetailTab::Information => ("save-information", tr(l, "save"), true),
+      DetailTab::Review => ("save-review", tr(l, "save"), has_version),
+      DetailTab::Privacy => ("save-privacy", tr(l, "save"), true),
       DetailTab::Analysis | DetailTab::Distribution | DetailTab::CustomerReviews => return None,
     };
-    let tooltip = if tab == DetailTab::Privacy {
-      tr(l, "Your answers stay on this Mac. The privacy policy URL is sent to App Store Connect.")
-    } else {
-      tr(l, "Save to App Store Connect")
-    };
+    let tooltip = if tab == DetailTab::Privacy { tr(l, "yourAnswersStayOn") } else { tr(l, "saveToAppStore") };
     Some(
       self
         .save_button(id, label, enabled, cx, move |this, window, cx| match tab {
@@ -179,34 +171,34 @@ impl Workspace {
     let forms = &self.forms;
     let mut page = v_flex().gap_6().children(picker);
     page = page.child(section(
-      tr(l, "Basics"),
+      tr(l, "basics"),
       pair(
-        text_field_with_action(tr(l, "App name"), &forms.name, NAME_LIMIT, self.field_generate_button(ListingField::Name, cx), cx),
-        text_field_with_action(tr(l, "Subtitle"), &forms.subtitle, SUBTITLE_LIMIT, self.field_generate_button(ListingField::Subtitle, cx), cx),
+        text_field_with_action(tr(l, "appName"), &forms.name, NAME_LIMIT, self.field_generate_button(ListingField::Name, cx), cx),
+        text_field_with_action(tr(l, "subtitle"), &forms.subtitle, SUBTITLE_LIMIT, self.field_generate_button(ListingField::Subtitle, cx), cx),
       ),
     ));
     if has_version {
       page = page
         .child(section(
-          tr(l, "Store listing"),
+          tr(l, "storeListing"),
           v_flex()
             .gap_4()
             .child(area_field_with_action(
-              tr(l, "Description"),
+              tr(l, "description"),
               &forms.description,
               DESCRIPTION_LIMIT,
               self.field_generate_button(ListingField::Description, cx),
               cx,
             ))
             .child(text_field_with_action(
-              tr(l, "Keywords"),
+              tr(l, "keywords"),
               &forms.keywords,
               KEYWORDS_LIMIT,
               self.field_generate_button(ListingField::Keywords, cx),
               cx,
             ))
             .child(area_field_with_action(
-              tr(l, "Promotional text"),
+              tr(l, "promotionalText"),
               &forms.promotional,
               PROMOTIONAL_LIMIT,
               self.field_generate_button(ListingField::PromotionalText, cx),
@@ -214,16 +206,16 @@ impl Workspace {
             )),
         ))
         .child(section(
-          tr(l, "Links"),
+          tr(l, "links"),
           pair(
-            url_field("open-support-url", tr(l, "Support URL"), &forms.support_url, l, cx),
-            url_field("open-marketing-url", tr(l, "Marketing URL"), &forms.marketing_url, l, cx),
+            url_field("open-support-url", tr(l, "supportUrl"), &forms.support_url, l, cx),
+            url_field("open-marketing-url", tr(l, "marketingUrl"), &forms.marketing_url, l, cx),
           ),
         ))
         .child(section(
-          tr(l, "What's new in this version"),
+          tr(l, "whatsNewInThis"),
           area_field_with_action(
-            tr(l, "What's new in this version"),
+            tr(l, "whatsNewInThis"),
             &forms.whats_new,
             WHATS_NEW_LIMIT,
             self.field_generate_button(ListingField::WhatsNew, cx),
@@ -231,12 +223,7 @@ impl Workspace {
           ),
         ));
     } else {
-      page = page.child(
-        div()
-          .text_sm()
-          .text_color(theme.muted_foreground)
-          .child(tr(l, "This app has no iOS version in preparation, so the store listing cannot be edited. Create a version in App Store Connect.")),
-      );
+      page = page.child(div().text_sm().text_color(theme.muted_foreground).child(tr(l, "thisAppHasNo")));
     }
     page
   }
@@ -251,37 +238,35 @@ impl Workspace {
     let forms = &self.forms;
     let mut page = v_flex().gap_6();
     if !has_version {
-      page = page
-        .child(Alert::warning("review-no-version", tr(l, "This app has no iOS version in preparation, so App Review information cannot be saved.")));
+      page = page.child(Alert::warning("review-no-version", tr(l, "thisAppHasNoIos")));
     } else if !editable {
-      page = page.child(Alert::info("review-locked", tr(l, "This version is no longer editable at Apple, so saving may be refused.")));
+      page = page.child(Alert::info("review-locked", tr(l, "thisVersionIsNo")));
     }
     if missing {
-      page = page.child(Alert::info("review-missing", tr(l, "Nothing is stored for App Review yet. Saving creates it.")));
+      page = page.child(Alert::info("review-missing", tr(l, "nothingIsStoredFor")));
     }
-    let mut sign_in =
-      v_flex().gap_4().child(Switch::new("demo-required").checked(forms.demo_required).label(tr(l, "Sign-in required to review the app")).on_click(
-        cx.listener(|this, checked: &bool, _, cx| {
-          this.forms.demo_required = *checked;
-          cx.notify();
-        }),
-      ));
+    let mut sign_in = v_flex().gap_4().child(Switch::new("demo-required").checked(forms.demo_required).label(tr(l, "signInRequiredTo")).on_click(
+      cx.listener(|this, checked: &bool, _, cx| {
+        this.forms.demo_required = *checked;
+        cx.notify();
+      }),
+    ));
     if forms.demo_required {
       sign_in = sign_in.child(pair(
-        text_field(tr(l, "Demo user name"), &forms.demo_name, None, cx),
-        text_field(tr(l, "Demo password"), &forms.demo_password, None, cx),
+        text_field(tr(l, "demoUserName"), &forms.demo_name, None, cx),
+        text_field(tr(l, "demoPassword"), &forms.demo_password, None, cx),
       ));
     }
     page
       .child(section(
-        tr(l, "Contact"),
+        tr(l, "contact"),
         v_flex()
           .gap_4()
-          .child(pair(text_field(tr(l, "First name"), &forms.first_name, None, cx), text_field(tr(l, "Last name"), &forms.last_name, None, cx)))
-          .child(pair(text_field(tr(l, "Phone"), &forms.phone, None, cx), text_field(tr(l, "Email"), &forms.email, None, cx))),
+          .child(pair(text_field(tr(l, "firstName"), &forms.first_name, None, cx), text_field(tr(l, "lastName"), &forms.last_name, None, cx)))
+          .child(pair(text_field(tr(l, "phone"), &forms.phone, None, cx), text_field(tr(l, "email"), &forms.email, None, cx))),
       ))
-      .child(section(tr(l, "Sign-in"), sign_in))
-      .child(section(tr(l, "Notes for the reviewer"), area_field(tr(l, "Notes"), &forms.notes, None, cx)))
+      .child(section(tr(l, "signInHeading"), sign_in))
+      .child(section(tr(l, "notesForTheReviewer"), area_field(tr(l, "notes"), &forms.notes, None, cx)))
   }
 
   fn render_privacy(&mut self, app: &App, cx: &mut Context<Self>) -> impl IntoElement {
@@ -297,30 +282,38 @@ impl Workspace {
     };
     v_flex()
       .gap_6()
-      .child(Alert::info(
-        "privacy-api",
-        tr(l, "Apple's API does not expose the App Privacy (nutrition label) answers, so they are edited in App Store Connect. The privacy policy URL below is saved through the API. The answers on this page stay on your Mac and feed the Analysis."),
-      ))
-      .child(h_flex().child(
-        Button::new("open-app-privacy")
-          .icon(Icon::new(IconName::ExternalLink))
-          .label(tr(l, "Open App Privacy in App Store Connect"))
-          .outline()
-          .on_click(move |_, _, cx| cx.open_url(&url)),
-      ))
-      .child(section(tr(l, "Privacy policy URL"), url_field("open-privacy-url", tr(l, "Privacy policy URL"), &forms.privacy_url, l, cx)))
+      .child(Alert::info("privacy-api", tr(l, "applesApiDoesNot")))
+      .child(
+        h_flex().child(
+          Button::new("open-app-privacy")
+            .icon(Icon::new(IconName::ExternalLink))
+            .label(tr(l, "openAppPrivacyIn"))
+            .outline()
+            .on_click(move |_, _, cx| cx.open_url(&url)),
+        ),
+      )
+      .child(section(tr(l, "privacyPolicyUrl"), url_field("open-privacy-url", tr(l, "privacyPolicyUrl"), &forms.privacy_url, l, cx)))
       .child(section(
-        tr(l, "Your answers"),
+        tr(l, "yourAnswers"),
         v_flex()
           .gap_3()
-          .child(toggle("p-confirmed", tr(l, "I answered App Privacy in App Store Connect"), declaration.confirmed_in_app_store_connect, |d, v| d.confirmed_in_app_store_connect = v, cx))
-          .child(toggle("p-collects", tr(l, "The app collects data from users"), declaration.collects_data, |d, v| d.collects_data = v, cx))
-          .child(toggle("p-tracking", tr(l, "The app tracks users across other companies' apps or sites"), declaration.uses_tracking, |d, v| d.uses_tracking = v, cx))
-          .child(toggle("p-att", tr(l, "The app shows the App Tracking Transparency prompt"), declaration.shows_tracking_prompt, |d, v| d.shows_tracking_prompt = v, cx))
-          .child(toggle("p-accounts", tr(l, "People can create an account in the app"), declaration.has_accounts, |d, v| d.has_accounts = v, cx))
-          .child(toggle("p-deletion", tr(l, "Accounts can be deleted inside the app"), declaration.account_deletion_in_app, |d, v| d.account_deletion_in_app = v, cx))
-          .child(toggle("p-login", tr(l, "A reviewer must sign in to reach the main features"), declaration.requires_login_to_review, |d, v| d.requires_login_to_review = v, cx))
-          .child(pair(text_field(tr(l, "Data types collected"), &forms.data_types, None, cx), text_field(tr(l, "Third-party SDKs"), &forms.sdks, None, cx))),
+          .child(toggle(
+            "p-confirmed",
+            tr(l, "iAnsweredAppPrivacy"),
+            declaration.confirmed_in_app_store_connect,
+            |d, v| d.confirmed_in_app_store_connect = v,
+            cx,
+          ))
+          .child(toggle("p-collects", tr(l, "theAppCollectsData"), declaration.collects_data, |d, v| d.collects_data = v, cx))
+          .child(toggle("p-tracking", tr(l, "theAppTracksUsers"), declaration.uses_tracking, |d, v| d.uses_tracking = v, cx))
+          .child(toggle("p-att", tr(l, "theAppShowsThe"), declaration.shows_tracking_prompt, |d, v| d.shows_tracking_prompt = v, cx))
+          .child(toggle("p-accounts", tr(l, "peopleCanCreateAn"), declaration.has_accounts, |d, v| d.has_accounts = v, cx))
+          .child(toggle("p-deletion", tr(l, "accountsCanBeDeleted"), declaration.account_deletion_in_app, |d, v| d.account_deletion_in_app = v, cx))
+          .child(toggle("p-login", tr(l, "aReviewerMustSign"), declaration.requires_login_to_review, |d, v| d.requires_login_to_review = v, cx))
+          .child(pair(
+            text_field(tr(l, "dataTypesCollected"), &forms.data_types, None, cx),
+            text_field(tr(l, "thirdPartySdks"), &forms.sdks, None, cx),
+          )),
       ))
   }
 }

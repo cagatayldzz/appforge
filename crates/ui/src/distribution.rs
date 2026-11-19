@@ -49,20 +49,20 @@ pub(crate) enum Change {
 impl Change {
   pub(crate) fn label(&self) -> &'static str {
     match self {
-      Self::Create(_) => "Create iOS version",
-      Self::Build(_, _) => "Select build",
-      Self::ReleaseType(_, false) => "Manual release",
-      Self::ReleaseType(_, true) => "Release after approval",
-      Self::Schedule(_) => "Schedule release",
-      Self::EnablePhased(_) => "Enable phased release",
-      Self::Phase(_, "PAUSED") => "Pause phased release",
-      Self::Phase(_, _) => "Resume phased release",
-      Self::Draft(..) => "Add to review draft",
-      Self::Submit(..) => "Submit for review",
-      Self::Cancel(..) => "Withdraw submission",
-      Self::Release(_) => "Release this version",
-      Self::PublishReviewResponse(_) => "Publish reply",
-      Self::DeleteReviewResponse(_) => "Delete reply",
+      Self::Create(_) => "createIosVersion",
+      Self::Build(_, _) => "selectBuild",
+      Self::ReleaseType(_, false) => "manualRelease",
+      Self::ReleaseType(_, true) => "releaseAfterApproval",
+      Self::Schedule(_) => "scheduleRelease",
+      Self::EnablePhased(_) => "enablePhasedRelease",
+      Self::Phase(_, "PAUSED") => "pausePhasedRelease",
+      Self::Phase(_, _) => "resumePhasedRelease",
+      Self::Draft(..) => "addToReviewDraft",
+      Self::Submit(..) => "submitForReview",
+      Self::Cancel(..) => "withdrawSubmission",
+      Self::Release(_) => "releaseThisVersion",
+      Self::PublishReviewResponse(_) => "publishReply",
+      Self::DeleteReviewResponse(_) => "deleteReply",
     }
   }
 
@@ -149,7 +149,7 @@ impl Workspace {
               return;
             }
             match &result {
-              Ok(()) => Self::success(window, cx, tr(this.settings.language, "Saved to App Store Connect.")),
+              Ok(()) => Self::success(window, cx, tr(this.settings.language, "savedToAppStore")),
               Err(error) => Self::error(window, cx, error.to_string()),
             }
             let active = this.selected.as_ref() == Some(&app);
@@ -222,7 +222,7 @@ impl Workspace {
         .justify_end()
         .gap_2()
         .w_full()
-        .child(Button::new("distribution-cancel").label(tr(l, "Cancel")).outline().on_click(|_, window, cx| window.close_dialog(cx)))
+        .child(Button::new("distribution-cancel").label(tr(l, "cancel")).outline().on_click(|_, window, cx| window.close_dialog(cx)))
         .child(Button::new("distribution-confirm").label(tr(l, change.label())).primary().on_click(move |_, window, cx| {
           let value = field.as_ref().map_or_else(String::new, |field| read_input(field, cx));
           window.close_dialog(cx);
@@ -234,7 +234,7 @@ impl Workspace {
           v_flex()
             .gap_2()
             .child(target.clone())
-            .children(count.as_ref().map(|count| trf(l, "{} items in this submission", &[count])))
+            .children(count.as_ref().map(|count| trf(l, "itemsInThisSubmission", &[count])))
             .children(input.as_ref().map(Input::new)),
         )
         .footer(footer)
@@ -255,7 +255,7 @@ impl Workspace {
     let open = self.distribution_expanded.contains(key);
     Some(
       Button::new(SharedString::from(format!("expand-{key}")))
-        .label(if open { tr(l, "Show fewer") } else { trf(l, "Show all ({})", &[&total.to_string()]) })
+        .label(if open { tr(l, "showFewer") } else { trf(l, "showAll", &[&total.to_string()]) })
         .ghost()
         .small()
         .on_click(cx.listener(move |this, _, _, cx| {
@@ -272,7 +272,7 @@ impl Workspace {
     let data = match self.active_data().map(|data| &data.distribution) {
       Some(Load::Ready(data)) => data,
       Some(Load::Failed(message)) => return Alert::error("distribution-error", message.clone()).into_any_element(),
-      _ => return h_flex().gap_2().child(Spinner::new()).child(tr(l, "Loading from App Store Connect…")).into_any_element(),
+      _ => return h_flex().gap_2().child(Spinner::new()).child(tr(l, "loadingFromAppStore")).into_any_element(),
     };
     let Some(snapshot) = self.ready_snapshot() else { return div().into_any_element() };
     let version = snapshot.version.as_ref();
@@ -290,11 +290,11 @@ impl Workspace {
           .child(div().w_16().font_weight(FontWeight::SEMIBOLD).child(SharedString::from(item.number.clone())))
           .child(state_badge(&item.state, &c))
           .child(div().flex_1())
-          .children(current.then(|| Tag::secondary().small().child(tr(l, "Open version")))),
+          .children(current.then(|| Tag::secondary().small().child(tr(l, "openVersion")))),
       );
     }
     let versions = card(
-      tr(l, "iOS versions"),
+      tr(l, "iosVersions"),
       None,
       can_create.then(|| self.distribution_button("create-ios-version", Change::Create(snapshot.app.id.clone()), cx).primary().into_any_element()),
       versions,
@@ -314,7 +314,7 @@ impl Workspace {
     let shown = if expanded { ordered.len() } else { SHORT_LIST };
     let mut builds = v_flex().gap_0p5();
     if ordered.is_empty() {
-      builds = builds.child(div().px_3().py_2().text_color(c.text_secondary).child(tr(l, "No matching builds.")));
+      builds = builds.child(div().px_3().py_2().text_color(c.text_secondary).child(tr(l, "noMatchingBuilds")));
     }
     for build in ordered.iter().take(shown) {
       let selected = data.selected_build.as_ref() == Some(&build.id);
@@ -324,7 +324,7 @@ impl Workspace {
           .child(div().w_16().font_weight(FontWeight::SEMIBOLD).child(SharedString::from(build.number.clone())))
           .child(state_badge(&build.state, &c))
           .child(div().flex_1())
-          .children(selected.then(|| Tag::success().small().child(tr(l, "Selected build"))))
+          .children(selected.then(|| Tag::success().small().child(tr(l, "selectedBuild"))))
           .children(
             pickable
               .then(|| self.distribution_button(SharedString::from(format!("select-{}", build.id)), Change::Build(id.clone(), build.id.clone()), cx)),
@@ -333,8 +333,8 @@ impl Workspace {
     }
     builds = builds.children(self.expand_toggle("builds", ordered.len(), cx));
     let builds = card(
-      tr(l, "Builds"),
-      Some(if data.selected_build.is_some() { tr(l, "Pick the build that goes with this version.") } else { tr(l, "No build is selected yet.") }),
+      tr(l, "builds"),
+      Some(if data.selected_build.is_some() { tr(l, "pickTheBuildThat") } else { tr(l, "noBuildIsSelected") }),
       None,
       builds,
       &c,
@@ -368,11 +368,11 @@ impl Workspace {
     let active = data.submissions.iter().any(|item| item.includes_version && item.state != "COMPLETE");
     let can_draft = editable && data.selected_build.is_some() && !active;
     if submissions.is_empty() && !can_draft {
-      review = review.child(div().px_3().py_2().text_color(c.text_secondary).child(tr(l, "Nothing was submitted for this version yet.")));
+      review = review.child(div().px_3().py_2().text_color(c.text_secondary).child(tr(l, "nothingWasSubmittedFor")));
     }
     review = review.children(self.expand_toggle("reviews", submissions.len(), cx));
     let review = card(
-      tr(l, "App Review"),
+      tr(l, "appReview"),
       None,
       can_draft.then(|| {
         self.distribution_button("review-draft", Change::Draft(snapshot.app.id.clone(), id.clone(), draft), cx).primary().into_any_element()
@@ -394,11 +394,8 @@ impl Workspace {
       self.distribution_button(button, change, cx).selected(chosen).disabled(!editable || self.store_write_busy || self.saving)
     })));
     if let Some(item) = current.filter(|item| !item.release_date.is_empty()) {
-      release = release.child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(
-        l,
-        "Scheduled for {}",
-        &[&short_date(&item.release_date)],
-      )));
+      release =
+        release.child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "scheduledFor", &[&short_date(&item.release_date)])));
     }
     if let Some((phase, state)) = &data.phased_release {
       let change = match state.as_str() {
@@ -410,7 +407,7 @@ impl Workspace {
         h_flex()
           .gap_3()
           .items_center()
-          .child(div().font_weight(FontWeight::MEDIUM).child(tr(l, "Phased release")))
+          .child(div().font_weight(FontWeight::MEDIUM).child(tr(l, "phasedRelease")))
           .child(state_badge(state, &c))
           .children(change.map(|change| self.distribution_button("change-phased", change, cx))),
       );
@@ -419,21 +416,21 @@ impl Workspace {
     }
     let release_now = (version.state == "PENDING_DEVELOPER_RELEASE")
       .then(|| self.distribution_button("release-now", Change::Release(id.clone()), cx).primary().into_any_element());
-    let release = card(tr(l, "Release"), Some(tr(l, "How this version goes live after approval.")), release_now, release, &c);
+    let release = card(tr(l, "release"), Some(tr(l, "howThisVersionGoes")), release_now, release, &c);
 
     // The next step, in one line at the top ------------------------------------------------------------------
     let (step, step_color): (SharedString, Hsla) = if version.state == "PENDING_DEVELOPER_RELEASE" {
-      (tr(l, "Approved. Release it when you are ready."), c.success)
+      (tr(l, "approvedReleaseItWhen"), c.success)
     } else if matches!(version.state.as_str(), "WAITING_FOR_REVIEW" | "IN_REVIEW") {
-      (tr(l, "In review at Apple. Nothing to do until it finishes."), c.info)
+      (tr(l, "inReviewAtApple"), c.info)
     } else if editable && data.selected_build.is_none() {
-      (tr(l, "Next: select a build."), c.warning)
+      (tr(l, "nextSelectABuild"), c.warning)
     } else if editable && !active {
-      (tr(l, "Next: add this version to a review draft, then submit it."), c.warning)
+      (tr(l, "nextAddThisVersion"), c.warning)
     } else if editable {
-      (tr(l, "Next: submit the draft for review."), c.warning)
+      (tr(l, "nextSubmitTheDraft"), c.warning)
     } else {
-      (tr(l, "This version is live. Create a new version for the next update."), c.success)
+      (tr(l, "thisVersionIsLive"), c.success)
     };
     let banner = h_flex()
       .w_full()
@@ -445,7 +442,7 @@ impl Workspace {
       .bg(step_color.opacity(0.12))
       .child(div().size_2().rounded_full().bg(step_color))
       .child(div().flex_1().font_weight(FontWeight::MEDIUM).child(step))
-      .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "Version {}", &[&version.version_string])))
+      .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "version", &[&version.version_string])))
       .child(state_badge(&version.state, &c));
     v_flex().gap_4().child(banner).child(builds).child(review).child(release).child(versions).into_any_element()
   }

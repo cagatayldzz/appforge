@@ -28,7 +28,7 @@ impl Workspace {
           }
           match result {
             Ok(true) => {
-              Self::success(window, cx, tr(this.settings.language, "Saved to App Store Connect."));
+              Self::success(window, cx, tr(this.settings.language, "savedToAppStore"));
               if let Some(data) = this.app_data.get_mut(&id) {
                 data.snapshot_task = None;
                 if this.selected.as_ref() != Some(&id) {
@@ -39,7 +39,7 @@ impl Workspace {
                 this.load_snapshot(window, cx);
               }
             }
-            Ok(false) => Self::success(window, cx, tr(this.settings.language, "Nothing changed.")),
+            Ok(false) => Self::success(window, cx, tr(this.settings.language, "nothingChanged")),
             Err(error) => Self::error(window, cx, error.to_string()),
           }
           cx.notify();

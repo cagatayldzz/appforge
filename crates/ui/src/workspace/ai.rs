@@ -21,11 +21,7 @@ impl Workspace {
     self.tasks.usage = Some(cx.spawn_in(window, async move |this, cx| {
       let result = cx.background_spawn(async move { ledger.save(&dir) }).await;
       if let Err(error) = result {
-        this
-          .update_in(cx, |this, window, cx| {
-            Self::warning(window, cx, trf(this.settings.language, "Could not save the AI usage: {}", &[&error.to_string()]))
-          })
-          .ok();
+        this.update_in(cx, |this, window, cx| Self::warning(window, cx, trf(this.settings.language, "couldNotSaveThe", &[&error.to_string()]))).ok();
       }
     }));
   }
@@ -46,10 +42,10 @@ impl Workspace {
     let (Some(snapshot), Some(report)) = (self.ready_snapshot().cloned(), self.report.clone()) else { return };
     let provider = self.settings.ai.provider;
     if !self.has_key.get(&provider).copied().unwrap_or(false) {
-      Self::error(window, cx, trf(self.settings.language, "Add your {} API key in Settings first.", &[provider.label()]));
+      Self::error(window, cx, trf(self.settings.language, "addYourApiKey", &[provider.label()]));
       return;
     }
-    let missing_key = trf(self.settings.language, "Add your {} API key in Settings first.", &[provider.label()]);
+    let missing_key = trf(self.settings.language, "addYourApiKey", &[provider.label()]);
     let model = self.settings.ai.model(provider).to_owned();
     let used = model.clone();
     let declaration = self.privacy_declaration();
@@ -116,7 +112,7 @@ impl Workspace {
               this.playbook = playbook;
               this.playbook_error = None;
               if announce {
-                Self::success(window, cx, tr(this.settings.language, "Rules updated from the playbook."));
+                Self::success(window, cx, tr(this.settings.language, "rulesUpdatedFromThe"));
               }
             }
             Err(error) => {
@@ -147,7 +143,7 @@ impl Workspace {
     };
     let key = read_input(key_input, cx);
     if key.is_empty() {
-      Self::success(window, cx, trf(self.settings.language, "{} settings saved.", &[provider.label()]));
+      Self::success(window, cx, trf(self.settings.language, "settingsSaved", &[provider.label()]));
       cx.notify();
       return;
     }
@@ -164,7 +160,7 @@ impl Workspace {
                 Provider::Anthropic => this.settings_form.anthropic_key.clone(),
               };
               set_input(&input, "", window, cx);
-              Self::success(window, cx, trf(this.settings.language, "{} API key saved in the Keychain.", &[provider.label()]));
+              Self::success(window, cx, trf(this.settings.language, "apiKeySavedIn", &[provider.label()]));
             }
             Err(error) => Self::error(window, cx, error.to_string()),
           }
@@ -183,7 +179,7 @@ impl Workspace {
           match result {
             Ok(()) => {
               this.has_key.insert(provider, false);
-              Self::success(window, cx, trf(this.settings.language, "{} API key removed.", &[provider.label()]));
+              Self::success(window, cx, trf(this.settings.language, "apiKeyRemoved", &[provider.label()]));
             }
             Err(error) => Self::error(window, cx, error.to_string()),
           }
