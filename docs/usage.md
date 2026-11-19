@@ -79,7 +79,9 @@ AppForge checks Apple’s guidelines in the background at startup if the last su
 | AI provider | For Claude and OpenAI: a menu of the models, with what a million input and output tokens cost, the API key (kept in the Keychain), and which provider is in use. |
 | Code folders | For each app, the folder that holds its source code (**Choose folder**, **Change**, **Remove**). A folder that was moved or deleted is shown in red. |
 | Rules | Search the Apple App Review Guidelines by number or topic, open the official rule, and see the latest additions, changes and removals. |
-| About | The version and a button that shows the data folder. |
+| About | The version, GitHub release updates and a button that shows the data folder. |
+
+AppForge checks GitHub for a newer stable release on launch. In **Settings → About**, you can turn off launch checks, check manually, or read the release notes. Choose **Download update** to verify and stage the release, then **Restart to update** to install it. This requires a signed Apple Silicon release in a writable folder. AppForge verifies the checksum, macOS code signature, Gatekeeper assessment, developer team, bundle ID and version before offering to restart.
 
 Only low-cost models are offered: Claude Haiku 5.5 and 4.5, and GPT-6 Luna. The prices are the providers' list prices when they were last checked and can change, so check the provider's price page. A model you had chosen earlier that is no longer offered is replaced by the default.
 

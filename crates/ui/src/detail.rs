@@ -3,7 +3,7 @@
 use crate::{
   i18n::{tr, trf},
   theme::colors,
-  widgets::{area_field, area_field_with_action, centered, pair, section, text_field, text_field_with_action, url_field},
+  widgets::{area_field, area_field_with_action, centered, pair, required, required_mark, section, text_field, text_field_with_action, url_field},
   workspace::{DetailTab, Load, Workspace},
 };
 use appforge_appstore::App;
@@ -102,7 +102,11 @@ impl Workspace {
       None => title.into_any_element(),
     };
     v_flex().flex_1().min_h_0().overflow_hidden().child(
-      v_flex().id("detail-scroll").size_full().overflow_y_scrollbar().child(centered(v_flex().pt_6().pb_6().gap_6().child(heading).child(body))),
+      v_flex()
+        .id("detail-scroll")
+        .size_full()
+        .overflow_y_scrollbar()
+        .child(centered(v_flex().pt_6().pb_6().gap_6().child(heading).children(self.render_ai_tasks(cx)).child(body))),
     )
   }
 
@@ -157,7 +161,7 @@ impl Workspace {
     page = page.child(section(
       tr(l, "basics"),
       pair(
-        text_field_with_action(tr(l, "appName"), &forms.name, NAME_LIMIT, self.field_generate_button(ListingField::Name, cx), cx),
+        text_field_with_action(required(tr(l, "appName")), &forms.name, NAME_LIMIT, self.field_generate_button(ListingField::Name, cx), cx),
         text_field_with_action(tr(l, "subtitle"), &forms.subtitle, SUBTITLE_LIMIT, self.field_generate_button(ListingField::Subtitle, cx), cx),
       ),
     ));
@@ -168,14 +172,14 @@ impl Workspace {
           v_flex()
             .gap_4()
             .child(area_field_with_action(
-              tr(l, "description"),
+              required(tr(l, "description")),
               &forms.description,
               DESCRIPTION_LIMIT,
               self.field_generate_button(ListingField::Description, cx),
               cx,
             ))
             .child(text_field_with_action(
-              tr(l, "keywords"),
+              required(tr(l, "keywords")),
               &forms.keywords,
               KEYWORDS_LIMIT,
               self.field_generate_button(ListingField::Keywords, cx),
@@ -192,7 +196,7 @@ impl Workspace {
         .child(section(
           tr(l, "links"),
           pair(
-            url_field("open-support-url", tr(l, "supportUrl"), &forms.support_url, l, cx),
+            url_field("open-support-url", required(tr(l, "supportUrl")), &forms.support_url, l, cx),
             url_field("open-marketing-url", tr(l, "marketingUrl"), &forms.marketing_url, l, cx),
           ),
         ))
@@ -229,16 +233,23 @@ impl Workspace {
     if missing {
       page = page.child(Alert::info("review-missing", tr(l, "nothingIsStoredFor")));
     }
-    let mut sign_in = v_flex().gap_4().child(Switch::new("demo-required").checked(forms.demo_required).label(tr(l, "signInRequiredTo")).on_click(
-      cx.listener(|this, checked: &bool, _, cx| {
-        this.forms.demo_required = *checked;
-        cx.notify();
-      }),
-    ));
-    if forms.demo_required {
+    let sign_in_required = self.privacy_declaration().requires_login_to_review;
+    let mut sign_in = v_flex().gap_4().child(
+      h_flex()
+        .gap_1()
+        .items_center()
+        .child(Switch::new("demo-required").checked(forms.demo_required).label(tr(l, "signInRequiredTo")).on_click(cx.listener(
+          |this, checked: &bool, _, cx| {
+            this.forms.demo_required = *checked;
+            cx.notify();
+          },
+        )))
+        .children(sign_in_required.then(|| required_mark(cx))),
+    );
+    if self.review_credentials_required() {
       sign_in = sign_in.child(pair(
-        text_field(tr(l, "demoUserName"), &forms.demo_name, None, cx),
-        text_field(tr(l, "demoPassword"), &forms.demo_password, None, cx),
+        text_field(required(tr(l, "demoUserName")), &forms.demo_name, None, cx),
+        text_field(required(tr(l, "demoPassword")), &forms.demo_password, None, cx),
       ));
     }
     page
@@ -246,8 +257,11 @@ impl Workspace {
         tr(l, "contact"),
         v_flex()
           .gap_4()
-          .child(pair(text_field(tr(l, "firstName"), &forms.first_name, None, cx), text_field(tr(l, "lastName"), &forms.last_name, None, cx)))
-          .child(pair(text_field(tr(l, "phone"), &forms.phone, None, cx), text_field(tr(l, "email"), &forms.email, None, cx))),
+          .child(pair(
+            text_field(required(tr(l, "firstName")), &forms.first_name, None, cx),
+            text_field(required(tr(l, "lastName")), &forms.last_name, None, cx),
+          ))
+          .child(pair(text_field(required(tr(l, "phone")), &forms.phone, None, cx), text_field(required(tr(l, "email")), &forms.email, None, cx))),
       ))
       .child(section(tr(l, "signInHeading"), sign_in))
       .child(section(tr(l, "notesForTheReviewer"), area_field(tr(l, "notes"), &forms.notes, None, cx)))
@@ -281,7 +295,7 @@ impl Workspace {
       .child(section(
         tr(l, "privacyPolicyUrl"),
         pair(
-          url_field("open-privacy-url", tr(l, "privacyPolicyUrl"), &forms.privacy_url, l, cx),
+          url_field("open-privacy-url", required(tr(l, "privacyPolicyUrl")), &forms.privacy_url, l, cx),
           url_field("open-privacy-choices", tr(l, "privacyChoicesUrl"), &forms.privacy_choices, l, cx),
         ),
       ))
@@ -290,13 +304,19 @@ impl Workspace {
         tr(l, "yourAnswers"),
         v_flex()
           .gap_3()
-          .child(toggle(
-            "p-confirmed",
-            tr(l, "iAnsweredAppPrivacy"),
-            declaration.confirmed_in_app_store_connect,
-            |d, v| d.confirmed_in_app_store_connect = v,
-            cx,
-          ))
+          .child(
+            h_flex()
+              .gap_1()
+              .items_center()
+              .child(toggle(
+                "p-confirmed",
+                tr(l, "iAnsweredAppPrivacy"),
+                declaration.confirmed_in_app_store_connect,
+                |d, v| d.confirmed_in_app_store_connect = v,
+                cx,
+              ))
+              .child(required_mark(cx)),
+          )
           .child(toggle("p-collects", tr(l, "theAppCollectsData"), declaration.collects_data, |d, v| d.collects_data = v, cx))
           .child(toggle("p-tracking", tr(l, "theAppTracksUsers"), declaration.uses_tracking, |d, v| d.uses_tracking = v, cx))
           .child(toggle("p-att", tr(l, "theAppShowsThe"), declaration.shows_tracking_prompt, |d, v| d.shows_tracking_prompt = v, cx))

@@ -345,7 +345,7 @@ impl Workspace {
     let builds = card(
       tr(l, "builds"),
       Some(if data.selected_build.is_some() { tr(l, "pickTheBuildThat") } else { tr(l, "noBuildIsSelected") }),
-      None,
+      Some(crate::widgets::required_mark(cx).into_any_element()),
       builds,
       &c,
     );

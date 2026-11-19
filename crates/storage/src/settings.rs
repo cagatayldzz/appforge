@@ -115,6 +115,7 @@ pub struct WindowState {
 pub struct Settings {
   /// The welcome screen was shown and finished.
   pub onboarded: bool,
+  pub skip_update_check_on_launch: bool,
   pub language: Language,
   pub apple: Option<AppleAccount>,
   pub ai: AiSettings,

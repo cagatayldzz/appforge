@@ -9,10 +9,11 @@ mod apps;
 mod saving;
 mod session;
 mod settings;
+mod updates;
 
 use appforge_ai::Provider;
 use appforge_appstore::{App as StoreApp, AppInfoLocalization, AppSnapshot, Client, Credentials, ReviewDetail, VersionLocalization};
-use appforge_compliance::{analyze_with_ai, check, AiReview, Guidelines, ListingField, Playbook, Report};
+use appforge_compliance::{analyze_project_with_ai, check, AiReview, Guidelines, ListingField, Playbook, Report};
 use appforge_storage::{AppleAccount, IconCache, Keychain, Language, PrivacyDeclaration, SecretKey, SecretStore, Settings, UsageLedger};
 use gpui_kit::{
   component::{
@@ -175,6 +176,7 @@ pub(crate) struct AppData {
 
 pub struct Workspace {
   pub data_dir: PathBuf,
+  updates: updates::Updates,
   pub settings: Settings,
   /// The settings file exists but could not be read: nothing is saved over it.
   pub settings_locked: bool,
@@ -320,6 +322,22 @@ impl Workspace {
         })
         .collect();
     let forms = Forms::new(window, cx);
+    let completion_subscriptions = [
+      &forms.name,
+      &forms.keywords,
+      &forms.support_url,
+      &forms.first_name,
+      &forms.last_name,
+      &forms.phone,
+      &forms.email,
+      &forms.demo_name,
+      &forms.demo_password,
+      &forms.privacy_url,
+    ]
+    .into_iter()
+    .map(|field| cx.observe(field, |_, _, cx| cx.notify()))
+    .collect::<Vec<_>>();
+    let description_subscription = cx.observe(&forms.description, |_, _, cx| cx.notify());
     let guideline_search = cx.new(|cx| InputState::new(window, cx));
     let guideline_search_subscription = cx.observe(&guideline_search, |_, _, cx| cx.notify());
     let language_names: Vec<SharedString> = Language::ALL.iter().map(|language| SharedString::new_static(language.native_name())).collect();
@@ -333,6 +351,7 @@ impl Workspace {
     });
     let mut this = Self {
       data_dir,
+      updates: updates::Updates::default(),
       settings,
       settings_locked,
       usage,
@@ -379,6 +398,8 @@ impl Workspace {
           cx.observe_window_bounds(window, |this, window, cx| this.remember_window(window, cx)),
         ])
         .chain(model_subscriptions)
+        .chain(completion_subscriptions)
+        .chain(std::iter::once(description_subscription))
         .chain(std::iter::once(guideline_search_subscription))
         .collect(),
       forms,
@@ -393,6 +414,9 @@ impl Workspace {
     }
     crate::theme::apply_theme(window, cx);
     this.restore(window, cx);
+    if !this.settings.skip_update_check_on_launch {
+      this.check_updates(false, window, cx);
+    }
     this
   }
 

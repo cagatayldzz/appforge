@@ -1,5 +1,6 @@
 //! The text fields of the app screens and helpers to read and fill them.
 
+use crate::workspace::{DetailTab, Load, Workspace};
 use appforge_appstore::{AppSnapshot, ReviewDetail};
 use gpui_kit::{
   component::input::{InputState, TextareaState},
@@ -106,5 +107,41 @@ impl Forms {
     set_input(&self.demo_password, &review.demo_account_password, window, cx);
     set_area(&self.notes, &review.notes, window, cx);
     self.demo_required = review.demo_account_required;
+  }
+}
+
+impl Workspace {
+  pub(crate) fn review_credentials_required(&self) -> bool {
+    self.forms.demo_required || self.privacy_declaration().requires_login_to_review
+  }
+
+  /// Counts populated fields in the current draft and required confirmations.
+  pub(crate) fn page_completion(&self, tab: DetailTab, cx: &App) -> Option<(usize, usize)> {
+    let has_version = self.ready_snapshot()?.version.is_some();
+    let forms = &self.forms;
+    let filled = |field: &Entity<InputState>| !field.read(cx).value().trim().is_empty();
+    let count = |checks: &[bool]| (checks.iter().filter(|&&complete| complete).count(), checks.len());
+    Some(match tab {
+      DetailTab::Information if has_version => {
+        count(&[filled(&forms.name), !forms.description.read(cx).value().trim().is_empty(), filled(&forms.keywords), filled(&forms.support_url)])
+      }
+      DetailTab::Information => count(&[filled(&forms.name)]),
+      DetailTab::Review if has_version => {
+        let mut checks = vec![filled(&forms.first_name), filled(&forms.last_name), filled(&forms.phone), filled(&forms.email)];
+        if self.review_credentials_required() {
+          checks.extend([filled(&forms.demo_name), filled(&forms.demo_password)]);
+        }
+        if self.privacy_declaration().requires_login_to_review {
+          checks.push(forms.demo_required);
+        }
+        count(&checks)
+      }
+      DetailTab::Privacy => count(&[filled(&forms.privacy_url), self.privacy_declaration().confirmed_in_app_store_connect]),
+      DetailTab::Distribution => {
+        let Load::Ready(data) = &self.active_data()?.distribution else { return None };
+        count(&[data.selected_build.is_some()])
+      }
+      _ => return None,
+    })
   }
 }

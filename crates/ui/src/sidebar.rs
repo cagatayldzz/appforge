@@ -5,11 +5,13 @@ use crate::{
   i18n::{tr, trf},
   theme::{colors, FONT_SIZE, FONT_SIZE_SM},
   widgets::{app_avatar, list_row, rail_button, state_badge, ACTIVITY_BAR_WIDTH, SIDEBAR_WIDTH},
-  workspace::{DetailTab, Load, SettingsPage, Workspace},
+  workspace::{AiState, DetailTab, Load, SettingsPage, Workspace},
 };
 use appforge_compliance::Verdict;
 use gpui_kit::{
-  component::{button::Button, h_flex, scroll::ScrollableElement as _, tooltip::Tooltip, v_flex, Icon, IconName, Sizable as _},
+  component::{
+    button::Button, h_flex, scroll::ScrollableElement as _, tag::Tag, tooltip::Tooltip, v_flex, Disableable as _, Icon, IconName, Sizable as _,
+  },
   prelude::FluentBuilder as _,
   *,
 };
@@ -194,13 +196,28 @@ impl Workspace {
   /// The pages of the open app, one under the other.
   fn page_rows(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
     let l = self.settings.language;
+    let c = colors(cx);
     DetailTab::ALL
       .iter()
       .map(|tab| {
         let tab = *tab;
         list_row(SharedString::from(format!("page-{}", tab.label())), self.tab == tab, cx)
           .py_2()
-          .child(tr(l, tab.label()))
+          .justify_between()
+          .child(div().min_w_0().truncate().child(tr(l, tab.label())))
+          .child(
+            h_flex()
+              .gap_1()
+              .flex_none()
+              .children(self.page_completion(tab, cx).map(|(done, total)| {
+                let color = if done == total { c.success } else { c.warning };
+                Tag::custom(color.opacity(0.16), c.text, color).small().child(format!("{done}/{total}"))
+              }))
+              .children({
+                let count = self.ai_tasks_for(tab).count();
+                (count > 0).then(|| Tag::custom(c.accent.opacity(0.16), c.text, c.accent).small().child(trf(l, "aiTaskCount", &[&count.to_string()])))
+              }),
+          )
           .on_click(cx.listener(move |this, _, window, cx| {
             this.tab = tab;
             this.back_tab = None;
@@ -233,7 +250,20 @@ impl Workspace {
       }),
     );
     let save = self.save_control(cx);
-    v_flex().gap_2().px_4().py_3().child(h_flex().gap_2().child(reload).children(save.map(|button| button.flex_1()))).into_any_element()
+    let analysis = Button::new("sidebar-project-analysis")
+      .icon(Icon::new(IconName::Bot))
+      .small()
+      .outline()
+      .tooltip(tr(l, "aiAnalysis"))
+      .loading(matches!(self.ai, AiState::Running))
+      .disabled(self.ready_snapshot().is_none())
+      .on_click(cx.listener(|this, _, window, cx| this.confirm_ai(true, window, cx)));
+    v_flex()
+      .gap_2()
+      .px_4()
+      .py_3()
+      .child(h_flex().gap_2().child(reload).child(analysis).children(save.map(|button| button.flex_1())))
+      .into_any_element()
   }
 
   fn settings_rows(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {

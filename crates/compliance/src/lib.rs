@@ -10,7 +10,7 @@ mod playbook;
 mod report;
 mod rules;
 
-pub use ai_review::{analyze_with_ai, describe, parse_ai_answer, AiReview};
+pub use ai_review::{analyze_project_with_ai, analyze_with_ai, describe, parse_ai_answer, AiReview};
 pub use guidelines::{Guideline, GuidelineChanges, Guidelines, GUIDELINES_URL};
 pub use listing_draft::{
   draft_listing, draft_listing_field, listing_prompt, parse_listing_answer, ListingDraft, ListingField, ListingFields, DESCRIPTION_LIMIT,

@@ -259,10 +259,19 @@ dependencies = [
  "appforge-compliance",
  "appforge-project",
  "appforge-storage",
+ "appforge-updater",
  "gpui-kit",
  "gpui-kit-assets",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "appforge-updater"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

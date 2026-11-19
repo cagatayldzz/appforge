@@ -29,6 +29,8 @@ pub enum Category {
   AppInformation,
   AppReview,
   AppPrivacy,
+  Distribution,
+  ProductPage,
 }
 
 impl Category {
@@ -37,6 +39,8 @@ impl Category {
       Self::AppInformation => "App Information",
       Self::AppReview => "App Review",
       Self::AppPrivacy => "App Privacy",
+      Self::Distribution => "Distribution",
+      Self::ProductPage => "Product Page Information",
     }
   }
 }

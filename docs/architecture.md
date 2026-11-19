@@ -21,6 +21,7 @@ apps/appforge → app → ui → compliance → appstore
 | `project` | Reads a short description of an app's source folder for the AI: the folder shape, README, manifests and the texts the app shows. Never reads secrets (`.env`, keys, signing files) or follows links; at most about 10,000 tokens. |
 | `storage` | The data directory: `settings.json` (language, account ids, AI choices, per-app privacy answers and code folders, the window as it was left), `ai-usage.json` (`UsageLedger`), `icons/<app id>.png` (`IconCache`) and the Keychain (`SecretStore`). |
 | `ui` | The window: sign-in, the bars and pages of the signed-in window, Analysis and Settings. |
+| `updater` | Checks GitHub releases, verifies and stages macOS app bundles, and replaces the installed bundle on restart. The UI runs its blocking calls on background tasks. |
 | `app` | Startup: the window (opened the way it was left), key bindings and the menu. |
 
 ## Code map (`crates/ui/src`)

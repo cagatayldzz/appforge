@@ -73,10 +73,31 @@ fn page_of(category: Category) -> DetailTab {
     Category::AppInformation => DetailTab::Information,
     Category::AppReview => DetailTab::Review,
     Category::AppPrivacy => DetailTab::Privacy,
+    Category::Distribution => DetailTab::Distribution,
+    Category::ProductPage => DetailTab::ProductPage,
   }
 }
 
 impl Workspace {
+  pub(crate) fn ai_tasks_for(&self, tab: DetailTab) -> impl Iterator<Item = &Finding> {
+    let findings = match &self.ai {
+      AiState::Done(review) => review.findings.as_slice(),
+      _ => &[],
+    };
+    findings.iter().filter(move |finding| page_of(finding.category) == tab && !finding.fix.trim().is_empty())
+  }
+
+  pub(crate) fn render_ai_tasks(&self, cx: &mut Context<Self>) -> Option<Div> {
+    let mut tasks = self.ai_tasks_for(self.tab).peekable();
+    tasks.peek()?;
+    Some(
+      v_flex()
+        .gap_2()
+        .child(div().font_weight(FontWeight::SEMIBOLD).child(tr(self.settings.language, "projectAnalysisTasks")))
+        .children(tasks.map(|finding| self.finding_row("ai-page", finding, cx))),
+    )
+  }
+
   /// Critical findings and warnings start open, tips closed; a click flips that for one finding.
   fn finding_open(&self, key: &str, severity: Severity) -> bool {
     (severity != Severity::Info) != self.toggled_findings.contains(key)
@@ -87,7 +108,7 @@ impl Workspace {
     let l = self.settings.language;
     let c = colors(cx);
     let key = format!("{scope}-{}-{}", finding.id, finding.title);
-    let open = self.finding_open(&key, finding.severity);
+    let open = self.finding_open(&key, if scope == "ai-page" { Severity::Warning } else { finding.severity });
     let tab = page_of(finding.category);
     let toggle_key = key.clone();
     let mut header = h_flex()
@@ -136,7 +157,7 @@ impl Workspace {
           h_flex()
             .pl_6()
             .gap_2()
-            .child(
+            .children((scope != "ai-page").then(|| {
               Button::new(SharedString::from(format!("go-{key}")))
                 .label(trf(l, "openPage", &[&tr(l, finding.category.label())]))
                 .small()
@@ -144,8 +165,8 @@ impl Workspace {
                 .on_click(cx.listener(move |this, _, _, cx| {
                   this.tab = tab;
                   cx.notify();
-                })),
-            )
+                }))
+            }))
             .children(source),
         );
     }
@@ -314,7 +335,7 @@ impl Workspace {
           .primary()
           .loading(matches!(self.ai, AiState::Running))
           .disabled(!has_key)
-          .on_click(cx.listener(|this, _, window, cx| this.run_ai(window, cx))),
+          .on_click(cx.listener(|this, _, window, cx| this.confirm_ai(false, window, cx))),
       )
       .child(div().flex_1().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(hint));
     let result = match &self.ai {

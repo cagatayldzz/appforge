@@ -300,6 +300,7 @@ impl Workspace {
       SettingsPage::About => {
         let data_dir = self.data_dir.clone();
         v_flex()
+          .child(self.render_updates(cx))
           .child(setting_row(
             trf(l, "appforgeVersion", &[env!("CARGO_PKG_VERSION")]),
             Some(tr(l, "settingsAndNotesAre")),
