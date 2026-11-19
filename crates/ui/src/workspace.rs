@@ -595,9 +595,45 @@ impl Workspace {
           .ok();
       }
     }));
+    self.clear_apple_session(window, cx);
+  }
+
+  pub(crate) fn require_apple_sign_in<T>(
+    &mut self,
+    result: &Result<T, appforge_appstore::Error>,
+    window: &mut Window,
+    cx: &mut Context<Self>,
+  ) -> bool {
+    if !matches!(result, Err(appforge_appstore::Error::Api { status: 401, .. })) {
+      return false;
+    }
+    if self.client.is_some() {
+      let account = self.settings.apple.clone();
+      window.close_dialog(cx);
+      self.settings.onboarded = true;
+      self.clear_apple_session(window, cx);
+      if let Some(account) = account {
+        set_input(&self.login.issuer, &account.issuer_id, window, cx);
+        set_input(&self.login.key_id, &account.key_id, window, cx);
+      }
+      self.login.step = 1;
+      self.login.key = None;
+      self.login.error =
+        Some(tr(self.settings.language, "App Store Connect rejected your session. Confirm your IDs and choose a valid .p8 key to sign in again."));
+      cx.notify();
+    }
+    true
+  }
+
+  fn clear_apple_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
     self.settings.apple = None;
     self.save_settings(window, cx);
     self.client = None;
+    self.tasks.ai = None;
+    self.tasks.save = None;
+    self.tasks.store_write = None;
+    self.saving = false;
+    self.store_write_busy = false;
     self.apps = Load::Idle;
     self.icons.clear();
     self.tasks.icons = None;
@@ -621,6 +657,9 @@ impl Workspace {
       let result = cx.background_spawn(async move { client.apps() }).await;
       this
         .update_in(cx, |this, window, cx| {
+          if this.require_apple_sign_in(&result, window, cx) {
+            return;
+          }
           match result {
             Ok(apps) => {
               let first = apps.first().map(|app| app.id.clone());
@@ -753,6 +792,9 @@ impl Workspace {
       let result = cx.background_spawn(async move { client.snapshot(&app) }).await;
       this
         .update_in(cx, |this, window, cx| {
+          if this.require_apple_sign_in(&result, window, cx) {
+            return;
+          }
           let Some(data) = this.app_data.get_mut(&id) else { return };
           data.snapshot_task = None;
           let active = this.selected.as_ref() == Some(&id);
@@ -836,6 +878,9 @@ impl Workspace {
         .update_in(cx, |this, window, cx| {
           this.saving = false;
           if !this.client.as_ref().is_some_and(|current| Arc::ptr_eq(current, &client)) {
+            return;
+          }
+          if this.require_apple_sign_in(&result, window, cx) {
             return;
           }
           match result {

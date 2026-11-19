@@ -16,7 +16,7 @@ The sign-in screen is a three-step guide, with a progress bar on top and the Bac
 2. **Copy IDs**: enter the **Issuer ID** (shown above the key list) and the **Key ID** (in the key table).
 3. **Sign in**: choose the `.p8` file and press **Sign in**. A file named `AuthKey_<KEY ID>.p8` fills in the Key ID for you.
 
-The private key is kept in the macOS Keychain; only the Issuer ID and Key ID are written to `settings.json`. **Sign out** removes the key from the Keychain.
+The private key is kept in the macOS Keychain; only the Issuer ID and Key ID are written to `settings.json`. **Sign out** removes the key from the Keychain. If App Store Connect rejects an active session with HTTP 401, AppForge returns to sign-in with the previous IDs filled in and asks for a valid key file.
 
 ## Finding your way
 

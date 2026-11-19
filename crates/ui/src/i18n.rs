@@ -7,6 +7,7 @@ use std::{collections::HashMap, sync::OnceLock};
 
 /// English text and its Turkish translation. Both sides use the same `{}` placeholders in the same order.
 pub const TURKISH: &[(&str, &str)] = &[
+  ("App Store Connect rejected your session. Confirm your IDs and choose a valid .p8 key to sign in again.", "App Store Connect oturumunuzu reddetti. Yeniden giriş yapmak için kimlik bilgilerinizi kontrol edin ve geçerli bir .p8 anahtarı seçin."),
   ("No draft for this field. Add relevant details to the listing or project README and try again.", "Bu alan için taslak üretilemedi. Mağaza metnine veya proje README dosyasına ilgili bilgileri ekleyip tekrar deneyin."),
   ("No alternative was generated. The current text was kept.", "Yeni bir öneri üretilmedi. Mevcut metin korundu."),
   ("Generate {}", "{} üret"),

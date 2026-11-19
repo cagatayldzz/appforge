@@ -34,6 +34,9 @@ impl Workspace {
       let result = cx.background_spawn(async move { client.customer_reviews(&target) }).await;
       this
         .update_in(cx, |this, window, cx| {
+          if this.require_apple_sign_in(&result, window, cx) {
+            return;
+          }
           let Some(data) = this.app_data.get_mut(&app) else { return };
           data.reviews_task = None;
           let active = this.selected.as_ref() == Some(&app);

@@ -46,7 +46,7 @@ apps/appforge → app → ui → compliance → appstore
 
 A title band (drag area, the rail color) sits above the content.
 
-**Signed out**: a fixed sidebar on the left (brand, language) and on the right a progress bar with the step counter ("Step 2 of 4") above the current step, with the Back and Next actions pinned at the bottom. The steps are the welcome screen (first launch only), then the three-step sign-in guide: a checklist of five things to do on Apple's site (the drawings are pictures of Apple's page, labelled as such, and only the first button is real), the Issuer ID and Key ID, and the `.p8` file.
+**Signed out**: a fixed sidebar holds the brand and language. The welcome screen uses the main workspace’s section layout with the progress and Get started action in the sidebar. During sign-in, progress appears above the current step and Back and Next stay pinned at the bottom. The steps are the welcome screen (first launch only), then the three-step sign-in guide: a checklist of five things to do on Apple's site (the drawings are pictures of Apple's page, labelled as such, and only the first button is real), the Issuer ID and Key ID, and the `.p8` file.
 
 **Signed in**: three columns.
 

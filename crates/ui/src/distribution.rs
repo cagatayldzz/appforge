@@ -93,6 +93,9 @@ impl Workspace {
         .await;
       this
         .update_in(cx, |this, window, cx| {
+          if this.require_apple_sign_in(&result, window, cx) {
+            return;
+          }
           let Some(data) = this.app_data.get_mut(&app) else { return };
           data.distribution_task = None;
           let active = this.selected.as_ref() == Some(&app);
@@ -130,6 +133,9 @@ impl Workspace {
         .update_in(cx, |this, window, cx| {
           this.store_write_busy = false;
           if this.client.as_ref().is_some_and(|current| std::sync::Arc::ptr_eq(current, &client)) {
+            if this.require_apple_sign_in(&result, window, cx) {
+              return;
+            }
             match &result {
               Ok(()) => Self::success(window, cx, tr(this.settings.language, "Saved to App Store Connect.")),
               Err(error) => Self::error(window, cx, error.to_string()),

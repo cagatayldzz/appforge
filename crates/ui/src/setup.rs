@@ -3,12 +3,12 @@
 
 use crate::{
   i18n::{tr, trf},
+  theme::colors,
   widgets::SIDEBAR_WIDTH,
   workspace::Workspace,
 };
 use gpui_kit::{
   component::{
-    avatar::Avatar,
     h_flex,
     label::Label,
     progress::Progress,
@@ -32,11 +32,22 @@ impl Workspace {
   pub(crate) fn render_setup(&mut self, current: usize, content: impl IntoElement, actions: Option<Div>, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let muted = cx.theme().muted_foreground;
+    let palette = colors(cx);
+    let (sidebar_actions, main_actions) = if current == 0 { (actions, None) } else { (None, actions) };
     // The header and footer are plain containers: Kit's `SidebarHeader` and `SidebarFooter` light up on hover.
     let brand = h_flex()
       .gap_3()
       .items_center()
-      .child(Avatar::new().placeholder(Icon::new(IconName::LayoutDashboard)))
+      .child(
+        div()
+          .size_10()
+          .rounded_md()
+          .bg(palette.selected)
+          .flex()
+          .items_center()
+          .justify_center()
+          .child(Icon::new(IconName::LayoutDashboard).text_color(palette.text)),
+      )
       .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).child("AppForge"));
     // Why the guide asks for an API key, and where the key goes: shown with the sign-in steps.
     let note = |icon: IconName, title: SharedString, text: SharedString| {
@@ -59,29 +70,37 @@ impl Workspace {
           tr(l, "Your key is stored in the macOS Keychain and is never sent anywhere except Apple."),
         ))
     });
-    let header = v_flex().w_full().gap_6().px_4().pt_5().pb_3().child(brand).children(notes);
-    let footer =
-      v_flex().w_full().gap_4().p_4().child(Separator::horizontal()).child(
-        v_flex().gap_1p5().child(div().text_xs().text_color(muted).child(tr(l, "Language"))).child(Select::new(&self.language_select).w_full()),
-      );
-    let sidebar = div()
-      .w(px(SIDEBAR_WIDTH))
-      .flex_shrink_0()
-      .h_full()
-      .child(Sidebar::<SidebarMenu>::new("setup-sidebar").collapsible(false).w_full().header(header).footer(footer));
     let progress = v_flex()
       .w_full()
-      .max_w(px(SETUP_CONTENT_WIDTH))
-      .px_10()
-      .pt_8()
-      .gap_3()
+      .gap_2()
       .child(div().text_sm().font_weight(FontWeight::MEDIUM).text_color(muted).child(trf(
         l,
         "Step {} of {}",
         &[&(current + 1).to_string(), &STEP_TOTAL.to_string()],
       )))
       .child(Progress::new("setup-progress").xsmall().value((current + 1) as f32 / STEP_TOTAL as f32 * 100.));
-    let bar = actions.map(|actions| {
+    let (sidebar_progress, main_progress) = if current == 0 {
+      (Some(progress), None)
+    } else {
+      (None, Some(div().w_full().max_w(px(SETUP_CONTENT_WIDTH)).px_10().pt_8().pb_3().child(progress)))
+    };
+    let header = v_flex().w_full().gap_5().p_4().child(brand).child(Separator::horizontal()).children(sidebar_progress).children(notes);
+    let footer = v_flex()
+      .w_full()
+      .gap_3()
+      .p_4()
+      .child(Separator::horizontal())
+      .child(v_flex().gap_1p5().child(div().text_xs().text_color(muted).child(tr(l, "Language"))).child(Select::new(&self.language_select).w_full()))
+      .children(sidebar_actions);
+    let sidebar = div()
+      .w(px(SIDEBAR_WIDTH))
+      .flex_shrink_0()
+      .h_full()
+      .bg(palette.surface)
+      .border_r_1()
+      .border_color(palette.border)
+      .child(Sidebar::<SidebarMenu>::new("setup-sidebar").collapsible(false).w_full().header(header).footer(footer));
+    let bar = main_actions.map(|actions| {
       v_flex()
         .w_full()
         .flex_shrink_0()
@@ -95,7 +114,7 @@ impl Workspace {
         .min_w_0()
         .min_h_0()
         .overflow_hidden()
-        .child(v_flex().id("setup-content").flex_1().min_h_0().overflow_y_scrollbar().child(progress).child(content))
+        .child(v_flex().id("setup-content").flex_1().min_h_0().overflow_y_scrollbar().children(main_progress).child(content))
         .children(bar),
     )
   }
