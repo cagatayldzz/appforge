@@ -45,7 +45,7 @@ impl Category {
   }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Finding {
   /// Stable identifier of the rule, for example `info.keywords-too-long`.
   pub id: String,

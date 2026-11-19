@@ -1,10 +1,7 @@
 //! AI analysis, the playbook, provider and key settings, and the AI usage totals.
 
 use super::*;
-use gpui_kit::component::{
-  button::{Button, ButtonVariants as _},
-  h_flex, v_flex, Sizable as _,
-};
+use gpui_kit::component::{button::Button, Sizable as _};
 
 struct AiAnalysisNotice;
 
@@ -45,64 +42,7 @@ impl Workspace {
     cx.notify();
   }
 
-  pub(crate) fn confirm_ai(&mut self, require_project: bool, window: &mut Window, cx: &mut Context<Self>) {
-    if self.tasks.ai.is_some() && matches!(self.ai, AiState::Running(_)) {
-      return;
-    }
-    let Some(app) = self.selected.clone() else { return };
-    let Some(version) = self.ready_snapshot().map(|snapshot| snapshot.version.as_ref().map(|version| version.id.clone())) else { return };
-    let l = self.settings.language;
-    let provider = self.settings.ai.provider;
-    let model = self.settings.ai.model(provider).to_owned();
-    let folder = self.settings.code_folders.get(&app).cloned();
-    let has_key = self.has_key.get(&provider).copied().unwrap_or(false);
-    let workspace = cx.weak_entity();
-    window.open_dialog(cx, move |dialog, _, _| {
-      let (workspace, app, version, folder, model) = (workspace.clone(), app.clone(), version.clone(), folder.clone(), model.clone());
-      let needs_folder = require_project && folder.is_none();
-      let (message, action) = if !has_key {
-        (trf(l, "addAApiKeyIn", &[provider.label()]), tr(l, "settings"))
-      } else if needs_folder {
-        (tr(l, "projectAnalysisNeedsFolder"), tr(l, "chooseFolder"))
-      } else {
-        (trf(l, if folder.is_some() { "projectAnalysisConsent" } else { "metadataAnalysisConsent" }, &[provider.label()]), tr(l, "aiAnalysis"))
-      };
-      dialog
-        .title(tr(l, "aiAnalysis"))
-        .child(v_flex().gap_2().child(message).children((has_key && !needs_folder).then(|| div().child(tr(l, "projectAnalysisEffect")))))
-        .footer(
-          h_flex()
-            .gap_2()
-            .justify_end()
-            .child(Button::new("cancel-ai-analysis").outline().label(tr(l, "cancel")).on_click(|_, window, cx| window.close_dialog(cx)))
-            .child(Button::new("confirm-ai-analysis").primary().label(action).on_click(move |_, window, cx| {
-              window.close_dialog(cx);
-              workspace
-                .update(cx, |this, cx| {
-                  if this.selected.as_ref() != Some(&app)
-                    || this.ready_snapshot().map(|snapshot| snapshot.version.as_ref().map(|version| &version.id)) != Some(version.as_ref())
-                    || this.settings.ai.provider != provider
-                    || this.settings.ai.model(provider) != model
-                  {
-                    return;
-                  }
-                  if !has_key {
-                    this.show_settings = true;
-                    this.settings_page = SettingsPage::AiProvider;
-                    cx.notify();
-                  } else if needs_folder {
-                    this.choose_code_folder(app.clone(), None, window, cx);
-                  } else {
-                    this.run_ai(folder.clone(), window, cx);
-                  }
-                })
-                .ok();
-            })),
-        )
-    });
-  }
-
-  fn run_ai(&mut self, folder: Option<PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
+  pub(super) fn run_ai(&mut self, folder: Option<PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
     if matches!(self.ai, AiState::Running(_)) {
       return;
     }
@@ -118,6 +58,7 @@ impl Workspace {
     let model = self.settings.ai.model(provider).to_owned();
     let used = model.clone();
     let require_project = folder.is_some();
+    let cache = self.analysis_cache(require_project);
     let declaration = self.privacy_declaration();
     let secrets = self.secrets.clone();
     let playbook = self.playbook.clone();
@@ -135,7 +76,7 @@ impl Workspace {
         let key = secrets.get(SecretKey::ApiKey(provider)).map_err(|error| error.to_string())?.ok_or_else(|| missing_key.to_string())?;
         let project = if let Some(folder) = folder {
           report_progress(tr(language, "projectAnalysisReadingSource"));
-          Some(appforge_project::summarize(&folder).map_err(|error| trf(language, "couldNotReadThe", &[&error.to_string()]).to_string())?)
+          Some(appforge_project::summarize_for_review(&folder).map_err(|error| trf(language, "couldNotReadThe", &[&error.to_string()]).to_string())?)
         } else {
           None
         };
@@ -160,7 +101,12 @@ impl Workspace {
             AiReviewStage::ReadingResponse => tr(language, "projectAnalysisReadingResponse"),
           });
         })
-        .map(|(review, usage)| (review, playbook, usage))
+        .map(|(review, usage)| {
+          let entry =
+            appforge_compliance::CachedReview { finished_at: now(), provider, model: model.clone(), project_included: require_project, review };
+          let cache_error = cache.and_then(|cache| cache.save(&entry).err()).map(|error| error.to_string());
+          (entry.review, playbook, usage, cache_error)
+        })
         .map_err(|error| match &error {
           appforge_compliance::AiReviewError::Provider(provider_error) if provider_error.is_temporary_service_error() => {
             trf(language, "aiProviderTemporarilyUnavailable", &[provider.label(), &model]).to_string()
@@ -185,7 +131,7 @@ impl Workspace {
         .update_in(cx, |this, window, cx| {
           this.tasks.ai = None;
           if this.ready_snapshot().map(|snapshot| snapshot.version.as_ref().map(|version| &version.id)) != Some(version_id.as_ref()) {
-            if let Ok((_, _, usage)) = result {
+            if let Ok((_, _, usage, _)) = result {
               this.record_usage(provider, &used, usage, window, cx);
             }
             this.reset_ai_analysis(window, cx);
@@ -193,9 +139,12 @@ impl Workspace {
             return;
           }
           match result {
-            Ok((review, playbook, usage)) => {
+            Ok((review, playbook, usage, cache_error)) => {
               this.record_usage(provider, &used, usage, window, cx);
               this.playbook = playbook;
+              if let Some(error) = cache_error {
+                Self::warning(window, cx, trf(this.settings.language, "analysisCacheWriteFailed", &[&error]));
+              }
               let count = review.findings.iter().filter(|finding| !finding.fix.trim().is_empty()).count().to_string();
               this.ai = AiState::Done(review);
               window.push_notification(
@@ -227,6 +176,7 @@ impl Workspace {
 
   pub(super) fn reset_ai_analysis(&mut self, window: &mut Window, cx: &mut App) {
     self.tasks.ai = None;
+    self.tasks.ai_dialog = None;
     self.ai = AiState::Idle;
     window.remove_notification::<AiAnalysisNotice>(cx);
   }

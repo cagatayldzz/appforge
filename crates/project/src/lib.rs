@@ -186,6 +186,15 @@ fn recent_changes(root: &Path) -> Option<String> {
 
 /// Describes the folder `root`. Fails when it is not a folder that can be read.
 pub fn summarize(root: &Path) -> io::Result<ProjectSummary> {
+  summarize_source(root, true)
+}
+
+/// Summarizes review-relevant source context without reading Git history.
+pub fn summarize_for_review(root: &Path) -> io::Result<ProjectSummary> {
+  summarize_source(root, false)
+}
+
+fn summarize_source(root: &Path, include_git: bool) -> io::Result<ProjectSummary> {
   let metadata = fs::metadata(root)?;
   if !metadata.is_dir() {
     return Err(io::Error::new(io::ErrorKind::InvalidInput, "the project path is not a folder"));
@@ -206,7 +215,7 @@ pub fn summarize(root: &Path) -> io::Result<ProjectSummary> {
     text.push_str(line);
     text.push('\n');
   }
-  if let Some(changes) = recent_changes(root) {
+  if let Some(changes) = include_git.then(|| recent_changes(root)).flatten() {
     text.push_str(&format!("\n--- RECENT CHANGES (git commit subjects, newest first) ---\n{changes}\n"));
   }
   let mut truncated = state.truncated;
@@ -226,4 +235,21 @@ pub fn summarize(root: &Path) -> io::Result<ProjectSummary> {
     text.push_str(&block);
   }
   Ok(ProjectSummary { text, files_seen: state.visited, truncated })
+}
+
+/// Runs AppForge's local checklist against a bounded source summary.
+pub fn quick_check(root: &Path) -> io::Result<Vec<String>> {
+  use std::{io::Write as _, process::Stdio};
+
+  let summary = summarize_for_review(root)?;
+  let script = include_str!("../../../scripts/project-check.sh");
+  let mut child = Command::new("/bin/sh").arg("-c").arg(script).stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()?;
+  if let Some(mut stdin) = child.stdin.take() {
+    stdin.write_all(summary.text.as_bytes())?;
+  }
+  let output = child.wait_with_output()?;
+  if !output.status.success() {
+    return Err(io::Error::other("The project checklist script failed."));
+  }
+  Ok(String::from_utf8_lossy(&output.stdout).lines().map(str::to_owned).collect())
 }

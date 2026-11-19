@@ -5,6 +5,7 @@ use crate::{
   i18n::{tr, trf},
 };
 mod ai;
+mod ai_dialog;
 mod apps;
 mod form_history;
 pub(crate) mod refresh;
@@ -153,6 +154,7 @@ pub(crate) struct Tasks {
   pub(crate) save: Option<Task<()>>,
   pub(crate) form_history: Option<Task<()>>,
   pub(crate) ai: Option<Task<()>>,
+  pub(crate) ai_dialog: Option<Task<()>>,
   pub(crate) playbook: Option<Task<()>>,
   pub(crate) guidelines: Option<Task<()>>,
   pub(crate) window: Option<Task<()>>,

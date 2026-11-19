@@ -70,6 +70,8 @@ The built-in rules check the saved data (not unsaved edits): limits, placeholder
 
 AppForge checks Apple’s guidelines in the background at startup if the last successful check was at least 24 hours ago. **Update rules** runs the check on demand. If Apple’s page is unavailable or cannot be parsed, AppForge keeps the last valid catalog. Findings link to the official rules where a matching number exists, and AI analysis receives a limited set of relevant Apple excerpts alongside the community playbook.
 
+The AI analysis dialog shows the last successful review for the active app version. **Open saved results** reuses its findings without contacting the provider. **Run AI analysis again** requests a fresh review. With a source folder linked, **Quick local check** runs the bundled checklist script and the built-in rules without using AI tokens.
+
 ## Version history
 
 App Information, App Review and App Privacy have a **Version history** button. Confirmed saves add a local revision with a timestamp and field-by-field changes. **Load as draft** fills the form with the selected revision. Use **Save** and confirm the preview to apply the restored values and record a new revision. History for App Information and App Privacy is scoped to the selected store language. Demo passwords are kept in Keychain.

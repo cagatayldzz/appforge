@@ -2,6 +2,7 @@
 //! (<https://github.com/mjmirza/app-store-compliance>) fetched and cached on this Mac, and an AI analysis that
 //! reads both.
 
+mod ai_cache;
 mod ai_review;
 mod guidelines;
 
@@ -10,6 +11,7 @@ mod playbook;
 mod report;
 mod rules;
 
+pub use ai_cache::{AiCache, CachedReview};
 pub use ai_review::{analyze_project_with_ai, analyze_with_ai, describe, parse_ai_answer, AiReview, AiReviewError, AiReviewStage};
 pub use guidelines::{Guideline, GuidelineChanges, Guidelines, GUIDELINES_URL};
 pub use listing_draft::{

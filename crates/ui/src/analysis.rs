@@ -14,7 +14,7 @@ use gpui_kit::{
     button::{Button, ButtonVariants as _},
     h_flex,
     spinner::Spinner,
-    v_flex, ActiveTheme, Disableable as _, Icon, IconName, Selectable as _, Sizable as _,
+    v_flex, ActiveTheme, Icon, IconName, Selectable as _, Sizable as _,
   },
   *,
 };
@@ -366,8 +366,7 @@ impl Workspace {
           .icon(Icon::new(IconName::Bot))
           .label(trf(l, "analyzeWith", &[provider.label()]))
           .primary()
-          .loading(matches!(self.ai, AiState::Running(_)))
-          .disabled(!has_key)
+          .loading(matches!(self.ai, AiState::Running(_)) || self.tasks.ai_dialog.is_some())
           .on_click(cx.listener(|this, _, window, cx| this.confirm_ai(false, window, cx))),
       )
       .child(div().flex_1().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(hint));
