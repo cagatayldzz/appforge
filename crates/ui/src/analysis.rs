@@ -1,7 +1,7 @@
 //! The Analysis page: score, checklist, AI analysis and rules.
 
 use crate::{
-  i18n::{tr, trf},
+  i18n::{tr, translated_text, trf},
   theme::{colors, FONT_SIZE_SM},
   widgets::{setting_row, severity_badge},
   workspace::{AiState, DetailTab, Workspace},
@@ -98,7 +98,7 @@ impl Workspace {
       .cursor_pointer()
       .child(Icon::new(if open { IconName::ChevronDown } else { IconName::ChevronRight }).small().text_color(c.text_secondary))
       .child(severity_badge(finding.severity, l, cx))
-      .child(div().flex_1().min_w_0().font_weight(FontWeight::SEMIBOLD).child(finding.title.clone()))
+      .child(div().flex_1().min_w_0().font_weight(FontWeight::SEMIBOLD).child(translated_text(l, &finding.title)))
       .child(div().flex_shrink_0().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, finding.category.label())))
       .on_click(cx.listener(move |this, _, _, cx| {
         if !this.toggled_findings.remove(&toggle_key) {
@@ -121,7 +121,7 @@ impl Workspace {
           .on_click(move |_, _, cx| cx.open_url(&url))
       });
       card = card
-        .child(div().pl_6().text_color(c.text_secondary).child(finding.detail.clone()))
+        .child(div().pl_6().text_color(c.text_secondary).child(translated_text(l, &finding.detail)))
         .child(
           v_flex()
             .ml_6()
@@ -130,7 +130,7 @@ impl Workspace {
             .rounded_md()
             .bg(c.surface)
             .child(div().text_size(FONT_SIZE_SM).font_weight(FontWeight::SEMIBOLD).text_color(c.text_secondary).child(tr(l, "howToFix")))
-            .child(div().child(finding.fix.clone())),
+            .child(div().child(translated_text(l, &finding.fix))),
         )
         .child(
           h_flex()
