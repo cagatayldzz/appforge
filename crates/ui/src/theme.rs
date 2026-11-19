@@ -52,6 +52,7 @@ pub(crate) struct Colors {
   pub success: Hsla,
   pub danger: Hsla,
   pub warning: Hsla,
+  pub on_warning: Hsla,
   pub info: Hsla,
 }
 
@@ -95,6 +96,7 @@ impl Colors {
       success: hex(0x3fb950),
       danger: hex(0xf85149),
       warning: hex(0xd29922),
+      on_warning: hex(0x0d1117),
       info: hex(0x4493f8),
     }
   }
@@ -125,6 +127,7 @@ impl Colors {
       success: hex(0x1a7f37),
       danger: hex(0xd1242f),
       warning: hex(0x9a6700),
+      on_warning: hex(0xffffff),
       info: hex(0x0969da),
     }
   }
@@ -208,6 +211,7 @@ pub(crate) fn apply_theme(window: &mut Window, cx: &mut App) {
     colors.success = c.success;
     colors.danger = c.danger;
     colors.warning = c.warning;
+    colors.warning_foreground = c.on_warning;
     colors.info = c.info;
     colors.selection = c.accent.opacity(0.35);
   });

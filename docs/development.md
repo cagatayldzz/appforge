@@ -44,8 +44,23 @@ from Conventional Commits since the latest `v*` tag: a breaking change (`!:` or 
 4. **Verify**: exactly the expected assets, none empty, `SHA256SUMS.txt`.
 5. **Publish**: checksums verified, draft GitHub release, then published as latest.
 
-Required Actions secrets: `APPLE_CERTIFICATE_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID`,
-`APPLE_APP_SPECIFIC_PASSWORD`. The version in the repository is stamped only in CI; the tag is the source of truth.
+### First release setup
+
+Add these repository secrets in **Settings → Secrets and variables → Actions** on GitHub.
+
+| Secret | Value |
+| --- | --- |
+| `APPLE_CERTIFICATE_BASE64` | Base64 of the Developer ID Application certificate and private key exported together as a `.p12`. On macOS, run `base64 -i /path/to/certificate.p12` and save the output as the secret. |
+| `APPLE_CERTIFICATE_PASSWORD` | Password set when exporting the `.p12`. |
+| `APPLE_ID` | Apple Account email used for notarization. |
+| `APPLE_TEAM_ID` | Apple Developer Team ID matching the certificate. |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password for that Apple Account. |
+
+With the release files on the default branch, open **Actions → Release → Run workflow**. From a clean local
+checkout that matches the pushed default branch, you can also run `bun run release` with an authenticated GitHub CLI.
+Download the signed ZIP and `SHA256SUMS.txt` from **Releases** once the workflow finishes.
+
+The version in the repository is stamped only in CI; the tag is the source of truth.
 `CI` (`.github/workflows/ci.yml`) runs the shell tests, formatting, and clippy and tests of the plain-Rust crates (the ones without the interface) on Linux.
 
 ## Packages
