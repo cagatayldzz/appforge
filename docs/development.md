@@ -12,7 +12,7 @@ Requirements: Command Line Tools (not Xcode), Rust 1.92+ (stable) and Bun. After
 
 | Command | Does |
 | --- | --- |
-| `bun run dev` | debug build, launch `dist/AppForge.app` |
+| `bun run dev` | debug build, open `dist/AppForge.app` or activate its running instance |
 | `bun run build` | release build → `dist/AppForge.app` |
 | `bun run check` | script syntax and shell tests, `cargo fmt --check`, clippy with warnings as errors, tests (run before finishing a change) |
 | `bun run update` | update the Rust dependencies in `Cargo.lock` to the newest versions `Cargo.toml` allows, then clippy and tests; `Cargo.lock` is put back if they fail |
@@ -82,7 +82,7 @@ Code map and data flow: [architecture](architecture.md).
 
 Tests live in `crates/<crate>/tests/`, never inline. API clients are tested against a local HTTP server on a random port; no test reaches Apple, OpenAI or Anthropic, and none touches the Keychain (`MemorySecrets`). Tests that touch the data directory use temporary directories; `APPFORGE_DATA_DIR` overrides the location. `crates/appstore/tests/test_key.p8` is a throwaway P-256 key for token tests, not a credential.
 
-Shell tests for the scripts and workflows live in `scripts/tests/`. The interface has no automated tests; check a change by running `bun run dev`.
+Shell tests for the scripts and workflows live in `scripts/tests/`. Run `bun run check` for terminal verification. For a visual check, quit any running development instance before running `bun run dev` so macOS launches the newly built executable.
 
 ## Visual inspection
 

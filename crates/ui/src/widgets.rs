@@ -224,6 +224,7 @@ pub fn app_avatar(id: &str, name: &str, selected: bool, ring: bool, icon: Option
       base
         .text_size(FONT_SIZE)
         .font_weight(FontWeight::SEMIBOLD)
+        .when(ring, |avatar| avatar.border_2().border_color(if selected { accent } else { gpui_kit::transparent_black() }))
         .when(selected, |avatar| avatar.bg(color).text_color(white()))
         .when(!selected, |avatar| avatar.bg(color.opacity(0.2)).text_color(color))
         .child(letter)

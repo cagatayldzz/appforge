@@ -13,13 +13,14 @@ use gpui_kit::{
     alert::Alert,
     button::{Button, ButtonVariants as _},
     h_flex,
-    scroll::ScrollableElement as _,
     spinner::Spinner,
     v_flex, Disableable as _, Icon, IconName, Sizable as _, WindowExt as _,
   },
   *,
 };
 use std::sync::Arc;
+
+const MEDIA_PREVIEW_WIDTH: Pixels = px(560.0);
 
 struct Media {
   asset: ProductAsset,
@@ -49,6 +50,11 @@ fn display_name(value: &str) -> String {
     .trim_start_matches("GAMES_")
     .split('_')
     .map(|part| {
+      let part = match part {
+        "IPAD" => return "iPad".to_owned(),
+        "IPHONE" => return "iPhone".to_owned(),
+        _ => part,
+      };
       let mut letters = part.chars();
       letters.next().map_or_else(String::new, |first| format!("{}{}", first.to_uppercase(), letters.as_str().to_lowercase()))
     })
@@ -120,11 +126,23 @@ impl Workspace {
 
   pub(crate) fn render_product_page(&self, app: &StoreApp, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
-    let mut page = v_flex().gap_4().child(h_flex().gap_2().justify_between().children(self.locale_picker(cx)).child(store_link(
-      "manage-product-media",
-      tr(l, "manageProductPage"),
-      store_version(app),
-    )));
+    let mut page = v_flex().gap_4().child(
+      h_flex()
+        .gap_2()
+        .flex_wrap()
+        .justify_between()
+        .children(self.locale_picker(cx))
+        .child(store_link("manage-product-media", tr(l, "manageProductPage"), store_version(app)))
+        .child(
+          Button::new("reload-product-media")
+            .label(tr(l, "reload"))
+            .icon(Icon::new(IconName::RefreshCw))
+            .small()
+            .outline()
+            .disabled(self.product_localization().is_none())
+            .on_click(cx.listener(|this, _, window, cx| this.load_product_assets(true, window, cx))),
+        ),
+    );
     let Some(locale) = self.product_localization() else {
       return page.child(Alert::info("no-product-locale", tr(l, "noProductLocalization")));
     };
@@ -136,7 +154,13 @@ impl Workspace {
         for item in media.iter().filter(|item| matches!(item.asset.kind.as_str(), "APP_SCREENSHOT" | "APP_PREVIEW")) {
           groups.entry(&item.asset.device).or_default().push(item);
         }
-        let mut previews = v_flex().gap_3();
+        let mut previews = v_flex().gap_3().child(card(
+          "iPhone Duo",
+          Some(tr(l, "duoScreenshotSizes")),
+          Some(store_link("add-duo-media", tr(l, "addDuoScreenshots"), store_version(app)).into_any_element()),
+          div().text_sm().child(tr(l, "duoMediaHelp")),
+          &colors(cx),
+        ));
         if groups.is_empty() {
           previews = previews.child(Alert::info("empty-previews", tr(l, "noProductAssets")));
         }
@@ -170,7 +194,7 @@ impl Workspace {
     let busy = self.saving || self.store_write_busy;
     let mut items = items.peekable();
     let empty = items.peek().is_none();
-    let row = h_flex().gap_3().items_start().children(items.map(|item| {
+    let row = h_flex().gap_3().flex_wrap().items_start().children(items.map(|item| {
       let asset = &item.asset;
       let mut tile = v_flex().id(SharedString::from(asset.id.clone())).gap_2().flex_none().w_32();
       if wide {
@@ -193,7 +217,10 @@ impl Workspace {
             Button::new("preview-product-asset").label(tr(l, "previewMedia")).small().outline().on_click(move |_, window, cx| {
               let image = image.clone();
               window.open_dialog(cx, move |dialog, _, _| {
-                dialog.title(tr(l, "previewMedia")).child(img(image.clone()).w_full().h_80().object_fit(ObjectFit::Contain))
+                dialog
+                  .width(MEDIA_PREVIEW_WIDTH)
+                  .title(tr(l, "previewMedia"))
+                  .child(img(image.clone()).w_full().h_96().object_fit(ObjectFit::Contain))
               });
             })
           }))
@@ -212,7 +239,7 @@ impl Workspace {
       }
       tile
     }));
-    v_flex().id(SharedString::from(format!("media-scroll-{group}"))).min_w_0().w_full().overflow_x_scrollbar().child(if empty {
+    v_flex().id(SharedString::from(format!("media-gallery-{group}"))).min_w_0().w_full().child(if empty {
       row.child(tr(l, "noProductAssets"))
     } else {
       row

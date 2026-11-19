@@ -39,10 +39,15 @@ impl Workspace {
         let name: SharedString = app.name.clone().into();
         div()
           .id(SharedString::from(format!("rail-app-{}", app.id)))
+          .group("rail-app")
           .flex_none()
           .rounded_md()
           .cursor_pointer()
-          .child(app_avatar(&app.id, &app.name, selected, true, self.icons.get(&app.id), cx).size_10())
+          .child(
+            app_avatar(&app.id, &app.name, selected, true, self.icons.get(&app.id), cx)
+              .size_10()
+              .when(!selected, |avatar| avatar.group_hover("rail-app", move |style| style.border_color(c.control_border))),
+          )
           .tooltip(move |window, cx| Tooltip::new(name.clone()).build(window, cx))
           .on_click(cx.listener(move |this, _, window, cx| {
             this.show_settings = false;

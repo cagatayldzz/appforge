@@ -334,7 +334,7 @@ impl Workspace {
           .child(div().w_16().font_weight(FontWeight::SEMIBOLD).child(SharedString::from(build.number.clone())))
           .child(state_badge(&build.state, &c))
           .child(div().flex_1())
-          .children(selected.then(|| Tag::success().small().child(tr(l, "selectedBuild"))))
+          .children(selected.then(|| Tag::custom(c.success.opacity(0.16), c.text, c.success).child(tr(l, "selectedBuild"))))
           .children(
             pickable
               .then(|| self.distribution_button(SharedString::from(format!("select-{}", build.id)), Change::Build(id.clone(), build.id.clone()), cx)),

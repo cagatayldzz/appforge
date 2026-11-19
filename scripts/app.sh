@@ -158,6 +158,6 @@ case "$action" in
   build) build_app ;;
   dev)
     build_app
-    open -n "$app_dir"
+    open "$app_dir"
     ;;
 esac
