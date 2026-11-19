@@ -15,6 +15,7 @@ workspace = true
 doctest = false
 
 [dependencies]
+async-channel = "2.5"
 appforge-ai.workspace = true
 appforge-appstore.workspace = true
 appforge-compliance.workspace = true

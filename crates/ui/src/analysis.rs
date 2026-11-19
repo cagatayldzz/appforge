@@ -366,19 +366,15 @@ impl Workspace {
           .icon(Icon::new(IconName::Bot))
           .label(trf(l, "analyzeWith", &[provider.label()]))
           .primary()
-          .loading(matches!(self.ai, AiState::Running))
+          .loading(matches!(self.ai, AiState::Running(_)))
           .disabled(!has_key)
           .on_click(cx.listener(|this, _, window, cx| this.confirm_ai(false, window, cx))),
       )
       .child(div().flex_1().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(hint));
     let result = match &self.ai {
       AiState::Idle => v_flex(),
-      AiState::Running => {
-        v_flex().child(h_flex().gap_2().items_center().text_sm().text_color(theme.muted_foreground).child(Spinner::new()).child(trf(
-          l,
-          "isReadingYourApp",
-          &[provider.label()],
-        )))
+      AiState::Running(message) => {
+        v_flex().child(h_flex().gap_2().items_center().text_sm().text_color(theme.muted_foreground).child(Spinner::new()).child(message.clone()))
       }
       AiState::Failed(message) => v_flex().child(Alert::error("ai-error", message.clone())),
       AiState::Done(review) => {

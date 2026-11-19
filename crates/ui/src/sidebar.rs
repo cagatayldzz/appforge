@@ -270,7 +270,7 @@ impl Workspace {
       .small()
       .outline()
       .tooltip(tr(l, "aiAnalysis"))
-      .loading(matches!(self.ai, AiState::Running))
+      .loading(matches!(self.ai, AiState::Running(_)))
       .disabled(self.ready_snapshot().is_none())
       .on_click(cx.listener(|this, _, window, cx| this.confirm_ai(true, window, cx)));
     v_flex()

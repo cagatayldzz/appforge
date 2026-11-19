@@ -46,7 +46,7 @@ impl Workspace {
   }
 
   pub(crate) fn confirm_ai(&mut self, require_project: bool, window: &mut Window, cx: &mut Context<Self>) {
-    if self.tasks.ai.is_some() && matches!(self.ai, AiState::Running) {
+    if self.tasks.ai.is_some() && matches!(self.ai, AiState::Running(_)) {
       return;
     }
     let Some(app) = self.selected.clone() else { return };
@@ -103,7 +103,7 @@ impl Workspace {
   }
 
   fn run_ai(&mut self, folder: Option<PathBuf>, window: &mut Window, cx: &mut Context<Self>) {
-    if matches!(self.ai, AiState::Running) {
+    if matches!(self.ai, AiState::Running(_)) {
       return;
     }
     let (Some(snapshot), Some(report)) = (self.ready_snapshot().cloned(), self.report.clone()) else { return };
@@ -123,51 +123,64 @@ impl Workspace {
     let playbook = self.playbook.clone();
     let guidelines = self.guidelines.clone();
     let data_dir = self.data_dir.clone();
-    self.ai = AiState::Running;
-    analysis_progress(tr(language, "projectAnalysisPreparing"), window, cx);
+    let initial = tr(language, "projectAnalysisCheckingKey");
+    self.ai = AiState::Running(initial.clone());
+    analysis_progress(initial, window, cx);
     self.tasks.ai = Some(cx.spawn_in(window, async move |this, cx| {
-      let prepared = cx
-        .background_spawn(async move {
-          let key = secrets.get(SecretKey::ApiKey(provider)).map_err(|error| error.to_string())?.ok_or_else(|| missing_key.to_string())?;
-          // The rules are downloaded the first time they are needed.
-          let playbook = if playbook.is_empty() { Playbook::refresh(&data_dir).unwrap_or(playbook) } else { playbook };
-          let project = folder
-            .map(|folder| appforge_project::summarize(&folder))
-            .transpose()
-            .map_err(|error| trf(language, "couldNotReadThe", &[&error.to_string()]).to_string())?;
-          Ok((key, playbook, project))
+      let (progress, updates) = async_channel::unbounded();
+      let worker = cx.background_spawn(async move {
+        let report_progress = |message| {
+          let _ = progress.try_send(message);
+        };
+        let key = secrets.get(SecretKey::ApiKey(provider)).map_err(|error| error.to_string())?.ok_or_else(|| missing_key.to_string())?;
+        let project = if let Some(folder) = folder {
+          report_progress(tr(language, "projectAnalysisReadingSource"));
+          Some(appforge_project::summarize(&folder).map_err(|error| trf(language, "couldNotReadThe", &[&error.to_string()]).to_string())?)
+        } else {
+          None
+        };
+        let playbook = if playbook.is_empty() {
+          report_progress(tr(language, "projectAnalysisLoadingRules"));
+          Playbook::refresh(&data_dir).unwrap_or(playbook)
+        } else {
+          playbook
+        };
+        let client = appforge_ai::Client::default();
+        let language_name = match language {
+          Language::English => "English",
+          Language::Turkish => "Turkish",
+        };
+        let context = Some((language_name, project.as_ref().map(|summary| summary.text.as_str())));
+        analyze_project_with_ai(&client, provider, &key, &model, &snapshot, &declaration, &report, &playbook, &guidelines, context, |stage| {
+          use appforge_compliance::AiReviewStage;
+          report_progress(match stage {
+            AiReviewStage::PreparingRequest => tr(language, "projectAnalysisPreparing"),
+            AiReviewStage::WaitingForProvider => trf(language, "projectAnalysisWaiting", &[provider.label()]),
+            AiReviewStage::RetryingProvider => trf(language, "projectAnalysisRetrying", &[provider.label()]),
+            AiReviewStage::ReadingResponse => tr(language, "projectAnalysisReadingResponse"),
+          });
         })
-        .await;
-      let result = match prepared {
-        Ok((key, playbook, project)) => {
-          if this
-            .update_in(cx, |this, window, cx| {
-              analysis_progress(trf(this.settings.language, "projectAnalysisWaiting", &[provider.label()]), window, cx);
-            })
-            .is_err()
-          {
-            return;
+        .map(|(review, usage)| (review, playbook, usage))
+        .map_err(|error| match &error {
+          appforge_compliance::AiReviewError::Provider(provider_error) if provider_error.is_temporary_service_error() => {
+            trf(language, "aiProviderTemporarilyUnavailable", &[provider.label(), &model]).to_string()
           }
-          cx.background_spawn(async move {
-            let client = appforge_ai::Client::default();
-            let language_name = match language {
-              Language::English => "English",
-              Language::Turkish => "Turkish",
-            };
-            let context = Some((language_name, project.as_ref().map(|summary| summary.text.as_str())));
-            analyze_project_with_ai(&client, provider, &key, &model, &snapshot, &declaration, &report, &playbook, &guidelines, context)
-              .map(|(review, usage)| (review, playbook, usage))
-              .map_err(|error| match &error {
-                appforge_compliance::AiReviewError::Provider(provider_error) if provider_error.is_temporary_service_error() => {
-                  trf(language, "aiProviderTemporarilyUnavailable", &[provider.label(), &model]).to_string()
-                }
-                _ => error.to_string(),
-              })
+          _ => error.to_string(),
+        })
+      });
+      while let Ok(message) = updates.recv().await {
+        if this
+          .update_in(cx, |this, window, cx| {
+            this.ai = AiState::Running(message.clone());
+            analysis_progress(message, window, cx);
+            cx.notify();
           })
-          .await
+          .is_err()
+        {
+          return;
         }
-        Err(error) => Err(error),
-      };
+      }
+      let result = worker.await;
       this
         .update_in(cx, |this, window, cx| {
           this.tasks.ai = None;

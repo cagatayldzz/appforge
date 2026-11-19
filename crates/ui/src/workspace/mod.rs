@@ -110,7 +110,7 @@ impl SettingsPage {
 
 pub enum AiState {
   Idle,
-  Running,
+  Running(SharedString),
   Done(AiReview),
   Failed(SharedString),
 }

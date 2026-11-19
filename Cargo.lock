@@ -262,6 +262,7 @@ dependencies = [
  "appforge-project",
  "appforge-storage",
  "appforge-updater",
+ "async-channel",
  "chrono",
  "gpui-kit",
  "gpui-kit-assets",

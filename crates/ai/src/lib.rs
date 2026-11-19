@@ -154,9 +154,10 @@ impl Client {
   }
 
   /// Retries one explicit temporary service failure, using the same request.
-  pub fn complete_with_service_retry(&self, request: &Request) -> Result<Completion, Error> {
+  pub fn complete_with_service_retry(&self, request: &Request, on_retry: impl FnOnce()) -> Result<Completion, Error> {
     match self.complete_with_usage(request) {
       Err(error) if error.is_temporary_service_error() => {
+        on_retry();
         std::thread::sleep(Duration::from_secs(1));
         self.complete_with_usage(request)
       }

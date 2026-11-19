@@ -173,7 +173,8 @@ pub fn analyze_with_ai(
   playbook: &Playbook,
   guidelines: &Guidelines,
 ) -> Result<(AiReview, Usage), String> {
-  analyze_project_with_ai(client, provider, api_key, model, snapshot, privacy, local, playbook, guidelines, None).map_err(|error| error.to_string())
+  analyze_project_with_ai(client, provider, api_key, model, snapshot, privacy, local, playbook, guidelines, None, |_| {})
+    .map_err(|error| error.to_string())
 }
 
 /// A provider failure or an answer that could not be parsed.
@@ -194,6 +195,14 @@ impl std::fmt::Display for AiReviewError {
 
 impl std::error::Error for AiReviewError {}
 
+/// Observable phases of the local analysis pipeline and provider request.
+pub enum AiReviewStage {
+  PreparingRequest,
+  WaitingForProvider,
+  RetryingProvider,
+  ReadingResponse,
+}
+
 /// Includes an optional project summary and requests findings in the interface language.
 #[allow(clippy::too_many_arguments)]
 pub fn analyze_project_with_ai(
@@ -207,7 +216,9 @@ pub fn analyze_project_with_ai(
   playbook: &Playbook,
   guidelines: &Guidelines,
   context: Option<(&str, Option<&str>)>,
+  mut on_stage: impl FnMut(AiReviewStage),
 ) -> Result<(AiReview, Usage), AiReviewError> {
+  on_stage(AiReviewStage::PreparingRequest);
   let mut user = user_prompt(snapshot, privacy, local, playbook, guidelines);
   if let Some((language, project)) = context {
     if let Some(project) = project {
@@ -215,7 +226,9 @@ pub fn analyze_project_with_ai(
     }
     user.push_str(&format!("\nWrite the summary, titles, explanations and fixes in {language}. Keep the JSON keys and enum values in English."));
   }
-  let done =
-    client.complete_with_service_retry(&Request { provider, api_key, model, system: SYSTEM_PROMPT, user: &user }).map_err(AiReviewError::Provider)?;
+  on_stage(AiReviewStage::WaitingForProvider);
+  let request = Request { provider, api_key, model, system: SYSTEM_PROMPT, user: &user };
+  let done = client.complete_with_service_retry(&request, || on_stage(AiReviewStage::RetryingProvider)).map_err(AiReviewError::Provider)?;
+  on_stage(AiReviewStage::ReadingResponse);
   parse_ai_answer(&done.text).map(|review| (review, done.usage)).map_err(AiReviewError::InvalidAnswer)
 }

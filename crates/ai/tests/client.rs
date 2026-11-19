@@ -153,7 +153,9 @@ fn a_temporary_provider_error_retries_the_same_analysis_request_once() {
     ("200 OK", r#"{"choices":[{"message":{"content":"{}"}}]}"#),
   ]);
   let client = Client::with_base_urls(&url, &url);
-  let completion = client.complete_with_service_retry(&request(Provider::OpenAi, "sk-test")).unwrap();
+  let mut retries = 0;
+  let completion = client.complete_with_service_retry(&request(Provider::OpenAi, "sk-test"), || retries += 1).unwrap();
+  assert_eq!(retries, 1);
   assert_eq!(completion.text, "{}");
   let first = received.recv().unwrap();
   let second = received.recv().unwrap();
