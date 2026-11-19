@@ -7,7 +7,7 @@ use crate::{
 use appforge_ai::Provider;
 use appforge_appstore::{App as StoreApp, AppInfoLocalization, AppSnapshot, Client, Credentials, ReviewDetail, VersionLocalization};
 use appforge_compliance::{analyze_with_ai, check, AiReview, Guidelines, ListingField, Playbook, Report};
-use appforge_storage::{AppleAccount, IconCache, Keychain, Language, PrivacyDeclaration, SecretKey, SecretStore, Settings};
+use appforge_storage::{AppleAccount, IconCache, Keychain, Language, PrivacyDeclaration, SecretKey, SecretStore, Settings, UsageLedger};
 use gpui_kit::{
   component::{
     input::InputState,
@@ -141,6 +141,8 @@ pub(crate) struct Tasks {
   pub(crate) guidelines: Option<Task<()>>,
   pub(crate) window: Option<Task<()>>,
   pub(crate) icons: Option<Task<()>>,
+  pub(crate) versions: Option<Task<()>>,
+  pub(crate) usage: Option<Task<()>>,
   pub(crate) folder: Option<Task<()>>,
   pub(crate) draft: Option<Task<()>>,
   pub(crate) store_write: Option<Task<()>>,
@@ -161,6 +163,9 @@ pub struct Workspace {
   pub settings: Settings,
   /// The settings file exists but could not be read: nothing is saved over it.
   pub settings_locked: bool,
+  /// What the AI features have used, and whether its file could not be read (then it is never overwritten).
+  pub(crate) usage: UsageLedger,
+  pub(crate) usage_locked: bool,
   pub(crate) secrets: Arc<dyn SecretStore>,
   pub client: Option<Arc<Client>>,
   /// Reading the Keychain at startup.
@@ -168,6 +173,8 @@ pub struct Workspace {
   pub apps: Load<Vec<StoreApp>>,
   /// The icon file of each app, by app id, for the apps whose icon is known.
   pub icons: HashMap<String, PathBuf>,
+  /// The version in front of each app, by app id, for the apps whose version is known.
+  pub versions: HashMap<String, appforge_appstore::Version>,
   pub selected: Option<String>,
   pub(crate) app_data: HashMap<String, AppData>,
   pub(crate) store_write_busy: bool,
@@ -175,6 +182,13 @@ pub struct Workspace {
   pub locale: String,
   pub report: Option<Report>,
   pub ai: AiState,
+  /// The page a jump from another page came from, so the new page can offer a way back. Picking a page in the sidebar clears it.
+  /// The lists of the Distribution page that show all their rows instead of the first few.
+  pub(crate) distribution_expanded: std::collections::HashSet<&'static str>,
+  pub(crate) back_tab: Option<DetailTab>,
+  pub(crate) analysis_tab: crate::analysis::AnalysisTab,
+  /// Findings whose open or closed state was flipped by a click (keys of `finding_row`).
+  pub(crate) toggled_findings: std::collections::HashSet<String>,
   pub playbook: Playbook,
   pub(crate) guidelines: Arc<Guidelines>,
   pub(crate) guidelines_busy: bool,
@@ -188,6 +202,9 @@ pub struct Workspace {
   pub settings_page: SettingsPage,
   /// The main area shows every app as a grid instead of one app.
   pub show_all_apps: bool,
+  /// The filters of the customer reviews page.
+  pub(crate) review_status: crate::customer_reviews::ReviewStatus,
+  pub(crate) review_rating: Option<u64>,
   pub saving: bool,
   pub login: LoginForm,
   /// The language menu shared by the welcome screen, the sign-in guide and Settings. Add a language to `Language::ALL` and it shows up here.
@@ -247,6 +264,10 @@ impl Workspace {
       Err(_) => (Settings::default(), true),
     };
     let playbook = Playbook::load(&data_dir);
+    let (usage, usage_locked) = match UsageLedger::load(&data_dir) {
+      Ok(usage) => (usage, false),
+      Err(_) => (UsageLedger::default(), true),
+    };
     let login = LoginForm {
       step: 0,
       issuer: cx.new(|cx| InputState::new(window, cx).placeholder("00000000-0000-0000-0000-000000000000")),
@@ -295,11 +316,14 @@ impl Workspace {
       data_dir,
       settings,
       settings_locked,
+      usage,
+      usage_locked,
       secrets: Arc::new(Keychain),
       client: None,
       starting: true,
       apps: Load::Idle,
       icons: HashMap::new(),
+      versions: HashMap::new(),
       selected: None,
       app_data: HashMap::new(),
       store_write_busy: false,
@@ -307,6 +331,10 @@ impl Workspace {
       locale: String::new(),
       report: None,
       ai: AiState::Idle,
+      distribution_expanded: Default::default(),
+      back_tab: None,
+      analysis_tab: Default::default(),
+      toggled_findings: Default::default(),
       playbook,
       guidelines: Arc::new(Guidelines::default()),
       guidelines_busy: false,
@@ -319,6 +347,8 @@ impl Workspace {
       show_settings: false,
       settings_page: SettingsPage::General,
       show_all_apps: false,
+      review_status: Default::default(),
+      review_rating: None,
       saving: false,
       login,
       language_select,
@@ -637,6 +667,8 @@ impl Workspace {
     self.apps = Load::Idle;
     self.icons.clear();
     self.tasks.icons = None;
+    self.versions.clear();
+    self.tasks.versions = None;
     self.selected = None;
     self.app_data.clear();
     self.tasks.draft = None;
@@ -663,7 +695,9 @@ impl Workspace {
           match result {
             Ok(apps) => {
               let first = apps.first().map(|app| app.id.clone());
-              this.load_icons(apps.iter().map(|app| app.id.clone()).collect(), window, cx);
+              let ids: Vec<String> = apps.iter().map(|app| app.id.clone()).collect();
+              this.load_icons(ids.clone(), window, cx);
+              this.load_versions(ids, window, cx);
               this.apps = Load::Ready(apps);
               if this.selected.is_none() {
                 if let Some(id) = first {
@@ -681,6 +715,20 @@ impl Workspace {
         .ok();
     }));
     cx.notify();
+  }
+
+  /// Asks App Store Connect for the version in front of each app; the cards show them as they arrive.
+  fn load_versions(&mut self, ids: Vec<String>, window: &mut Window, cx: &mut Context<Self>) {
+    let Some(client) = self.client.clone() else { return };
+    self.tasks.versions = Some(cx.spawn_in(window, async move |this, cx| {
+      let found = cx.background_spawn(async move { client.current_versions(&ids) }).await;
+      this
+        .update(cx, |this, cx| {
+          this.versions.extend(found);
+          cx.notify();
+        })
+        .ok();
+    }));
   }
 
   /// Shows the icons of the apps: first the ones kept on disk, so they appear at once, then the ones that are missing or old,
@@ -730,10 +778,66 @@ impl Workspace {
     }));
   }
 
+  /// Opens a page from a link inside another page, remembering where it came from.
+  pub(crate) fn jump_to(&mut self, tab: DetailTab, window: &mut Window, cx: &mut Context<Self>) {
+    if self.tab != tab {
+      self.back_tab = Some(self.tab);
+      self.tab = tab;
+      self.ensure_app_page(window, cx);
+    }
+    cx.notify();
+  }
+
+  /// Goes back to the page a jump came from.
+  pub(crate) fn go_back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    if let Some(tab) = self.back_tab.take() {
+      self.tab = tab;
+      self.ensure_app_page(window, cx);
+    }
+    cx.notify();
+  }
+
+  /// Counts what an AI request used and keeps the totals on disk.
+  pub(crate) fn record_usage(&mut self, provider: Provider, model: &str, usage: appforge_ai::Usage, window: &mut Window, cx: &mut Context<Self>) {
+    if usage.total() == 0 {
+      return;
+    }
+    self.usage.record(provider, model, usage, now());
+    self.save_usage(window, cx);
+  }
+
+  /// Writes the totals in the background. The whole ledger is written each time, so a newer write replaces an older one.
+  pub(crate) fn save_usage(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    if self.usage_locked {
+      return;
+    }
+    let (ledger, dir) = (self.usage.clone(), self.data_dir.clone());
+    self.tasks.usage = Some(cx.spawn_in(window, async move |this, cx| {
+      let result = cx.background_spawn(async move { ledger.save(&dir) }).await;
+      if let Err(error) = result {
+        this
+          .update_in(cx, |this, window, cx| {
+            Self::warning(window, cx, trf(this.settings.language, "Could not save the AI usage: {}", &[&error.to_string()]))
+          })
+          .ok();
+      }
+    }));
+  }
+
+  /// Clears the AI usage totals.
+  pub(crate) fn reset_usage(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    self.usage.reset();
+    // A file that could not be read is replaced now: the user chose to start again.
+    self.usage_locked = false;
+    self.save_usage(window, cx);
+    cx.notify();
+  }
+
   pub fn select_app(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
     self.show_settings = false;
     self.show_all_apps = false;
     if self.selected.as_ref() != Some(&id) {
+      self.back_tab = None;
       self.selected = Some(id.clone());
       self.locale.clear();
       self.ai = AiState::Idle;
@@ -1008,6 +1112,7 @@ impl Workspace {
     }
     let missing_key = trf(self.settings.language, "Add your {} API key in Settings first.", &[provider.label()]);
     let model = self.settings.ai.model(provider).to_owned();
+    let used = model.clone();
     let declaration = self.privacy_declaration();
     let secrets = self.secrets.clone();
     let playbook = self.playbook.clone();
@@ -1021,13 +1126,15 @@ impl Workspace {
           // The rules are downloaded the first time they are needed.
           let playbook = if playbook.is_empty() { Playbook::refresh(&data_dir).unwrap_or(playbook) } else { playbook };
           let client = appforge_ai::Client::default();
-          analyze_with_ai(&client, provider, &key, &model, &snapshot, &declaration, &report, &playbook, &guidelines).map(|review| (review, playbook))
+          analyze_with_ai(&client, provider, &key, &model, &snapshot, &declaration, &report, &playbook, &guidelines)
+            .map(|(review, usage)| (review, playbook, usage))
         })
         .await;
       this
         .update_in(cx, |this, window, cx| {
           match result {
-            Ok((review, playbook)) => {
+            Ok((review, playbook, usage)) => {
+              this.record_usage(provider, &used, usage, window, cx);
               this.playbook = playbook;
               this.ai = AiState::Done(review);
             }

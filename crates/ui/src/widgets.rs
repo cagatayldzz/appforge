@@ -3,19 +3,20 @@
 use std::path::PathBuf;
 
 use crate::{
-  i18n::{tr, trf},
+  i18n::tr,
   theme::{avatar_color, colors, Colors, FONT_SIZE, FONT_SIZE_SM},
 };
-use appforge_compliance::{Finding, Severity};
+use appforge_compliance::Severity;
 use appforge_storage::Language;
 use gpui_kit::{
   component::{
+    button::{Button, ButtonVariants as _},
     h_flex,
     input::{Input, InputState, Textarea, TextareaState},
     label::Label,
     separator::Separator,
     tooltip::Tooltip,
-    v_flex, ActiveTheme, Icon, IconName,
+    v_flex, ActiveTheme, Disableable as _, Icon, IconName, Sizable as _,
   },
   prelude::FluentBuilder as _,
   *,
@@ -43,6 +44,42 @@ fn labelled(label: SharedString, counter: Option<impl IntoElement>, input: impl 
 pub fn text_field(label: impl Into<SharedString>, input: &Entity<InputState>, limit: Option<usize>, cx: &App) -> impl IntoElement {
   let length = input.read(cx).value().chars().count();
   labelled(label.into(), counter(length, limit, cx), Input::new(input))
+}
+
+/// The web address to open for what was typed in a URL field: `https://` is assumed when there is no scheme, and only
+/// `http` and `https` addresses open. `None` for an empty or unusable value.
+fn openable_url(value: &str) -> Option<String> {
+  let value = value.trim();
+  if value.is_empty() || value.contains(char::is_whitespace) {
+    return None;
+  }
+  let lower = value.to_lowercase();
+  if lower.starts_with("http://") || lower.starts_with("https://") {
+    Some(value.to_owned())
+  } else if value.contains("://") || !value.contains('.') {
+    None
+  } else {
+    Some(format!("https://{value}"))
+  }
+}
+
+/// A one-line field for a web address, with a button inside it that opens the address in the browser.
+pub fn url_field(id: &'static str, label: impl Into<SharedString>, input: &Entity<InputState>, language: Language, cx: &App) -> impl IntoElement {
+  let value = input.read(cx).value().to_string();
+  let url = openable_url(&value);
+  let length = value.chars().count();
+  let open = Button::new(id)
+    .icon(Icon::new(IconName::ExternalLink))
+    .ghost()
+    .xsmall()
+    .disabled(url.is_none())
+    .tooltip(tr(language, "Open in browser"))
+    .on_click(move |_, _, cx| {
+      if let Some(url) = &url {
+        cx.open_url(url);
+      }
+    });
+  labelled(label.into(), counter(length, None, cx), Input::new(input).suffix(open))
 }
 
 /// A multi-line field.
@@ -92,6 +129,32 @@ pub fn section(title: impl Into<SharedString>, body: impl IntoElement) -> Div {
     .child(div().text_size(FONT_SIZE).font_weight(FontWeight::SEMIBOLD).child(title.into()))
     .child(Separator::horizontal())
     .child(div().w_full().pt_1().child(body))
+}
+
+/// A bordered group: a title with an optional hint on the left and an optional action on the right, then the body.
+pub fn card(title: impl Into<SharedString>, hint: Option<SharedString>, action: Option<AnyElement>, body: impl IntoElement, c: &Colors) -> Div {
+  v_flex()
+    .w_full()
+    .gap_2()
+    .p_4()
+    .rounded_lg()
+    .border_1()
+    .border_color(c.border)
+    .child(
+      h_flex()
+        .w_full()
+        .gap_3()
+        .items_center()
+        .child(
+          v_flex()
+            .flex_1()
+            .min_w_0()
+            .child(div().font_weight(FontWeight::SEMIBOLD).child(title.into()))
+            .children(hint.map(|hint| div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(hint))),
+        )
+        .children(action),
+    )
+    .child(body)
 }
 
 /// Two fields side by side.
@@ -225,32 +288,4 @@ pub fn severity_badge(severity: Severity, language: Language, cx: &App) -> Div {
     .text_size(FONT_SIZE_SM)
     .font_weight(FontWeight::SEMIBOLD)
     .child(tr(language, severity.label()))
-}
-
-/// One finding: severity, title, guideline, what is wrong and how to fix it. `action` is an optional button, for example "Fix".
-pub fn finding_card(finding: &Finding, action: Option<AnyElement>, language: Language, cx: &App) -> impl IntoElement {
-  let c = colors(cx);
-  let mut heading = h_flex()
-    .flex_1()
-    .min_w_0()
-    .flex_wrap()
-    .gap_x_2()
-    .gap_y_1()
-    .items_center()
-    .child(severity_badge(finding.severity, language, cx))
-    .child(div().font_weight(FontWeight::SEMIBOLD).child(finding.title.clone()));
-  if !finding.guideline.is_empty() {
-    heading = heading.child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(language, "Guideline {}", &[&finding.guideline])));
-  }
-  v_flex()
-    .w_full()
-    .gap_1()
-    .py_3()
-    .border_b_1()
-    .border_color(c.border)
-    .child(
-      h_flex().w_full().justify_between().items_start().gap_2().child(heading).children(action.map(|action| div().flex_shrink_0().child(action))),
-    )
-    .child(div().text_color(c.text_secondary).child(finding.detail.clone()))
-    .child(div().child(trf(language, "Fix: {}", &[&finding.fix])))
 }

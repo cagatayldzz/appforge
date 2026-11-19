@@ -1,6 +1,6 @@
 use crate::Guidelines;
 use crate::{Category, Finding, Playbook, Report, Severity};
-use appforge_ai::{Client, Provider, Request};
+use appforge_ai::{Client, Provider, Request, Usage};
 use appforge_appstore::AppSnapshot;
 use appforge_storage::PrivacyDeclaration;
 use serde::Deserialize;
@@ -168,8 +168,9 @@ pub fn analyze_with_ai(
   local: &Report,
   playbook: &Playbook,
   guidelines: &Guidelines,
-) -> Result<AiReview, String> {
+) -> Result<(AiReview, Usage), String> {
   let user = user_prompt(snapshot, privacy, local, playbook, guidelines);
-  let answer = client.complete(&Request { provider, api_key, model, system: SYSTEM_PROMPT, user: &user }).map_err(|error| error.to_string())?;
-  parse_ai_answer(&answer)
+  let done =
+    client.complete_with_usage(&Request { provider, api_key, model, system: SYSTEM_PROMPT, user: &user }).map_err(|error| error.to_string())?;
+  parse_ai_answer(&done.text).map(|review| (review, done.usage))
 }

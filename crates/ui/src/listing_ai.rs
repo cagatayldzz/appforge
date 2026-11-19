@@ -120,6 +120,7 @@ impl Workspace {
           this.drafting = None;
           match result {
             Ok((draft, usage)) => {
+              this.record_usage(provider, &used, usage, window, cx);
               let same_session =
                 this.client.as_ref().zip(session.as_ref()).is_some_and(|(current, original)| std::sync::Arc::ptr_eq(current, original));
               if !same_session

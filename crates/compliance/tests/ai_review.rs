@@ -96,7 +96,7 @@ fn the_analysis_sends_the_playbook_as_data_and_returns_findings() {
   let (url, received) = serve_once(body);
   let playbook = Playbook { documents: vec![("APPLE.md".into(), "RULE: demo accounts must work".into())], fetched_at: Some(1) };
   let client = Client::with_base_urls("http://unused.invalid", &url);
-  let review = analyze_with_ai(
+  let (review, _usage) = analyze_with_ai(
     &client,
     Provider::Anthropic,
     "key",

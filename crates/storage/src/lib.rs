@@ -5,8 +5,10 @@ mod icons;
 mod paths;
 mod secrets;
 mod settings;
+mod usage;
 
 pub use icons::IconCache;
 pub use paths::data_dir;
 pub use secrets::{Keychain, MemorySecrets, SecretError, SecretKey, SecretStore};
 pub use settings::{AiSettings, AppleAccount, Language, PrivacyDeclaration, Settings, WindowMode, WindowState};
+pub use usage::{ModelUsage, UsageLedger, UsageTotals, USAGE_FILE};

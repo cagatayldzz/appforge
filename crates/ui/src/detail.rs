@@ -1,7 +1,7 @@
 use crate::{
-  i18n::tr,
+  i18n::{tr, trf},
   theme::colors,
-  widgets::{area_field, area_field_with_action, centered, pair, section, text_field, text_field_with_action},
+  widgets::{area_field, area_field_with_action, centered, pair, section, text_field, text_field_with_action, url_field},
   workspace::{locales, DetailTab, Load, Workspace},
 };
 use appforge_appstore::App;
@@ -82,7 +82,25 @@ impl Workspace {
       }
     };
     // The pages are listed in the sidebar, so the page says which one it is; it scrolls under that heading.
-    let heading = div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, self.tab.label()));
+    let title = div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, self.tab.label()));
+    // After a jump from another page, a way back to it comes first.
+    let heading = match self.back_tab {
+      Some(origin) => h_flex()
+        .gap_3()
+        .items_center()
+        .child(
+          Button::new("back-to-page")
+            .icon(Icon::new(IconName::ArrowLeft))
+            .label(tr(l, origin.label()))
+            .outline()
+            .small()
+            .tooltip(trf(l, "Back to {}", &[&tr(l, origin.label())]))
+            .on_click(cx.listener(|this, _, window, cx| this.go_back(window, cx))),
+        )
+        .child(title)
+        .into_any_element(),
+      None => title.into_any_element(),
+    };
     v_flex().flex_1().min_h_0().overflow_hidden().child(
       v_flex().id("detail-scroll").size_full().overflow_y_scrollbar().child(centered(v_flex().pt_6().pb_6().gap_6().child(heading).child(body))),
     )
@@ -195,7 +213,10 @@ impl Workspace {
         ))
         .child(section(
           tr(l, "Links"),
-          pair(text_field(tr(l, "Support URL"), &forms.support_url, None, cx), text_field(tr(l, "Marketing URL"), &forms.marketing_url, None, cx)),
+          pair(
+            url_field("open-support-url", tr(l, "Support URL"), &forms.support_url, l, cx),
+            url_field("open-marketing-url", tr(l, "Marketing URL"), &forms.marketing_url, l, cx),
+          ),
         ))
         .child(section(
           tr(l, "What's new in this version"),
@@ -285,7 +306,7 @@ impl Workspace {
           .outline()
           .on_click(move |_, _, cx| cx.open_url(&url)),
       ))
-      .child(section(tr(l, "Privacy policy URL"), text_field(tr(l, "Privacy policy URL"), &forms.privacy_url, None, cx)))
+      .child(section(tr(l, "Privacy policy URL"), url_field("open-privacy-url", tr(l, "Privacy policy URL"), &forms.privacy_url, l, cx)))
       .child(section(
         tr(l, "Your answers"),
         v_flex()

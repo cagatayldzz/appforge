@@ -19,7 +19,7 @@ apps/appforge → app → ui → compliance → appstore
 | `ai` | One call, `complete` (and `complete_with_usage`, which also returns the tokens used), for OpenAI (chat completions) and Claude (messages) with an API key. It lists the low-cost models Settings offers (`Provider::models`) with their prices per million tokens and prices a request (`ModelInfo::cost`); models that think by default are asked to think as little as possible. |
 | `compliance` | Built-in rules over an app snapshot, the Apple guidelines catalog, the playbook download and cache, the AI analysis (prompt, JSON answer) and the AI-written store listing (`draft_listing_field`: prompt, answer cut to Apple's limits). |
 | `project` | Reads a short description of an app's source folder for the AI: the folder shape, README, manifests and the texts the app shows. Never reads secrets (`.env`, keys, signing files) or follows links; at most about 10,000 tokens. |
-| `storage` | The data directory: `settings.json` (language, account ids, AI choices, per-app privacy answers and code folders, the window as it was left), `icons/<app id>.png` (`IconCache`) and the Keychain (`SecretStore`). |
+| `storage` | The data directory: `settings.json` (language, account ids, AI choices, per-app privacy answers and code folders, the window as it was left), `ai-usage.json` (`UsageLedger`), `icons/<app id>.png` (`IconCache`) and the Keychain (`SecretStore`). |
 | `ui` | The window: sign-in, the bars and pages of the signed-in window, Analysis and Settings. |
 | `app` | Startup: the window (opened the way it was left), key bindings and the menu. |
 
@@ -76,6 +76,7 @@ The interface language (English or Türkçe) is `Settings.language`. Source text
 | Path | Holds |
 | --- | --- |
 | `settings.json` | Language, whether the welcome screen was done, Issuer ID and Key ID, the AI provider and models, privacy answers per app, code folders per app, the window. A file that cannot be read is never overwritten. |
+| `ai-usage.json` | What the AI features used: requests, tokens and estimated cost per model since the last reset (`UsageLedger`). A file that cannot be read is never overwritten. |
 | `icons/<app id>.png` | App icons, refreshed when a day old. |
 | `apple-guidelines.json` | The last validated Apple guidelines catalog, check time and latest per-rule changes. |
 | `playbook/` | The cached compliance playbook, refreshed weekly. |

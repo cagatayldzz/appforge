@@ -1,8 +1,8 @@
 use crate::{
   forms::read_input,
   i18n::{tr, trf},
-  theme::colors,
-  widgets::{section, state_badge},
+  theme::{colors, Colors, FONT_SIZE_SM},
+  widgets::{card, state_badge},
   workspace::{Load, Workspace},
 };
 use appforge_appstore::{Client, Error};
@@ -13,10 +13,20 @@ use gpui_kit::{
     h_flex,
     input::{Input, InputState},
     spinner::Spinner,
-    v_flex, Disableable as _, Sizable as _, WindowExt as _,
+    tag::Tag,
+    v_flex, Disableable as _, Selectable as _, Sizable as _, WindowExt as _,
   },
+  prelude::FluentBuilder as _,
   *,
 };
+
+/// How many builds and submissions show before "Show all".
+const SHORT_LIST: usize = 4;
+
+/// "2026-11-08T10:53:35.538Z" as "2026-11-08 10:53".
+fn short_date(value: &str) -> String {
+  value.replace('T', " ").chars().take(16).collect()
+}
 
 #[derive(Clone)]
 pub(crate) enum Change {
@@ -229,6 +239,32 @@ impl Workspace {
     });
   }
 
+  /// One row of a list: content on the left, an action on the right.
+  fn list_line(id: impl Into<ElementId>, highlighted: bool, c: &Colors) -> Stateful<Div> {
+    h_flex().id(id).w_full().gap_3().px_3().py_2().items_center().rounded_md().when(highlighted, |row| row.bg(c.selected))
+  }
+
+  /// "Show all (12)" / "Show fewer", for a list that is cut short.
+  fn expand_toggle(&self, key: &'static str, total: usize, cx: &mut Context<Self>) -> Option<Button> {
+    if total <= SHORT_LIST {
+      return None;
+    }
+    let l = self.settings.language;
+    let open = self.distribution_expanded.contains(key);
+    Some(
+      Button::new(SharedString::from(format!("expand-{key}")))
+        .label(if open { tr(l, "Show fewer") } else { trf(l, "Show all ({})", &[&total.to_string()]) })
+        .ghost()
+        .small()
+        .on_click(cx.listener(move |this, _, _, cx| {
+          if !this.distribution_expanded.remove(key) {
+            this.distribution_expanded.insert(key);
+          }
+          cx.notify();
+        })),
+    )
+  }
+
   pub(crate) fn render_distribution(&self, cx: &mut Context<Self>) -> AnyElement {
     let l = self.settings.language;
     let data = match self.active_data().map(|data| &data.distribution) {
@@ -238,84 +274,129 @@ impl Workspace {
     };
     let Some(snapshot) = self.ready_snapshot() else { return div().into_any_element() };
     let version = snapshot.version.as_ref();
-    let palette = colors(cx);
-    let mut history = v_flex().gap_2();
-    if version.is_none_or(|version| {
+    let c = colors(cx);
+    let can_create = version.is_none_or(|version| {
       matches!(version.state.as_str(), "READY_FOR_SALE" | "READY_FOR_DISTRIBUTION" | "REMOVED_FROM_SALE" | "DEVELOPER_REMOVED_FROM_SALE")
-    }) {
-      history = history.child(self.distribution_button("create-ios-version", Change::Create(snapshot.app.id.clone()), cx));
-    }
+    });
+
+    // Versions ------------------------------------------------------------------------------------------------
+    let mut versions = v_flex().gap_0p5();
     for item in &data.versions {
-      history = history.child(h_flex().gap_2().child(SharedString::from(item.number.clone())).child(state_badge(&item.state, &palette)));
+      let current = version.is_some_and(|version| version.id == item.id);
+      versions = versions.child(
+        Self::list_line(SharedString::from(format!("version-{}", item.id)), current, &c)
+          .child(div().w_16().font_weight(FontWeight::SEMIBOLD).child(SharedString::from(item.number.clone())))
+          .child(state_badge(&item.state, &c))
+          .child(div().flex_1())
+          .children(current.then(|| Tag::secondary().small().child(tr(l, "Open version")))),
+      );
     }
-    let page = v_flex().gap_6().child(section(tr(l, "iOS versions"), history));
-    let Some(version) = version else { return page.into_any_element() };
+    let versions = card(
+      tr(l, "iOS versions"),
+      None,
+      can_create.then(|| self.distribution_button("create-ios-version", Change::Create(snapshot.app.id.clone()), cx).primary().into_any_element()),
+      versions,
+      &c,
+    );
+    let Some(version) = version else {
+      return v_flex().gap_4().child(versions).into_any_element();
+    };
     let editable = version.is_editable();
     let id = &version.id;
-    let mut builds = v_flex().gap_2();
-    if data.builds.is_empty() {
-      builds = builds.child(tr(l, "No matching builds."));
+
+    // Builds --------------------------------------------------------------------------------------------------
+    let mut ordered: Vec<&appforge_appstore::StoreBuild> = data.builds.iter().collect();
+    // The chosen build first, so it is never hidden by the short list.
+    ordered.sort_by_key(|build| data.selected_build.as_ref() != Some(&build.id));
+    let expanded = self.distribution_expanded.contains("builds");
+    let shown = if expanded { ordered.len() } else { SHORT_LIST };
+    let mut builds = v_flex().gap_0p5();
+    if ordered.is_empty() {
+      builds = builds.child(div().px_3().py_2().text_color(c.text_secondary).child(tr(l, "No matching builds.")));
     }
-    for build in &data.builds {
+    for build in ordered.iter().take(shown) {
       let selected = data.selected_build.as_ref() == Some(&build.id);
+      let pickable = editable && !selected && !build.expired && !build.internal_only && build.state == "VALID";
       builds = builds.child(
-        h_flex()
-          .gap_2()
-          .child(SharedString::from(build.number.clone()))
-          .child(state_badge(&build.state, &palette))
-          .children(selected.then(|| tr(l, "Selected build")))
+        Self::list_line(SharedString::from(format!("build-{}", build.id)), selected, &c)
+          .child(div().w_16().font_weight(FontWeight::SEMIBOLD).child(SharedString::from(build.number.clone())))
+          .child(state_badge(&build.state, &c))
+          .child(div().flex_1())
+          .children(selected.then(|| Tag::success().small().child(tr(l, "Selected build"))))
           .children(
-            (editable && !selected && !build.expired && !build.internal_only && build.state == "VALID")
+            pickable
               .then(|| self.distribution_button(SharedString::from(format!("select-{}", build.id)), Change::Build(id.clone(), build.id.clone()), cx)),
           ),
       );
     }
-    let mut review = v_flex().gap_2();
+    builds = builds.children(self.expand_toggle("builds", ordered.len(), cx));
+    let builds = card(
+      tr(l, "Builds"),
+      Some(if data.selected_build.is_some() { tr(l, "Pick the build that goes with this version.") } else { tr(l, "No build is selected yet.") }),
+      None,
+      builds,
+      &c,
+    );
+
+    // App Review ----------------------------------------------------------------------------------------------
+    let mut submissions: Vec<&appforge_appstore::ReviewSubmission> = data.submissions.iter().filter(|item| item.includes_version).collect();
+    submissions.sort_by(|a, b| b.date.cmp(&a.date));
     let mut draft = None;
     for submission in &data.submissions {
       if submission.state == "READY_FOR_REVIEW" && !submission.includes_version && submission.item_count == 0 {
         draft = Some(submission.id.clone());
       }
-      if submission.includes_version {
-        let operation = match submission.state.as_str() {
-          "READY_FOR_REVIEW" => Some(Change::Submit(submission.id.clone(), submission.item_count)),
-          "WAITING_FOR_REVIEW" | "IN_REVIEW" | "UNRESOLVED_ISSUES" => Some(Change::Cancel(submission.id.clone(), submission.item_count)),
-          _ => None,
-        };
-        review = review.child(
-          h_flex()
-            .gap_2()
-            .child(state_badge(&submission.state, &palette))
-            .child(SharedString::from(submission.date.clone()))
-            .children(operation.map(|change| self.distribution_button(SharedString::from(format!("review-{}", submission.id)), change, cx))),
-        );
-      }
     }
-    if editable && data.selected_build.is_some() && !data.submissions.iter().any(|item| item.includes_version && item.state != "COMPLETE") {
-      review = review.child(self.distribution_button("review-draft", Change::Draft(snapshot.app.id.clone(), id.clone(), draft), cx));
-    }
-    let mut release = v_flex().gap_2();
-    if let Some(current) = data.versions.iter().find(|item| item.id == *id) {
-      let mode = match current.release_type.as_str() {
-        "MANUAL" => Some("Manual release"),
-        "AFTER_APPROVAL" => Some("Release after approval"),
-        "SCHEDULED" => Some("Scheduled release"),
+    let expanded = self.distribution_expanded.contains("reviews");
+    let shown = if expanded { submissions.len() } else { SHORT_LIST };
+    let mut review = v_flex().gap_0p5();
+    for submission in submissions.iter().take(shown) {
+      let operation = match submission.state.as_str() {
+        "READY_FOR_REVIEW" => Some(Change::Submit(submission.id.clone(), submission.item_count)),
+        "WAITING_FOR_REVIEW" | "IN_REVIEW" | "UNRESOLVED_ISSUES" => Some(Change::Cancel(submission.id.clone(), submission.item_count)),
         _ => None,
       };
-      release = release.children(mode.map(|mode| tr(l, mode))).child(SharedString::from(current.release_date.clone()));
-    }
-    if editable {
-      release = release.child(
-        h_flex()
-          .gap_2()
-          .flex_wrap()
-          .child(self.distribution_button("release-manual", Change::ReleaseType(id.clone(), false), cx))
-          .child(self.distribution_button("release-automatic", Change::ReleaseType(id.clone(), true), cx))
-          .child(self.distribution_button("release-schedule", Change::Schedule(id.clone()), cx)),
+      review = review.child(
+        Self::list_line(SharedString::from(format!("submission-{}", submission.id)), false, &c)
+          .child(state_badge(&submission.state, &c))
+          .child(div().flex_1().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(short_date(&submission.date)))
+          .children(operation.map(|change| self.distribution_button(SharedString::from(format!("review-{}", submission.id)), change, cx))),
       );
     }
-    if version.state == "PENDING_DEVELOPER_RELEASE" {
-      release = release.child(self.distribution_button("release-now", Change::Release(id.clone()), cx));
+    let active = data.submissions.iter().any(|item| item.includes_version && item.state != "COMPLETE");
+    let can_draft = editable && data.selected_build.is_some() && !active;
+    if submissions.is_empty() && !can_draft {
+      review = review.child(div().px_3().py_2().text_color(c.text_secondary).child(tr(l, "Nothing was submitted for this version yet.")));
+    }
+    review = review.children(self.expand_toggle("reviews", submissions.len(), cx));
+    let review = card(
+      tr(l, "App Review"),
+      None,
+      can_draft.then(|| {
+        self.distribution_button("review-draft", Change::Draft(snapshot.app.id.clone(), id.clone(), draft), cx).primary().into_any_element()
+      }),
+      review,
+      &c,
+    );
+
+    // Release -------------------------------------------------------------------------------------------------
+    let current = data.versions.iter().find(|item| item.id == *id);
+    let mode = current.map(|item| item.release_type.as_str()).unwrap_or_default();
+    let mut release = v_flex().gap_3();
+    let choices = [
+      ("release-manual", Change::ReleaseType(id.clone(), false), mode == "MANUAL"),
+      ("release-automatic", Change::ReleaseType(id.clone(), true), mode == "AFTER_APPROVAL"),
+      ("release-schedule", Change::Schedule(id.clone()), mode == "SCHEDULED"),
+    ];
+    release = release.child(h_flex().gap_1().flex_wrap().children(choices.into_iter().map(|(button, change, chosen)| {
+      self.distribution_button(button, change, cx).selected(chosen).disabled(!editable || self.store_write_busy || self.saving)
+    })));
+    if let Some(item) = current.filter(|item| !item.release_date.is_empty()) {
+      release = release.child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(
+        l,
+        "Scheduled for {}",
+        &[&short_date(&item.release_date)],
+      )));
     }
     if let Some((phase, state)) = &data.phased_release {
       let change = match state.as_str() {
@@ -325,18 +406,45 @@ impl Workspace {
       };
       release = release.child(
         h_flex()
-          .gap_2()
-          .child(tr(l, "Phased release"))
-          .child(state_badge(state, &palette))
+          .gap_3()
+          .items_center()
+          .child(div().font_weight(FontWeight::MEDIUM).child(tr(l, "Phased release")))
+          .child(state_badge(state, &c))
           .children(change.map(|change| self.distribution_button("change-phased", change, cx))),
       );
     } else if editable && data.versions.iter().any(|item| matches!(item.state.as_str(), "READY_FOR_DISTRIBUTION" | "READY_FOR_SALE")) {
-      release = release.child(self.distribution_button("enable-phased", Change::EnablePhased(id.clone()), cx));
+      release = release.child(h_flex().child(self.distribution_button("enable-phased", Change::EnablePhased(id.clone()), cx)));
     }
-    page
-      .child(section(tr(l, "Builds"), builds))
-      .child(section(tr(l, "App Review"), review))
-      .child(section(tr(l, "Release"), release))
-      .into_any_element()
+    let release_now = (version.state == "PENDING_DEVELOPER_RELEASE")
+      .then(|| self.distribution_button("release-now", Change::Release(id.clone()), cx).primary().into_any_element());
+    let release = card(tr(l, "Release"), Some(tr(l, "How this version goes live after approval.")), release_now, release, &c);
+
+    // The next step, in one line at the top ------------------------------------------------------------------
+    let (step, step_color): (SharedString, Hsla) = if version.state == "PENDING_DEVELOPER_RELEASE" {
+      (tr(l, "Approved. Release it when you are ready."), c.success)
+    } else if matches!(version.state.as_str(), "WAITING_FOR_REVIEW" | "IN_REVIEW") {
+      (tr(l, "In review at Apple. Nothing to do until it finishes."), c.info)
+    } else if editable && data.selected_build.is_none() {
+      (tr(l, "Next: select a build."), c.warning)
+    } else if editable && !active {
+      (tr(l, "Next: add this version to a review draft, then submit it."), c.warning)
+    } else if editable {
+      (tr(l, "Next: submit the draft for review."), c.warning)
+    } else {
+      (tr(l, "This version is live. Create a new version for the next update."), c.success)
+    };
+    let banner = h_flex()
+      .w_full()
+      .gap_3()
+      .px_4()
+      .py_3()
+      .items_center()
+      .rounded_lg()
+      .bg(step_color.opacity(0.12))
+      .child(div().size_2().rounded_full().bg(step_color))
+      .child(div().flex_1().font_weight(FontWeight::MEDIUM).child(step))
+      .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "Version {}", &[&version.version_string])))
+      .child(state_badge(&version.state, &c));
+    v_flex().gap_4().child(banner).child(builds).child(review).child(release).child(versions).into_any_element()
   }
 }

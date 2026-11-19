@@ -9,13 +9,8 @@ use crate::{
 };
 use appforge_compliance::Verdict;
 use gpui_kit::{
-  component::{
-    button::{Button, ButtonVariants as _},
-    h_flex,
-    scroll::ScrollableElement as _,
-    tooltip::Tooltip,
-    v_flex, Icon, IconName, Sizable as _,
-  },
+  component::{button::Button, h_flex, scroll::ScrollableElement as _, tooltip::Tooltip, v_flex, Icon, IconName, Sizable as _},
+  prelude::FluentBuilder as _,
   *,
 };
 
@@ -121,8 +116,9 @@ impl Workspace {
     let l = self.settings.language;
     Button::new("reload-apps")
       .icon(Icon::new(IconName::RefreshCw))
-      .ghost()
-      .xsmall()
+      .outline()
+      .small()
+      .loading(matches!(self.apps, Load::Loading))
       .tooltip(tr(l, "Reload apps"))
       .on_click(cx.listener(|this, _, window, cx| this.load_apps(window, cx)))
   }
@@ -131,48 +127,56 @@ impl Workspace {
   fn app_identity(&self, app: &appforge_appstore::App, cx: &mut Context<Self>) -> AnyElement {
     let c = colors(cx);
     let l = self.settings.language;
-    // Where this version stands: its number, then its state at Apple, one under the other.
-    let mut details = v_flex().gap_1().text_size(FONT_SIZE_SM).text_color(c.text_secondary);
-    if let Some(version) = self.ready_snapshot().and_then(|snapshot| snapshot.version.as_ref()) {
-      details = details.child(trf(l, "Version {}", &[&version.version_string])).child(state_badge(&version.state, &c));
-    }
-    // The review score, in the color of the verdict; it opens the Analysis page.
+    let version = self.ready_snapshot().and_then(|snapshot| snapshot.version.as_ref());
+    // The review score, in the color of the verdict.
     let score = self.report.as_ref().map(|report| {
       let color = match report.verdict() {
         Verdict::NotReady => c.danger,
         Verdict::NeedsAttention => c.warning,
         Verdict::LooksReady => c.success,
       };
-      let tooltip = trf(l, "Open {}", &[&tr(l, DetailTab::Analysis.label())]);
-      let open = self.tab == DetailTab::Analysis;
       v_flex()
-        .id("score-badge")
         .flex_none()
         .items_center()
-        .px_3()
-        .py_1()
+        .justify_center()
+        .size_12()
         .rounded_lg()
-        .cursor_pointer()
-        .bg(color.opacity(if open { 0.28 } else { 0.14 }))
-        .hover(move |badge| badge.bg(color.opacity(0.28)))
-        .child(div().text_color(color).text_size(rems(1.5)).font_weight(FontWeight::BOLD).child(report.score().to_string()))
-        .child(
-          h_flex()
-            .items_center()
-            .gap_1()
-            .child(Icon::new(IconName::Check).xsmall().text_color(color))
-            .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "Score"))),
-        )
-        .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
-        .on_click(cx.listener(|this, _, _, cx| {
-          this.tab = DetailTab::Analysis;
-          cx.notify();
-        }))
+        .bg(color.opacity(0.14))
+        .child(div().text_color(color).text_size(rems(1.25)).font_weight(FontWeight::BOLD).child(report.score().to_string()))
+        .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "Score")))
     });
+    // One tile: the score, the version and where it stands at Apple. It opens the Analysis page.
+    let tooltip = trf(l, "Open {}", &[&tr(l, DetailTab::Analysis.label())]);
+    let open = self.tab == DetailTab::Analysis;
+    let status = h_flex()
+      .id("score-badge")
+      .w_full()
+      .gap_3()
+      .p_2()
+      .items_center()
+      .rounded_lg()
+      .border_1()
+      .border_color(if open { c.control_border } else { c.border })
+      .cursor_pointer()
+      .when(open, |tile| tile.bg(c.selected))
+      .when(!open, |tile| tile.hover(move |tile| tile.bg(c.hover)))
+      .children(score)
+      .child(v_flex().flex_1().min_w_0().gap_1().text_size(FONT_SIZE_SM).children(version.map(|version| {
+        v_flex()
+          .gap_1()
+          .child(div().text_size(FONT_SIZE).font_weight(FontWeight::SEMIBOLD).text_color(c.text).child(trf(
+            l,
+            "Version {}",
+            &[&version.version_string],
+          )))
+          .child(div().text_color(c.text_secondary).child(state_badge(&version.state, &c)))
+      })))
+      .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
+      .on_click(cx.listener(|this, _, window, cx| this.jump_to(DetailTab::Analysis, window, cx)));
     v_flex()
       .w_full()
       .flex_none()
-      .gap_4()
+      .gap_3()
       .p_4()
       .border_b_1()
       .border_color(c.border)
@@ -185,7 +189,7 @@ impl Workspace {
             .child(div().truncate().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(app.bundle_id.clone())),
         ),
       )
-      .child(h_flex().w_full().items_center().justify_between().gap_3().child(details).children(score))
+      .child(status)
       .into_any_element()
   }
 
@@ -201,6 +205,7 @@ impl Workspace {
           .child(tr(l, tab.label()))
           .on_click(cx.listener(move |this, _, window, cx| {
             this.tab = tab;
+            this.back_tab = None;
             this.ensure_app_page(window, cx);
             cx.notify();
           }))

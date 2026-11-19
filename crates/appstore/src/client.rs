@@ -24,6 +24,9 @@ pub struct Client {
   base_url: String,
 }
 
+/// How many apps are asked for their version at the same time.
+const VERSION_BATCH: usize = 6;
+
 impl Client {
   pub fn new(credentials: Credentials) -> Self {
     Self::with_base_url(credentials, DEFAULT_BASE_URL)
@@ -144,6 +147,33 @@ impl Client {
       return Err(Error::Api { status, message: "The icon could not be downloaded".into() });
     }
     response.body_mut().with_config().limit(MAX_ICON_BYTES).read_to_vec().map(Some).map_err(network)
+  }
+
+  /// The version of each app that is in front: the one open for edits, or else the newest. Apps are asked a few at a time,
+  /// and an app whose answer fails is left out, so one failure does not hide the others.
+  pub fn current_versions(&self, app_ids: &[String]) -> Vec<(String, Version)> {
+    let mut found = Vec::new();
+    for chunk in app_ids.chunks(VERSION_BATCH) {
+      thread::scope(|scope| {
+        let handles: Vec<_> = chunk.iter().map(|id| (id, scope.spawn(|| self.current_version(id)))).collect();
+        for (id, handle) in handles {
+          if let Ok(Ok(Some(version))) = handle.join() {
+            found.push((id.clone(), version));
+          }
+        }
+      });
+    }
+    found
+  }
+
+  fn current_version(&self, app_id: &str) -> Result<Option<Version>, Error> {
+    let fields = "fields[appStoreVersions]=versionString,appVersionState,appStoreState";
+    let versions = self.get_all(&format!("/v1/apps/{app_id}/appStoreVersions?filter[platform]=IOS&limit=20&{fields}"))?;
+    Ok(pick_editable(&versions, &["appVersionState", "appStoreState"]).map(|version| Version {
+      id: version["id"].as_str().unwrap_or_default().to_owned(),
+      version_string: version["attributes"]["versionString"].as_str().unwrap_or_default().to_owned(),
+      state: state_of(version, &["appVersionState", "appStoreState"]),
+    }))
   }
 
   /// Reads everything about `app`: App Information, the listing of its current version, screenshots and review details.

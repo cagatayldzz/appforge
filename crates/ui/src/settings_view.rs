@@ -14,7 +14,7 @@ use gpui_kit::{
     scroll::ScrollableElement as _,
     select::Select,
     separator::Separator,
-    v_flex, ActiveTheme, Icon, IconName, Sizable as _,
+    v_flex, ActiveTheme, Disableable as _, Icon, IconName, Sizable as _, WindowExt as _,
   },
   *,
 };
@@ -89,6 +89,107 @@ impl Workspace {
           .child(field(tr(l, "Model"), div().w(px(FIELD_WIDTH)).child(Select::new(model_select)).into_any_element(), Some(price_hint)))
           .child(field(tr(l, "API key"), key_row.into_any_element(), Some(status))),
       )
+  }
+
+  /// What the AI features have used so far, with a button that clears the totals after a confirmation.
+  fn usage_section(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    let c = colors(cx);
+    let l = self.settings.language;
+    let total = self.usage.total();
+    let since: SharedString =
+      if self.usage.since == 0 { tr(l, "Nothing was counted yet.") } else { trf(l, "Counted since {}", &[&date_text(self.usage.since)]) };
+    let tile = |label: SharedString, value: String, detail: Option<String>| {
+      v_flex()
+        .flex_1()
+        .min_w_0()
+        .gap_0p5()
+        .p_3()
+        .rounded_lg()
+        .border_1()
+        .border_color(c.border)
+        .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(label))
+        .child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(value))
+        .children(detail.map(|detail| div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(detail)))
+    };
+    let tiles = h_flex()
+      .w_full()
+      .gap_3()
+      .child(tile(tr(l, "Requests"), total.requests.to_string(), None))
+      .child(tile(
+        tr(l, "Tokens"),
+        tokens_text(total.tokens()),
+        Some(trf(l, "{} in · {} out", &[&tokens_text(total.input_tokens), &tokens_text(total.output_tokens)]).to_string()),
+      ))
+      .child(tile(tr(l, "Estimated cost"), cost_text(total.cost), None));
+    let rows = self.usage.models.iter().map(|entry| {
+      let name = entry.provider.model_info(&entry.model).map_or(entry.model.as_str(), |info| info.label);
+      h_flex()
+        .w_full()
+        .gap_3()
+        .py_2()
+        .border_b_1()
+        .border_color(c.border)
+        .text_size(FONT_SIZE_SM)
+        .child(div().flex_1().min_w_0().truncate().child(format!("{} · {name}", entry.provider.label())))
+        .child(div().text_color(c.text_secondary).child(trf(l, "{} requests", &[&entry.totals.requests.to_string()])))
+        .child(div().w_20().text_right().text_color(c.text_secondary).child(tokens_text(entry.totals.tokens())))
+        .child(div().w_20().text_right().font_weight(FontWeight::MEDIUM).child(cost_text(entry.totals.cost)))
+    });
+    let reset = Button::new("reset-ai-usage")
+      .icon(Icon::new(IconName::Delete))
+      .label(tr(l, "Reset"))
+      .outline()
+      .small()
+      .disabled(total.requests == 0)
+      .on_click(cx.listener(|this, _, window, cx| this.confirm_reset_usage(window, cx)));
+    v_flex()
+      .w_full()
+      .gap_3()
+      .child(
+        h_flex()
+          .w_full()
+          .h_8()
+          .justify_between()
+          .items_center()
+          .child(
+            v_flex()
+              .child(div().font_weight(FontWeight::SEMIBOLD).child(tr(l, "AI usage")))
+              .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(since)),
+          )
+          .child(reset),
+      )
+      .child(Separator::horizontal())
+      .child(tiles)
+      .children(rows)
+      .child(
+        div()
+          .text_size(FONT_SIZE_SM)
+          .text_color(c.text_secondary)
+          .child(tr(l, "Costs are estimates from the list prices of the models when each request was made.")),
+      )
+  }
+
+  /// Asks before the totals are cleared; clearing cannot be undone.
+  fn confirm_reset_usage(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    let l = self.settings.language;
+    let workspace = cx.entity();
+    window.open_dialog(cx, move |dialog, _, _| {
+      let workspace = workspace.clone();
+      dialog
+        .title(tr(l, "Reset AI usage?"))
+        .child(tr(l, "The counted requests, tokens and costs are cleared and counting starts again from zero. This cannot be undone."))
+        .footer(
+          h_flex()
+            .w_full()
+            .gap_2()
+            .justify_end()
+            .child(Button::new("cancel-reset-usage").label(tr(l, "Cancel")).outline().on_click(|_, window, cx| window.close_dialog(cx)))
+            .child(Button::new("confirm-reset-usage").label(tr(l, "Reset")).danger().on_click(move |_, window, cx| {
+              window.close_dialog(cx);
+              workspace.update(cx, |this, cx| this.reset_usage(window, cx));
+            })),
+        )
+    });
   }
 
   /// One row per app: where its source code is, with a button to choose or remove the folder.
@@ -198,6 +299,7 @@ impl Workspace {
         v_flex()
           .gap_8()
           .children(sections)
+          .child(self.usage_section(cx))
           .child(div().text_size(FONT_SIZE_SM).text_color(cx.theme().muted_foreground).child(tr(l, "More providers can be added later.")))
           .into_any_element()
       }
@@ -244,4 +346,37 @@ impl Workspace {
     let body = self.settings_page_body(cx);
     v_flex().id("settings").flex_1().min_h_0().overflow_y_scrollbar().child(centered(v_flex().py_6().gap_4().child(heading).child(body)))
   }
+}
+
+/// 12345 as "12.3K", 2_500_000 as "2.50M".
+fn tokens_text(tokens: u64) -> String {
+  match tokens {
+    0..=999 => tokens.to_string(),
+    1_000..=999_999 => format!("{:.1}K", tokens as f64 / 1_000.),
+    _ => format!("{:.2}M", tokens as f64 / 1_000_000.),
+  }
+}
+
+/// Small amounts keep four decimals so a single request does not show as $0.00.
+fn cost_text(cost: f64) -> String {
+  if cost < 1. {
+    format!("${cost:.4}")
+  } else {
+    format!("${cost:.2}")
+  }
+}
+
+/// A Unix time in seconds as "2026-11-19" (UTC).
+fn date_text(seconds: u64) -> String {
+  // Civil date from days since 1970-01-01 (Howard Hinnant's algorithm).
+  let days = (seconds / 86_400) as i64 + 719_468;
+  let era = days.div_euclid(146_097);
+  let day_of_era = days.rem_euclid(146_097);
+  let year_of_era = (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+  let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+  let month_index = (5 * day_of_year + 2) / 153;
+  let day = day_of_year - (153 * month_index + 2) / 5 + 1;
+  let month = if month_index < 10 { month_index + 3 } else { month_index - 9 };
+  let year = year_of_era + era * 400 + i64::from(month <= 2);
+  format!("{year}-{month:02}-{day:02}")
 }
