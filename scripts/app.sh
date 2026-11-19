@@ -3,7 +3,7 @@
 #   scripts/app.sh --dev                     debug build, then launch dist/AppForge.app
 #   scripts/app.sh [debug|release] --build   build dist/AppForge.app (default: debug)
 #   scripts/app.sh --check                   scripts and their tests, formatting, clippy and tests
-#   scripts/app.sh --update                  update the Rust dependencies in Cargo.lock, then check that everything still builds
+#   scripts/app.sh --update                  upgrade workspace dependency requirements and the lockfile, then run checks
 
 set -euo pipefail
 
@@ -52,22 +52,40 @@ run_check() {
 }
 
 
-# Moves every dependency to the newest version its Cargo.toml allows (only Cargo.lock changes), then builds and runs the
-# tests, so a version that breaks the app is found at once. The old lock file is put back when that fails.
-run_update() {
-  local backup
-  backup="$(mktemp)"
-  cp Cargo.lock "$backup"
+# Keep the manifests and lockfile together if an upgrade or check fails.
+run_update() (
+  cargo upgrade --version >/dev/null 2>&1 || fail 'Cargo Upgrade is required. Install it with: cargo install cargo-edit --locked'
+  files=(Cargo.toml Cargo.lock apps/*/Cargo.toml crates/*/Cargo.toml)
+  backup="$(mktemp -d)"
+  restore=false
+  cleanup_update() {
+    status=$?
+    trap - EXIT
+    if [[ "$restore" == true ]]; then
+      for file in "${files[@]}"; do
+        if ! cp -p "$backup/$file" "$file"; then
+          fail "Could not restore $file. Dependency backups are in $backup."
+        fi
+      done
+      echo "Dependency update failed. The original manifests and lockfile were restored." >&2
+    fi
+    rm -rf "$backup"
+    exit "$status"
+  }
+  trap cleanup_update EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  for file in "${files[@]}"; do
+    mkdir -p "$backup/$(dirname "$file")"
+    cp -p "$file" "$backup/$file"
+  done
+  restore=true
+  cargo upgrade --compatible allow --incompatible allow --pinned ignore
   cargo update
-  if cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace; then
-    rm -f "$backup"
-    echo "Dependencies updated. Review the change with: git diff Cargo.lock"
-  else
-    cp "$backup" Cargo.lock
-    rm -f "$backup"
-    fail "The updated dependencies do not build or pass the tests, so Cargo.lock was put back."
-  fi
-}
+  run_check
+  restore=false
+  echo 'Dependencies updated and verified. Review the manifests and Cargo.lock with git diff.'
+)
 
 # Render icon.svg at every size macOS expects and pack it into AppIcon.icns.
 make_icon() {

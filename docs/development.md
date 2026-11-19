@@ -15,7 +15,7 @@ Requirements: Command Line Tools (not Xcode), Rust 1.92+ (stable) and Bun. After
 | `bun run dev` | debug build, open `dist/AppForge.app` or activate its running instance |
 | `bun run build` | release build → `dist/AppForge.app` |
 | `bun run check` | script syntax and shell tests, `cargo fmt --check`, clippy with warnings as errors, tests (run before finishing a change) |
-| `bun run update` | update the Rust dependencies in `Cargo.lock` to the newest versions `Cargo.toml` allows, then clippy and tests; `Cargo.lock` is put back if they fail |
+| `bun run update` | upgrade dependency requirements and `Cargo.lock`, then run all checks with rollback on failure |
 | `bun run test` | shell tests, then `cargo test --locked --workspace` |
 | `bun run release` | request a release: dispatches the Release workflow for the pushed default branch (needs `gh`) |
 | `bun run icon` | redraw `AppIcon.icns` and `DevIcon.icns` from `apps/appforge/macos/icon.svg` (needs Google Chrome) |
@@ -111,7 +111,7 @@ Set `APPFORGE_SIGN_IDENTITY` to use a certificate with another name. Without the
 
 ## Dependencies
 
-`bun run update` moves the Rust dependencies to the newest versions `Cargo.toml` allows (only `Cargo.lock` changes), then runs clippy and the tests, and puts the old `Cargo.lock` back if they fail. A version beyond what `Cargo.toml` allows (a new `gpui-kit` minor, for example) is raised by hand in `Cargo.toml`.
+`bun run update` uses Cargo Upgrade from `cargo-edit` to update compatible and incompatible dependency requirements across the workspace. Exact pins stay in place. Cargo then resolves `Cargo.lock` and runs `bun run check`'s checks. If any step fails, the manifests and lockfile are restored to their contents before the command. Install the tool with `cargo install cargo-edit --locked`.
 
 ## README images
 
