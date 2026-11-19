@@ -8,7 +8,7 @@ English for all project-owned identifiers, comments, UI text, logs, tests, docs 
 
 # Layout
 
-Workspace: `apps/*` (executables), `crates/*` (libraries). Dependencies: `apps/appforge` → `app` → `ui` → `compliance` → `appstore`, `ai`, `storage`; `ui` → `project`. Keep `apps/appforge` a thin entry point; put application logic in `crates/*`. `ai`, `appstore`, `compliance`, `project` and `storage` never depend on the interface and never block on it: their calls are blocking, so the interface runs them on a background task. No `unsafe` (`unsafe_code = "deny"`). Update `docs/architecture.md` when architecture changes (crate boundaries, window layout, files in the data directory).
+Workspace: `apps/*` (executables), `crates/*` (libraries). Dependencies: `apps/appforge` → `app` → `ui` → `compliance` → `appstore`, `ai`, `storage`; `ui` → `project`. Keep `apps/appforge` a thin entry point; put application logic in `crates/*`. `ai`, `appstore`, `compliance`, `project` and `storage` never depend on the interface and never block on it: their calls are blocking, so the interface runs them on a background task. No `unsafe` (`unsafe_code = "deny"`). Start with `scripts/code-map.sh` (every file with a one-line summary) instead of reading directories; give each new file a `//!` header. Keep files focused: split one that passes about 400 lines. Update `docs/architecture.md` when architecture changes (crate boundaries, window layout, files in the data directory).
 
 # Interface
 

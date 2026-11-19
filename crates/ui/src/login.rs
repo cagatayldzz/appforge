@@ -1,3 +1,5 @@
+//! The sign-in guide: checklist, Issuer ID and Key ID, and the .p8 file.
+
 use crate::{
   forms::read_input,
   guide_art::{self, reveal_after, DRAWING_WIDTH, KEY_STEP_COUNT},

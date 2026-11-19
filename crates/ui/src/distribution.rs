@@ -1,3 +1,5 @@
+//! The Distribution page (versions, builds, review submissions, release) and the `Change` writes to App Store Connect.
+
 use crate::{
   forms::read_input,
   i18n::{tr, trf},

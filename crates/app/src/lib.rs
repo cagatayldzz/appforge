@@ -1,3 +1,5 @@
+//! Startup: initializes the Kit, opens the window, binds keys and the menu.
+
 use appforge_ui::{install_fonts, Assets, Quit, Workspace};
 use gpui_kit::{component::TitleBar, *};
 

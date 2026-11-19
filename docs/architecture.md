@@ -25,9 +25,16 @@ apps/appforge → app → ui → compliance → appstore
 
 ## Code map (`crates/ui/src`)
 
+For all crates in one list, run `scripts/code-map.sh`: every source file with its line count and the first line of its `//!` header (about 3,000 tokens). Keep that header true when a file's job changes; a file without one shows as `NO HEADER`.
+
 | File | Owns |
 | --- | --- |
-| `workspace.rs` | `Workspace`, the one state of the window: settings, the client, the apps and their icons, the selected app and its snapshot, every background task. Startup and sign-in, loading, saving, the model menus, window state. |
+| `workspace/mod.rs` | `Workspace`, the one state of the window (fields, `Load<T>`, tabs, `Tasks`, `AppData`) and `new`. Behavior lives in the sibling files below, all `impl Workspace`. |
+| `workspace/session.rs` | Startup from the Keychain, sign-in and sign-out, the `.p8` file. |
+| `workspace/apps.rs` | The app list (`Arc<[App]>`, shared), icons, versions, the selected app, its snapshot, the report (`Arc<Report>`), page jumps and Back. |
+| `workspace/saving.rs` | Saving the pages to App Store Connect and the privacy answers. |
+| `workspace/ai.rs` | The AI analysis, the playbook, provider and keys, and the AI usage totals. |
+| `workspace/settings.rs` | Saving settings, the window place, code folders. |
 | `view.rs` | `Render for Workspace`: the title band and which screen shows. |
 | `welcome.rs`, `login.rs`, `setup.rs`, `guide_art.rs` | First run: the welcome screen, the sign-in guide, its frame (sidebar, progress, pinned actions) and the small drawings of Apple's page. |
 | `sidebar.rs` | The signed-in bars: the activity bar and the sidebar (app, page menu, Reload and Save; or the pages of Settings). |

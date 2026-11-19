@@ -1,3 +1,5 @@
+//! Customer reviews and developer responses.
+
 use super::{relationship, resource_id, text, Client, Error};
 use serde_json::json;
 use std::collections::HashMap;

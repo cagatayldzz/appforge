@@ -1,3 +1,5 @@
+//! The open app's page: heading, the loaded body, and the App Information, App Review and App Privacy forms.
+
 use crate::{
   i18n::{tr, trf},
   theme::colors,

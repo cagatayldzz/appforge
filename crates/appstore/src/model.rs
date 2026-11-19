@@ -1,3 +1,5 @@
+//! The plain data the client returns: apps, versions, localizations, review details.
+
 use serde_json::{Map, Value};
 
 #[derive(Clone, Debug, Default, PartialEq)]

@@ -1,3 +1,5 @@
+//! The built-in rules that check an app snapshot.
+
 use crate::{Category, Finding, Report, Severity};
 use appforge_appstore::{AppInfoLocalization, AppSnapshot, ReviewDetail, VersionLocalization};
 use appforge_storage::PrivacyDeclaration;

@@ -2,12 +2,27 @@ use appforge_storage::Language;
 use appforge_ui::i18n::{tr, trf, TURKISH};
 use std::{collections::HashSet, fs};
 
+/// Every `.rs` file under `src`, including the ones in subfolders such as `workspace/`.
+fn source_files() -> Vec<std::path::PathBuf> {
+  fn walk(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+    for entry in fs::read_dir(dir).unwrap() {
+      let path = entry.unwrap().path();
+      if path.is_dir() {
+        walk(&path, files);
+      } else if path.extension().is_some_and(|extension| extension == "rs") {
+        files.push(path);
+      }
+    }
+  }
+  let mut files = Vec::new();
+  walk(&std::path::PathBuf::from(format!("{}/src", env!("CARGO_MANIFEST_DIR"))), &mut files);
+  files
+}
+
 /// Every literal passed to `tr(l, "…")` or `trf(l, "…", …)` in the interface sources.
 fn used_texts() -> Vec<String> {
-  let dir = format!("{}/src", env!("CARGO_MANIFEST_DIR"));
   let mut texts = Vec::new();
-  for entry in fs::read_dir(dir).unwrap() {
-    let path = entry.unwrap().path();
+  for path in source_files() {
     if path.file_name().is_some_and(|name| name == "i18n.rs") {
       continue;
     }
@@ -75,10 +90,8 @@ fn placeholders_are_filled_in_order() {
 
 #[test]
 fn no_visible_text_is_left_untranslated_in_the_interface() {
-  let dir = format!("{}/src", env!("CARGO_MANIFEST_DIR"));
   let mut raw = Vec::new();
-  for entry in fs::read_dir(dir).unwrap() {
-    let path = entry.unwrap().path();
+  for path in source_files() {
     if path.file_name().is_some_and(|name| name == "i18n.rs" || name == "forms.rs") {
       continue;
     }

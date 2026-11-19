@@ -1,3 +1,5 @@
+//! The compliance playbook: download from GitHub, cache, weekly refresh.
+
 use std::{
   fs,
   path::{Path, PathBuf},

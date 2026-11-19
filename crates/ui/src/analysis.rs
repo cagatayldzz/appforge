@@ -1,3 +1,5 @@
+//! The Analysis page: score, checklist, AI analysis and rules.
+
 use crate::{
   i18n::{tr, trf},
   theme::{colors, FONT_SIZE_SM},
@@ -216,9 +218,9 @@ impl Workspace {
     };
     let provider = self.settings.ai.provider;
     let has_key = self.has_key.get(&provider).copied().unwrap_or(false);
-    let ai_findings: Vec<Finding> = match &self.ai {
-      AiState::Done(review) => review.findings.clone(),
-      _ => Vec::new(),
+    let ai_findings: &[Finding] = match &self.ai {
+      AiState::Done(review) => &review.findings,
+      _ => &[],
     };
     let all: Vec<&Finding> = report.findings.iter().chain(ai_findings.iter()).collect();
     let todo = self.todo_by_page(&all, cx);
@@ -271,7 +273,7 @@ impl Workspace {
         div().text_sm().text_color(theme.muted_foreground).child(tr(l, "No issues found in the saved data.")).into_any_element()
       }
       AnalysisTab::Checklist => self.finding_groups("rule", &report.findings, cx).into_any_element(),
-      AnalysisTab::Ai => self.render_ai_tab(&ai_findings, provider, has_key, cx).into_any_element(),
+      AnalysisTab::Ai => self.render_ai_tab(ai_findings, provider, has_key, cx).into_any_element(),
       AnalysisTab::Rules => {
         let playbook_status: SharedString = match (self.playbook.fetched_at, self.playbook.is_empty()) {
           (_, true) => tr(l, "Not downloaded yet"),

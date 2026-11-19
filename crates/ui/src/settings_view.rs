@@ -1,8 +1,10 @@
+//! The pages of Settings: general, account, AI provider and usage, code folders, rules, about.
+
 use crate::{
   i18n::{tr, trf},
   theme::{colors, FONT_SIZE_SM},
   widgets::{app_avatar, centered, setting_row},
-  workspace::{Load, SettingsPage, Workspace},
+  workspace::{SettingsPage, Workspace},
 };
 use appforge_ai::Provider;
 use appforge_compliance::PLAYBOOK_REPOSITORY;
@@ -196,10 +198,7 @@ impl Workspace {
   fn code_folders_body(&mut self, cx: &mut Context<Self>) -> AnyElement {
     let c = colors(cx);
     let l = self.settings.language;
-    let apps = match &self.apps {
-      Load::Ready(apps) => apps.clone(),
-      _ => Vec::new(),
-    };
+    let apps = self.app_list();
     let intro = div()
       .text_size(FONT_SIZE_SM)
       .text_color(c.text_secondary)
@@ -212,7 +211,7 @@ impl Workspace {
         .into_any_element();
     }
     let rows: Vec<AnyElement> = apps
-      .into_iter()
+      .iter()
       .map(|app| {
         let folder = self.settings.code_folders.get(&app.id).cloned();
         let missing = folder.as_ref().is_some_and(|folder| !folder.is_dir());

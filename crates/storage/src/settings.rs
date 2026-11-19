@@ -1,3 +1,5 @@
+//! `settings.json`: language, account ids, AI choices, privacy answers, code folders, window.
+
 use appforge_ai::Provider;
 use serde::{Deserialize, Serialize};
 use std::{

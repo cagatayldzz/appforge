@@ -1,3 +1,5 @@
+//! The Apple guidelines browser in Settings: search, sections, update.
+
 use crate::{
   analysis::ago,
   forms::read_input,

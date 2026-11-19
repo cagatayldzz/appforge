@@ -1,3 +1,5 @@
+//! `Render for Workspace`: the title band and which screen shows.
+
 use crate::{
   i18n::tr,
   theme::{colors, FONT_SIZE},

@@ -1,3 +1,5 @@
+//! Where the data directory is.
+
 use std::path::PathBuf;
 
 /// The application data directory (`$APPFORGE_DATA_DIR` overrides it, mainly for tests).

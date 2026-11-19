@@ -20,10 +20,7 @@ impl Workspace {
     let c = colors(cx);
     let l = self.settings.language;
     let workspace = cx.entity();
-    let apps = match &self.apps {
-      Load::Ready(apps) => apps.clone(),
-      _ => Vec::new(),
-    };
+    let apps = self.app_list();
     let all_apps = {
       let workspace = workspace.clone();
       rail_button("rail-all-apps", IconName::LayoutDashboard, tr(l, "Apps"), self.show_all_apps && !self.show_settings, cx, move |_, _, cx| {
@@ -35,7 +32,7 @@ impl Workspace {
       })
     };
     let items: Vec<AnyElement> = apps
-      .into_iter()
+      .iter()
       .map(|app| {
         let id = app.id.clone();
         let selected = !self.show_settings && !self.show_all_apps && self.selected.as_ref() == Some(&id);

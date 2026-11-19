@@ -1,8 +1,9 @@
-use crate::i18n::trf;
+//! The Ratings and Reviews page: summary, filters, review cards and developer replies.
+
 use crate::{
   distribution::Change,
   forms::{read_area, set_area},
-  i18n::tr,
+  i18n::{tr, trf},
   theme::{colors, Colors, FONT_SIZE_SM},
   widgets::{area_field, state_badge},
   workspace::{Load, Workspace},

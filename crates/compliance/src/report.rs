@@ -1,3 +1,5 @@
+//! `Finding`, `Report`, severities, the score and the verdict.
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]

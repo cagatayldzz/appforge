@@ -1,3 +1,5 @@
+//! The errors of the App Store Connect client.
+
 use std::fmt;
 
 #[derive(Debug)]

@@ -1,3 +1,5 @@
+//! Versions, builds, review submissions, release type and phased release.
+
 use super::{relationship, resource_id, state_of, text, Client, Error};
 use serde_json::{json, Value};
 

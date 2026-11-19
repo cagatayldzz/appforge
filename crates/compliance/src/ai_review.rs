@@ -1,3 +1,5 @@
+//! The AI analysis: prompt, call and parsing of the JSON answer into findings.
+
 use crate::Guidelines;
 use crate::{Category, Finding, Playbook, Report, Severity};
 use appforge_ai::{Client, Provider, Request, Usage};

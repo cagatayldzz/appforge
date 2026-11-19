@@ -1,3 +1,5 @@
+//! API key validation and the credentials that sign tokens.
+
 use crate::Error;
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use serde::Serialize;

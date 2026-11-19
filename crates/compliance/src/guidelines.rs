@@ -1,3 +1,5 @@
+//! The Apple review guidelines catalog: download, parse, cache, per-rule changes.
+
 use html5ever::{parse_document, tendril::TendrilSink};
 use markup5ever_rcdom::{Handle, NodeData, RcDom};
 use serde::{Deserialize, Serialize};

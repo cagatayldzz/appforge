@@ -1,3 +1,5 @@
+//! The Keychain (`Keychain`) and an in-memory store for tests.
+
 use appforge_ai::Provider;
 use std::{collections::HashMap, fmt, sync::Mutex};
 

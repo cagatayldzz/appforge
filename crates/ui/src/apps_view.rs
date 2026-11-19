@@ -6,7 +6,6 @@ use crate::{
   widgets::{app_avatar, state_badge},
   workspace::{Load, Workspace},
 };
-use appforge_appstore::App;
 use gpui_kit::{
   component::{alert::Alert, h_flex, scroll::ScrollableElement as _, skeleton::Skeleton, tag::Tag, v_flex, Sizable as _},
   prelude::FluentBuilder as _,
@@ -22,10 +21,7 @@ impl Workspace {
   pub(crate) fn render_apps(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
     let c = colors(cx);
     let l = self.settings.language;
-    let apps: Vec<App> = match &self.apps {
-      Load::Ready(apps) => apps.clone(),
-      _ => Vec::new(),
-    };
+    let apps = self.app_list();
     let loading = matches!(self.apps, Load::Loading);
     let heading = h_flex()
       .w_full()
@@ -43,7 +39,7 @@ impl Workspace {
       _ => None,
     };
     let cards: Vec<AnyElement> = apps
-      .into_iter()
+      .iter()
       .map(|app| {
         let id = app.id.clone();
         v_flex()
