@@ -146,12 +146,16 @@ pub(crate) fn has_room_for_columns(window: &Window) -> bool {
 }
 
 pub(crate) fn page_columns(wide: bool, primary: impl IntoElement, secondary: impl IntoElement) -> Div {
+  page_columns_with_primary(wide, 0.56, primary, secondary)
+}
+
+pub(crate) fn page_columns_with_primary(wide: bool, primary_share: f32, primary: impl IntoElement, secondary: impl IntoElement) -> Div {
   if wide {
     h_flex()
       .w_full()
       .gap_6()
       .items_start()
-      .child(div().flex_basis(relative(0.56)).min_w_0().child(primary))
+      .child(div().flex_basis(relative(primary_share)).min_w_0().child(primary))
       .child(div().flex_1().min_w_0().child(secondary))
   } else {
     v_flex().w_full().gap_6().child(primary).child(secondary)

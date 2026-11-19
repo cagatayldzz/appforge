@@ -4,8 +4,8 @@ use crate::{
   i18n::{tr, trf},
   theme::colors,
   widgets::{
-    area_field, area_field_with_action, centered_with_width, page_columns, pair, required, required_mark, section, text_field,
-    text_field_with_action, url_field,
+    area_field, area_field_with_action, centered_with_width, page_columns, page_columns_with_primary, pair, required, required_mark, section,
+    text_field, text_field_with_action, url_field,
   },
   workspace::{DetailTab, Load, Workspace},
 };
@@ -19,7 +19,7 @@ use gpui_kit::{
     empty::{Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle},
     h_flex,
     scroll::ScrollableElement as _,
-    spinner::Spinner,
+    skeleton::Skeleton,
     switch::Switch,
     v_flex, ActiveTheme, Disableable as _, Icon, IconName, Sizable as _,
   },
@@ -51,7 +51,6 @@ impl Workspace {
   }
 
   pub(crate) fn render_detail(&mut self, app: App, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
-    let c = colors(cx);
     let l = self.settings.language;
     let body = if self.tab == DetailTab::CustomerReviews {
       self.render_customer_reviews(cx)
@@ -79,9 +78,7 @@ impl Workspace {
             ),
           )
           .into_any_element(),
-        _ => {
-          h_flex().gap_2().items_center().text_color(c.text_secondary).child(Spinner::new()).child(tr(l, "loadingFromAppStore")).into_any_element()
-        }
+        _ => self.detail_loading(wide, cx).into_any_element(),
       }
     };
     // The pages are listed in the sidebar, so the page says which one it is; it scrolls under that heading.
@@ -104,7 +101,7 @@ impl Workspace {
         .into_any_element(),
       None => title.into_any_element(),
     };
-    let content = v_flex().pt_6().pb_6().gap_6().child(heading).children(self.render_ai_tasks(cx)).child(body);
+    let content = v_flex().pt_6().pb_6().gap_6().child(heading).child(body);
     let max_width = match self.tab {
       DetailTab::ProductPage | DetailTab::CustomerReviews => rems(90.),
       _ if wide => rems(86.),
@@ -112,6 +109,29 @@ impl Workspace {
     };
     let content = centered_with_width(content, max_width);
     v_flex().flex_1().min_h_0().overflow_hidden().child(v_flex().id("detail-scroll").size_full().overflow_y_scrollbar().child(content))
+  }
+
+  fn detail_loading(&self, wide: bool, cx: &gpui_kit::App) -> Div {
+    let c = colors(cx);
+    let panel = || {
+      v_flex()
+        .w_full()
+        .gap_3()
+        .p_4()
+        .rounded_lg()
+        .border_1()
+        .border_color(c.border)
+        .child(Skeleton::new().h_4().w_32())
+        .child(Skeleton::new().h_3().w_full().max_w_64())
+        .child(Skeleton::new().h_3().w_24())
+    };
+    let primary = v_flex().gap_3().child(panel()).child(panel());
+    let secondary = v_flex().gap_3().child(panel()).child(panel());
+    let share = if self.tab == DetailTab::Information { 0.65 } else { 0.56 };
+    v_flex()
+      .gap_4()
+      .child(div().text_sm().text_color(c.text_secondary).child(tr(self.settings.language, "loadingFromAppStore")))
+      .child(page_columns_with_primary(wide, share, primary, secondary))
   }
 
   /// The button that saves the page, shown in the sidebar. The Analysis page has none.
@@ -136,10 +156,16 @@ impl Workspace {
     )
   }
 
+  fn compact_locale_picker(&self, cx: &mut Context<Self>) -> Option<Div> {
+    let label = tr(self.settings.language, "storeListingLanguage");
+    let c = colors(cx);
+    Some(h_flex().gap_2().flex_wrap().items_center().child(div().text_sm().text_color(c.text_secondary).child(label)).child(self.locale_picker(cx)?))
+  }
+
   fn render_information(&mut self, app: &App, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let has_version = self.ready_snapshot().is_some_and(|snapshot| snapshot.version.is_some());
-    let picker = self.locale_picker(cx);
+    let picker = self.compact_locale_picker(cx);
     let theme = cx.theme().clone();
     let forms = &self.forms;
     let general = self.render_general(app, cx);
@@ -198,7 +224,7 @@ impl Workspace {
     } else {
       page = page.child(div().text_sm().text_color(theme.muted_foreground).child(tr(l, "thisAppHasNo")));
     }
-    v_flex().gap_6().children(picker).child(page_columns(wide, page, general))
+    v_flex().gap_6().children(picker).child(page_columns_with_primary(wide, 0.65, page, general))
   }
 
   fn render_review(&mut self, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
@@ -251,14 +277,14 @@ impl Workspace {
       ))
       .child(section(tr(l, "signInHeading"), sign_in));
     let notes = section(tr(l, "notesForTheReviewer"), area_field(tr(l, "notes"), &forms.notes, None, cx));
-    page.child(page_columns(wide, account, notes))
+    page.child(page_columns_with_primary(wide, 0.40, account, notes))
   }
 
   fn render_privacy(&mut self, app: &App, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let declaration = self.privacy_draft(cx);
     let url = app_privacy_url(app);
-    let picker = self.locale_picker(cx);
+    let picker = self.compact_locale_picker(cx);
     let forms = &self.forms;
     let toggle = |id: &'static str, label: SharedString, checked: bool, change: fn(&mut PrivacyDeclaration, bool), cx: &mut Context<Self>| {
       Switch::new(id).checked(checked).label(label).on_click(cx.listener(move |this, value: &bool, _, cx| {
@@ -297,11 +323,12 @@ impl Workspace {
     let policy = v_flex()
       .gap_6()
       .child(section(
-        tr(l, "privacyPolicyUrl"),
-        pair(
-          url_field("open-privacy-url", required(tr(l, "privacyPolicyUrl")), &forms.privacy_url, l, cx),
-          url_field("open-privacy-choices", tr(l, "privacyChoicesUrl"), &forms.privacy_choices, l, cx),
-        ),
+        tr(l, "privacyLinks"),
+        v_flex()
+          .gap_3()
+          .children(picker)
+          .child(url_field("open-privacy-url", required(tr(l, "privacyPolicyUrl")), &forms.privacy_url, l, cx))
+          .child(url_field("open-privacy-choices", tr(l, "privacyChoicesUrl"), &forms.privacy_choices, l, cx)),
       ))
       .child(section(tr(l, "productPagePreview"), self.render_privacy_preview(&declaration, cx)));
     v_flex()
@@ -316,7 +343,6 @@ impl Workspace {
             .on_click(move |_, _, cx| cx.open_url(&url)),
         ),
       )
-      .children(picker)
       .child(page_columns(wide, answers, policy))
   }
 }

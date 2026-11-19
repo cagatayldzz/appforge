@@ -76,7 +76,7 @@ impl Forms {
       email: input(window, cx, "name@example.com"),
       demo_name: input(window, cx, "Demo account user name"),
       demo_password: cx.new(|cx| InputState::new(window, cx).placeholder("Demo account password").masked(true)),
-      notes: area(window, cx, "How to reach every feature, hardware needed, in-app purchases, regional behaviour", 12),
+      notes: area(window, cx, "How to reach every feature, hardware needed, in-app purchases, regional behaviour", 16),
       data_types: input(window, cx, "email, purchases, crash logs"),
       sdks: input(window, cx, "Firebase, AdMob"),
       demo_required: false,
@@ -118,32 +118,47 @@ impl Workspace {
     self.forms.demo_required || self.forms.privacy.requires_login_to_review
   }
 
-  /// Counts populated fields in the current draft and required confirmations.
-  pub(crate) fn page_completion(&self, tab: DetailTab, cx: &App) -> Option<(usize, usize)> {
-    let has_version = self.ready_snapshot()?.version.is_some();
+  /// Required fields and confirmations in the current draft.
+  pub(crate) fn page_requirements(&self, tab: DetailTab, cx: &App) -> Option<Vec<(&'static str, bool)>> {
+    let snapshot = self.ready_snapshot()?;
+    let has_version = snapshot.version.is_some();
     let forms = &self.forms;
     let filled = |field: &Entity<InputState>| !field.read(cx).value().trim().is_empty();
-    let count = |checks: &[bool]| (checks.iter().filter(|&&complete| complete).count(), checks.len());
     Some(match tab {
-      DetailTab::Information if has_version => {
-        count(&[filled(&forms.name), !forms.description.read(cx).value().trim().is_empty(), filled(&forms.keywords), filled(&forms.support_url)])
+      DetailTab::Information => {
+        let mut checks = vec![("appName", filled(&forms.name))];
+        if has_version {
+          checks.extend([
+            ("description", !forms.description.read(cx).value().trim().is_empty()),
+            ("keywords", filled(&forms.keywords)),
+            ("supportUrl", filled(&forms.support_url)),
+          ]);
+        }
+        checks
       }
-      DetailTab::Information => count(&[filled(&forms.name)]),
       DetailTab::Review if has_version => {
-        let mut checks = vec![filled(&forms.first_name), filled(&forms.last_name), filled(&forms.phone), filled(&forms.email)];
+        let mut checks = vec![
+          ("firstName", filled(&forms.first_name)),
+          ("lastName", filled(&forms.last_name)),
+          ("phone", filled(&forms.phone)),
+          ("email", filled(&forms.email)),
+        ];
         if self.review_credentials_required() {
-          checks.extend([filled(&forms.demo_name), filled(&forms.demo_password)]);
+          checks.extend([("demoUserName", filled(&forms.demo_name)), ("demoPassword", filled(&forms.demo_password))]);
         }
-        if self.forms.privacy.requires_login_to_review {
-          checks.push(forms.demo_required);
+        if forms.privacy.requires_login_to_review {
+          checks.push(("signInRequiredTo", forms.demo_required));
         }
-        count(&checks)
+        checks
       }
-      DetailTab::Privacy => count(&[filled(&forms.privacy_url), forms.privacy.confirmed_in_app_store_connect]),
-      DetailTab::Distribution => {
+      DetailTab::Privacy => {
+        vec![("privacyPolicyUrl", filled(&forms.privacy_url)), ("iAnsweredAppPrivacy", forms.privacy.confirmed_in_app_store_connect)]
+      }
+      DetailTab::Distribution if has_version => {
         let Load::Ready(data) = &self.active_data()?.distribution else { return None };
-        count(&[data.selected_build.is_some()])
+        vec![("nextSelectABuild", data.selected_build.is_some())]
       }
+      DetailTab::ProductPage if has_version => vec![("appPreviewsAndScreenshots", snapshot.screenshot_sets.iter().any(|set| set.count > 0))],
       _ => return None,
     })
   }

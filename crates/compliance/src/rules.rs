@@ -304,7 +304,7 @@ fn listing(rules: &mut Rules, snapshot: &AppSnapshot) {
     rules.add(
       "listing.screenshots-missing",
       Severity::Critical,
-      Category::AppInformation,
+      Category::ProductPage,
       "2.3.3",
       "No screenshots",
       "The primary language has no screenshots, and App Store Connect does not accept a submission without them.",

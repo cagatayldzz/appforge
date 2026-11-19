@@ -79,23 +79,24 @@ fn page_of(category: Category) -> DetailTab {
 }
 
 impl Workspace {
-  pub(crate) fn ai_tasks_for(&self, tab: DetailTab) -> impl Iterator<Item = &Finding> {
-    let findings = match &self.ai {
-      AiState::Done(review) => review.findings.as_slice(),
-      _ => &[],
-    };
-    findings.iter().filter(move |finding| page_of(finding.category) == tab && !finding.fix.trim().is_empty())
+  pub(crate) fn page_needs_attention(&self, tab: DetailTab, cx: &App) -> Option<bool> {
+    let requirements = self.page_requirements(tab, cx);
+    let rule_issue = self
+      .report
+      .as_ref()
+      .is_some_and(|report| report.findings.iter().any(|finding| page_of(finding.category) == tab && finding.severity != Severity::Info));
+    let ai_issue = matches!(&self.ai, AiState::Done(review) if review.findings.iter().any(|finding| page_of(finding.category) == tab && !finding.fix.trim().is_empty()));
+    if rule_issue || ai_issue {
+      return Some(true);
+    }
+    requirements.map(|checks| checks.iter().any(|(_, complete)| !complete))
   }
 
-  pub(crate) fn render_ai_tasks(&self, cx: &mut Context<Self>) -> Option<Div> {
-    let mut tasks = self.ai_tasks_for(self.tab).peekable();
-    tasks.peek()?;
-    Some(
-      v_flex()
-        .gap_2()
-        .child(div().font_weight(FontWeight::SEMIBOLD).child(tr(self.settings.language, "projectAnalysisTasks")))
-        .children(tasks.map(|finding| self.finding_row("ai-page", finding, cx))),
-    )
+  fn missing_requirements(&self, cx: &App) -> Vec<(DetailTab, &'static str)> {
+    DetailTab::ALL
+      .iter()
+      .flat_map(|&tab| self.page_requirements(tab, cx).into_iter().flatten().filter_map(move |(label, done)| (!done).then_some((tab, label))))
+      .collect()
   }
 
   /// Critical findings and warnings start open, tips closed; a click flips that for one finding.
@@ -108,7 +109,7 @@ impl Workspace {
     let l = self.settings.language;
     let c = colors(cx);
     let key = format!("{scope}-{}-{}", finding.id, finding.title);
-    let open = self.finding_open(&key, if scope == "ai-page" { Severity::Warning } else { finding.severity });
+    let open = self.finding_open(&key, finding.severity);
     let tab = page_of(finding.category);
     let toggle_key = key.clone();
     let mut header = h_flex()
@@ -157,16 +158,15 @@ impl Workspace {
           h_flex()
             .pl_6()
             .gap_2()
-            .children((scope != "ai-page").then(|| {
+            .child(
               Button::new(SharedString::from(format!("go-{key}")))
                 .label(trf(l, "openPage", &[&tr(l, finding.category.label())]))
                 .small()
                 .outline()
-                .on_click(cx.listener(move |this, _, _, cx| {
-                  this.tab = tab;
-                  cx.notify();
-                }))
-            }))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                  this.jump_to(tab, window, cx);
+                })),
+            )
             .children(source),
         );
     }
@@ -272,7 +272,7 @@ impl Workspace {
       .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "basedOnTheData")));
     let tabs = h_flex().gap_1().flex_wrap().children(AnalysisTab::ALL.map(|option| {
       let label = match option {
-        AnalysisTab::Checklist => format!("{} · {}", tr(l, option.label()), report.findings.len()),
+        AnalysisTab::Checklist => tr(l, option.label()).to_string(),
         AnalysisTab::Ai if !ai_findings.is_empty() => format!("{} · {}", tr(l, option.label()), ai_findings.len()),
         _ => tr(l, option.label()).to_string(),
       };
@@ -287,10 +287,38 @@ impl Workspace {
         }))
     }));
     let content = match self.analysis_tab {
-      AnalysisTab::Checklist if report.findings.is_empty() => {
-        div().text_sm().text_color(theme.muted_foreground).child(tr(l, "noIssuesFoundIn")).into_any_element()
+      AnalysisTab::Checklist => {
+        let missing = self.missing_requirements(cx);
+        let mut checklist = v_flex().gap_4();
+        if !missing.is_empty() {
+          checklist = checklist.child(v_flex().gap_2().child(div().font_weight(FontWeight::SEMIBOLD).child(tr(l, "missingRequirements"))).children(
+            missing.into_iter().map(|(tab, label)| {
+              h_flex().gap_2().flex_wrap().items_center().justify_between().child(div().child(tr(l, label))).child(
+                Button::new(SharedString::from(format!("missing-{label}")))
+                  .small()
+                  .outline()
+                  .label(tr(l, tab.label()))
+                  .on_click(cx.listener(move |this, _, window, cx| this.jump_to(tab, window, cx))),
+              )
+            }),
+          ));
+        } else if report.findings.is_empty() && ai_findings.is_empty() {
+          checklist = checklist.child(div().text_sm().text_color(theme.muted_foreground).child(tr(l, "noIssuesFoundIn")));
+        }
+        if !report.findings.is_empty() {
+          checklist = checklist.child(self.finding_groups("rule", &report.findings, cx));
+        }
+        if !ai_findings.is_empty() {
+          checklist = checklist.child(
+            v_flex().gap_2().child(div().font_weight(FontWeight::SEMIBOLD).child(tr(l, "projectAnalysisTasks"))).child(self.finding_groups(
+              "ai",
+              ai_findings,
+              cx,
+            )),
+          );
+        }
+        checklist.into_any_element()
       }
-      AnalysisTab::Checklist => self.finding_groups("rule", &report.findings, cx).into_any_element(),
       AnalysisTab::Ai => self.render_ai_tab(ai_findings, provider, has_key, cx).into_any_element(),
       AnalysisTab::Rules => {
         let playbook_status: SharedString = match (self.playbook.fetched_at, self.playbook.is_empty()) {

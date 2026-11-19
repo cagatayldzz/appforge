@@ -102,6 +102,12 @@ pub enum Error {
   EmptyAnswer,
 }
 
+impl Error {
+  pub fn is_temporary_service_error(&self) -> bool {
+    matches!(self, Self::Api { status: 500 | 502 | 503 | 504 | 529, .. })
+  }
+}
+
 impl fmt::Display for Error {
   fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
@@ -145,6 +151,17 @@ impl Client {
   /// Sends one system and one user message and returns the model's text. Blocking: call it off the interface thread.
   pub fn complete(&self, request: &Request) -> Result<String, Error> {
     self.complete_with_usage(request).map(|completion| completion.text)
+  }
+
+  /// Retries one explicit temporary service failure, using the same request.
+  pub fn complete_with_service_retry(&self, request: &Request) -> Result<Completion, Error> {
+    match self.complete_with_usage(request) {
+      Err(error) if error.is_temporary_service_error() => {
+        std::thread::sleep(Duration::from_secs(1));
+        self.complete_with_usage(request)
+      }
+      result => result,
+    }
   }
 
   /// Like `complete`, and also says how many tokens the request used.

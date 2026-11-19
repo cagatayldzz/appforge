@@ -8,33 +8,44 @@ use std::{
 
 /// Serves one canned response and reports the raw request it received.
 fn serve_once(status: &str, body: &str) -> (String, mpsc::Receiver<String>) {
+  serve_responses(&[(status, body)])
+}
+
+fn serve_responses(responses: &[(&str, &str)]) -> (String, mpsc::Receiver<String>) {
   let listener = TcpListener::bind("127.0.0.1:0").unwrap();
   let url = format!("http://{}", listener.local_addr().unwrap());
   let (sender, receiver) = mpsc::channel();
-  let response = format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+  let responses: Vec<_> = responses
+    .iter()
+    .map(|(status, body)| {
+      format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len())
+    })
+    .collect();
   thread::spawn(move || {
-    let (mut stream, _) = listener.accept().unwrap();
-    let mut received = Vec::new();
-    let mut buffer = [0u8; 4096];
-    loop {
-      let count = stream.read(&mut buffer).unwrap();
-      received.extend_from_slice(&buffer[..count]);
-      let text = String::from_utf8_lossy(&received).to_string();
-      if let Some((head, body)) = text.split_once("\r\n\r\n") {
-        let length = head
-          .lines()
-          .find_map(|line| line.to_lowercase().strip_prefix("content-length:").map(|value| value.trim().parse::<usize>().unwrap()))
-          .unwrap_or(0);
-        if body.len() >= length {
+    for response in responses {
+      let (mut stream, _) = listener.accept().unwrap();
+      let mut received = Vec::new();
+      let mut buffer = [0u8; 4096];
+      loop {
+        let count = stream.read(&mut buffer).unwrap();
+        received.extend_from_slice(&buffer[..count]);
+        let text = String::from_utf8_lossy(&received).to_string();
+        if let Some((head, body)) = text.split_once("\r\n\r\n") {
+          let length = head
+            .lines()
+            .find_map(|line| line.to_lowercase().strip_prefix("content-length:").map(|value| value.trim().parse::<usize>().unwrap()))
+            .unwrap_or(0);
+          if body.len() >= length {
+            break;
+          }
+        }
+        if count == 0 {
           break;
         }
       }
-      if count == 0 {
-        break;
-      }
+      stream.write_all(response.as_bytes()).unwrap();
+      let _ = sender.send(String::from_utf8_lossy(&received).to_string());
     }
-    stream.write_all(response.as_bytes()).unwrap();
-    sender.send(String::from_utf8_lossy(&received).to_string()).unwrap();
   });
   (url, receiver)
 }
@@ -133,4 +144,19 @@ fn models_that_think_by_default_are_asked_to_think_as_little_as_possible() {
     let body: serde_json::Value = serde_json::from_str(received.recv().unwrap().split_once("\r\n\r\n").unwrap().1).unwrap();
     assert_eq!(body["reasoning_effort"], effort);
   }
+}
+
+#[test]
+fn a_temporary_provider_error_retries_the_same_analysis_request_once() {
+  let (url, received) = serve_responses(&[
+    ("500 Internal Server Error", r#"{"error":{"message":"Try again"}}"#),
+    ("200 OK", r#"{"choices":[{"message":{"content":"{}"}}]}"#),
+  ]);
+  let client = Client::with_base_urls(&url, &url);
+  let completion = client.complete_with_service_retry(&request(Provider::OpenAi, "sk-test")).unwrap();
+  assert_eq!(completion.text, "{}");
+  let first = received.recv().unwrap();
+  let second = received.recv().unwrap();
+  assert_eq!(first.split_once("\r\n\r\n").unwrap().1, second.split_once("\r\n\r\n").unwrap().1);
+  assert!(received.recv().is_err());
 }

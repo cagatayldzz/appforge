@@ -151,7 +151,7 @@ impl Workspace {
     if self.tab == DetailTab::ProductPage {
       self.load_product_assets(false, window, cx);
     }
-    if matches!(self.tab, DetailTab::Distribution | DetailTab::Readiness)
+    if matches!(self.tab, DetailTab::Distribution | DetailTab::Readiness | DetailTab::Analysis)
       && self.active_data().is_some_and(|data| matches!(data.distribution, Load::Idle))
     {
       self.load_distribution(window, cx);

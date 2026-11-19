@@ -10,7 +10,8 @@ use crate::{
 use appforge_compliance::Verdict;
 use gpui_kit::{
   component::{
-    button::Button, h_flex, scroll::ScrollableElement as _, tag::Tag, tooltip::Tooltip, v_flex, Disableable as _, Icon, IconName, Sizable as _,
+    button::Button, h_flex, scroll::ScrollableElement as _, skeleton::Skeleton, tooltip::Tooltip, v_flex, Disableable as _, Icon, IconName,
+    Sizable as _,
   },
   prelude::FluentBuilder as _,
   *,
@@ -152,6 +153,19 @@ impl Workspace {
     // One tile: the score, the version and where it stands at Apple. It opens the Analysis page.
     let tooltip = trf(l, "openPage", &[&tr(l, DetailTab::Analysis.label())]);
     let open = self.tab == DetailTab::Analysis;
+    let loading = self.active_data().is_some_and(|data| matches!(data.snapshot, Load::Idle | Load::Loading));
+    let placeholder = || {
+      h_flex()
+        .w_full()
+        .gap_3()
+        .p_2()
+        .items_center()
+        .rounded_lg()
+        .border_1()
+        .border_color(c.border)
+        .child(Skeleton::new().size_12().rounded_lg().flex_none())
+        .child(v_flex().flex_1().min_w_0().gap_2().child(Skeleton::new().h_4().w_20()).child(Skeleton::new().h_3().w_32().max_w_full()))
+    };
     let status = h_flex()
       .id("score-badge")
       .w_full()
@@ -189,7 +203,8 @@ impl Workspace {
             .child(div().truncate().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(app.bundle_id.clone())),
         ),
       )
-      .child(status)
+      .children(loading.then(placeholder))
+      .children((!loading && (self.report.is_some() || version.is_some())).then_some(status))
       .into_any_element()
   }
 
@@ -205,19 +220,16 @@ impl Workspace {
           .py_2()
           .justify_between()
           .child(div().min_w_0().truncate().child(tr(l, tab.label())))
-          .child(
-            h_flex()
-              .gap_1()
+          .children(self.page_needs_attention(tab, cx).map(|attention| {
+            let (color, label) = if attention { (c.warning, tr(l, "pageStatusNeedsAttention")) } else { (c.success, tr(l, "ready")) };
+            div()
+              .id("page-status")
+              .size_2()
               .flex_none()
-              .children(self.page_completion(tab, cx).map(|(done, total)| {
-                let color = if done == total { c.success } else { c.warning };
-                Tag::custom(color.opacity(0.16), c.text, color).small().child(format!("{done}/{total}"))
-              }))
-              .children({
-                let count = self.ai_tasks_for(tab).count();
-                (count > 0).then(|| Tag::custom(c.accent.opacity(0.16), c.text, c.accent).small().child(trf(l, "aiTaskCount", &[&count.to_string()])))
-              }),
-          )
+              .rounded_full()
+              .bg(color)
+              .tooltip(move |window, cx| Tooltip::new(label.clone()).build(window, cx))
+          }))
           .on_click(cx.listener(move |this, _, window, cx| {
             this.tab = tab;
             this.back_tab = None;

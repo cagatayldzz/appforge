@@ -173,8 +173,26 @@ pub fn analyze_with_ai(
   playbook: &Playbook,
   guidelines: &Guidelines,
 ) -> Result<(AiReview, Usage), String> {
-  analyze_project_with_ai(client, provider, api_key, model, snapshot, privacy, local, playbook, guidelines, None)
+  analyze_project_with_ai(client, provider, api_key, model, snapshot, privacy, local, playbook, guidelines, None).map_err(|error| error.to_string())
 }
+
+/// A provider failure or an answer that could not be parsed.
+#[derive(Debug)]
+pub enum AiReviewError {
+  Provider(appforge_ai::Error),
+  InvalidAnswer(String),
+}
+
+impl std::fmt::Display for AiReviewError {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Provider(error) => error.fmt(formatter),
+      Self::InvalidAnswer(error) => formatter.write_str(error),
+    }
+  }
+}
+
+impl std::error::Error for AiReviewError {}
 
 /// Includes an optional project summary and requests findings in the interface language.
 #[allow(clippy::too_many_arguments)]
@@ -189,7 +207,7 @@ pub fn analyze_project_with_ai(
   playbook: &Playbook,
   guidelines: &Guidelines,
   context: Option<(&str, Option<&str>)>,
-) -> Result<(AiReview, Usage), String> {
+) -> Result<(AiReview, Usage), AiReviewError> {
   let mut user = user_prompt(snapshot, privacy, local, playbook, guidelines);
   if let Some((language, project)) = context {
     if let Some(project) = project {
@@ -198,6 +216,6 @@ pub fn analyze_project_with_ai(
     user.push_str(&format!("\nWrite the summary, titles, explanations and fixes in {language}. Keep the JSON keys and enum values in English."));
   }
   let done =
-    client.complete_with_usage(&Request { provider, api_key, model, system: SYSTEM_PROMPT, user: &user }).map_err(|error| error.to_string())?;
-  parse_ai_answer(&done.text).map(|review| (review, done.usage))
+    client.complete_with_service_retry(&Request { provider, api_key, model, system: SYSTEM_PROMPT, user: &user }).map_err(AiReviewError::Provider)?;
+  parse_ai_answer(&done.text).map(|review| (review, done.usage)).map_err(AiReviewError::InvalidAnswer)
 }

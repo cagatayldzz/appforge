@@ -3,7 +3,7 @@
 use super::*;
 use gpui_kit::component::{
   button::{Button, ButtonVariants as _},
-  h_flex, v_flex,
+  h_flex, v_flex, Sizable as _,
 };
 
 struct AiAnalysisNotice;
@@ -117,6 +117,7 @@ impl Workspace {
     let missing_key = trf(language, "addYourApiKey", &[provider.label()]);
     let model = self.settings.ai.model(provider).to_owned();
     let used = model.clone();
+    let require_project = folder.is_some();
     let declaration = self.privacy_declaration();
     let secrets = self.secrets.clone();
     let playbook = self.playbook.clone();
@@ -156,6 +157,12 @@ impl Workspace {
             let context = Some((language_name, project.as_ref().map(|summary| summary.text.as_str())));
             analyze_project_with_ai(&client, provider, &key, &model, &snapshot, &declaration, &report, &playbook, &guidelines, context)
               .map(|(review, usage)| (review, playbook, usage))
+              .map_err(|error| match &error {
+                appforge_compliance::AiReviewError::Provider(provider_error) if provider_error.is_temporary_service_error() => {
+                  trf(language, "aiProviderTemporarilyUnavailable", &[provider.label(), &model]).to_string()
+                }
+                _ => error.to_string(),
+              })
           })
           .await
         }
@@ -185,8 +192,17 @@ impl Workspace {
             }
             Err(error) => {
               this.ai = AiState::Failed(error.clone().into());
-              window
-                .push_notification(Notification::error(trf(this.settings.language, "projectAnalysisFailed", &[&error])).id::<AiAnalysisNotice>(), cx);
+              let workspace = cx.weak_entity();
+              let label = tr(this.settings.language, "tryAgain");
+              let notice = Notification::error(trf(this.settings.language, "projectAnalysisFailed", &[&error])).id::<AiAnalysisNotice>().action(
+                move |_, _, _| {
+                  let workspace = workspace.clone();
+                  Button::new("retry-ai-analysis").label(label.clone()).outline().small().on_click(move |_, window, cx| {
+                    workspace.update(cx, |this, cx| this.confirm_ai(require_project, window, cx)).ok();
+                  })
+                },
+              );
+              window.push_notification(notice, cx);
             }
           }
           cx.notify();
