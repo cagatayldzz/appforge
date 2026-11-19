@@ -89,6 +89,10 @@ pub fn tr(language: Language, key: &'static str) -> SharedString {
   SharedString::new_static(catalog.by_key.get(key).or_else(|| catalog.from_english.get(key)).copied().unwrap_or(key))
 }
 
+pub(crate) fn translated_key(language: Language, key: &str) -> SharedString {
+  catalog(language).by_key.get(key).map_or_else(|| SharedString::from(key.to_owned()), |value| SharedString::new_static(value))
+}
+
 pub(crate) fn translated_text(language: Language, text: &str) -> SharedString {
   catalog(language).from_english.get(text).map_or_else(|| SharedString::from(text.to_owned()), |value| SharedString::new_static(value))
 }

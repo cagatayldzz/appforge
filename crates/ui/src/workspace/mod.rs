@@ -6,6 +6,7 @@ use crate::{
 };
 mod ai;
 mod apps;
+mod form_history;
 pub(crate) mod refresh;
 mod save_preview;
 mod saving;
@@ -150,6 +151,7 @@ pub(crate) struct Tasks {
   pub(crate) secrets: Option<Task<()>>,
   pub(crate) apps: Option<Task<()>>,
   pub(crate) save: Option<Task<()>>,
+  pub(crate) form_history: Option<Task<()>>,
   pub(crate) ai: Option<Task<()>>,
   pub(crate) playbook: Option<Task<()>>,
   pub(crate) guidelines: Option<Task<()>>,

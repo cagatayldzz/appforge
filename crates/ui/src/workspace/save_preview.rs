@@ -14,6 +14,7 @@ const SAVE_PREVIEW_WIDTH: Pixels = px(640.0);
 #[derive(Default, PartialEq)]
 struct SavePlan {
   changes: Vec<Change>,
+  history: Option<super::form_history::HistoryDraft>,
   info: Option<(AppInfoLocalization, AppInfoLocalization)>,
   listing: Option<(VersionLocalization, VersionLocalization)>,
   review: Option<(String, ReviewDetail)>,
@@ -44,6 +45,9 @@ struct SavedFields {
 
 impl SavePlan {
   fn record(&mut self, label: &'static str, before: &str, after: &str, kind: ValueKind) {
+    if let Some(history) = &mut self.history {
+      history.record(label, before, after, kind == ValueKind::Masked);
+    }
     if before != after {
       self.changes.push(Change { label, before: before.into(), after: after.into(), kind });
     }
@@ -54,11 +58,9 @@ impl SavePlan {
   }
 
   fn text_with_mask(&mut self, label: &'static str, original: &str, input: String, masked: bool) -> String {
-    if original.trim() == input {
-      return original.into();
-    }
-    self.record(label, original, &input, if masked { ValueKind::Masked } else { ValueKind::Text });
-    input
+    let edited = if original.trim() == input { original.to_owned() } else { input };
+    self.record(label, original, &edited, if masked { ValueKind::Masked } else { ValueKind::Text });
+    edited
   }
 
   fn boolean(&mut self, label: &'static str, before: bool, after: bool) {
@@ -80,11 +82,11 @@ impl Workspace {
   }
 
   pub(crate) fn has_pending_save(&self, cx: &App) -> bool {
-    !self.save_plan(cx).changes.is_empty()
+    !self.save_plan(cx, false).changes.is_empty()
   }
 
-  fn save_plan(&self, cx: &App) -> SavePlan {
-    let mut plan = SavePlan::default();
+  fn save_plan(&self, cx: &App, capture_history: bool) -> SavePlan {
+    let mut plan = SavePlan { history: capture_history.then(Default::default), ..Default::default() };
     let Some(snapshot) = self.ready_snapshot() else { return plan };
     let forms = &self.forms;
     let input = |field| read_input(field, cx);
@@ -168,7 +170,7 @@ impl Workspace {
   }
 
   pub(crate) fn confirm_save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-    let plan = Arc::new(self.save_plan(cx));
+    let plan = Arc::new(self.save_plan(cx, true));
     let Some(app) = self.selected.clone() else { return };
     if plan.changes.is_empty() || self.saving || self.store_write_busy || self.settings_locked {
       return;
@@ -238,7 +240,7 @@ impl Workspace {
                   {
                     return;
                   }
-                  let current = this.save_plan(cx);
+                  let current = this.save_plan(cx, true);
                   if current != *plan {
                     Self::warning(window, cx, tr(this.settings.language, "savePreviewChanged"));
                     return;
@@ -252,6 +254,7 @@ impl Workspace {
   }
 
   fn apply_save_plan(&mut self, app: &str, mut plan: SavePlan, window: &mut Window, cx: &mut Context<Self>) {
+    let local_saved = plan.privacy.is_some();
     if let Some(privacy) = plan.privacy.take() {
       let mut settings = self.settings.clone();
       settings.privacy.insert(app.to_owned(), privacy.clone());
@@ -268,23 +271,29 @@ impl Workspace {
       }
     }
     if !plan.has_remote_changes() {
+      if let Some(history) = plan.history.filter(|_| local_saved) {
+        self.record_local_history(history, window, cx);
+      }
       return;
     }
-    self.save_remote_fields(app.to_owned(), plan, window, cx);
+    self.save_remote_fields(app.to_owned(), plan, local_saved, window, cx);
   }
 
   /// Records each successful write, so retries preview only the fields that still need saving.
-  fn save_remote_fields(&mut self, app: String, plan: SavePlan, window: &mut Window, cx: &mut Context<Self>) {
+  fn save_remote_fields(&mut self, app: String, plan: SavePlan, local_saved: bool, window: &mut Window, cx: &mut Context<Self>) {
     let Some(client) = self.client.clone() else { return };
+    let history = self.form_history();
+    let secrets = self.secrets.clone();
+    let tab = self.tab;
     self.saving = true;
     if let Some(data) = self.app_data.get_mut(&app) {
       data.snapshot_task = None;
     }
     self.tasks.save = Some(cx.spawn_in(window, async move |this, cx| {
       let worker = client.clone();
-      let (saved, result) = cx
+      let (saved, result, history_result) = cx
         .background_spawn(async move {
-          let SavePlan { info, listing, review, .. } = plan;
+          let SavePlan { info, listing, review, history: draft, .. } = plan;
           let mut saved = SavedFields::default();
           let result = (|| {
             if let Some((edited, original)) = info {
@@ -302,12 +311,18 @@ impl Workspace {
             }
             Ok(())
           })();
-          (saved, result)
+          let history_result = history.zip(draft).map(|(history, draft)| {
+            draft.save(&history, secrets.as_ref(), tab, [saved.info.is_some(), saved.listing.is_some(), saved.review.is_some(), local_saved])
+          });
+          (saved, result, history_result)
         })
         .await;
       this
         .update_in(cx, |this, window, cx| {
           this.saving = false;
+          if let Some(Err(error)) = history_result {
+            Self::warning(window, cx, trf(this.settings.language, "historyRecordFailed", &[&error]));
+          }
           if !this.client.as_ref().is_some_and(|current| Arc::ptr_eq(current, &client)) {
             return;
           }

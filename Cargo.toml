@@ -20,6 +20,8 @@ appforge-project = { path = "crates/project" }
 appforge-storage = { path = "crates/storage" }
 appforge-ui = { path = "crates/ui" }
 appforge-updater = { path = "crates/updater" }
+git2 = { version = "0.21", default-features = false }
+chrono = "0.4"
 gpui-kit = { version = "0.10.0", features = ["gpui-fast", "syntect"] }
 gpui-kit-assets = "0.10.0"
 jsonwebtoken = "9"

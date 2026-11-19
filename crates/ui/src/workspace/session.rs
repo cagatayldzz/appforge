@@ -193,6 +193,7 @@ impl Workspace {
     self.client = None;
     self.reset_ai_analysis(window, cx);
     self.tasks.save = None;
+    self.tasks.form_history = None;
     self.tasks.store_write = None;
     self.saving = false;
     self.store_write_busy = false;

@@ -21,6 +21,7 @@ appforge-compliance.workspace = true
 appforge-project.workspace = true
 appforge-storage.workspace = true
 appforge-updater.workspace = true
+chrono.workspace = true
 gpui-kit.workspace = true
 gpui-kit-assets.workspace = true
 serde.workspace = true

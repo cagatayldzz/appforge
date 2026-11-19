@@ -101,6 +101,7 @@ impl Workspace {
         .into_any_element(),
       None => title.into_any_element(),
     };
+    let heading = h_flex().gap_3().flex_wrap().items_center().justify_between().child(heading).children(self.form_history_button(cx));
     let content = v_flex().pt_6().pb_6().gap_6().child(heading).child(body);
     let max_width = match self.tab {
       DetailTab::ProductPage | DetailTab::CustomerReviews => rems(90.),

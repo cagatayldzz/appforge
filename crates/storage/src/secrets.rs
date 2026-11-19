@@ -11,14 +11,16 @@ pub enum SecretKey {
   /// The contents of the App Store Connect `.p8` private key.
   ApplePrivateKey,
   ApiKey(Provider),
+  HistoryPassword(git2::Oid, bool),
 }
 
 impl SecretKey {
-  fn account(self) -> &'static str {
+  fn account(self) -> String {
     match self {
-      Self::ApplePrivateKey => "apple-private-key",
-      Self::ApiKey(Provider::OpenAi) => "openai-api-key",
-      Self::ApiKey(Provider::Anthropic) => "anthropic-api-key",
+      Self::ApplePrivateKey => "apple-private-key".into(),
+      Self::ApiKey(Provider::OpenAi) => "openai-api-key".into(),
+      Self::ApiKey(Provider::Anthropic) => "anthropic-api-key".into(),
+      Self::HistoryPassword(id, before) => format!("history-password-{id}-{before}"),
     }
   }
 }
@@ -45,7 +47,7 @@ pub trait SecretStore: Send + Sync {
 pub struct Keychain;
 
 fn entry(key: SecretKey) -> Result<keyring::Entry, SecretError> {
-  keyring::Entry::new(SERVICE, key.account()).map_err(|error| SecretError(error.to_string()))
+  keyring::Entry::new(SERVICE, &key.account()).map_err(|error| SecretError(error.to_string()))
 }
 
 impl SecretStore for Keychain {

@@ -109,3 +109,5 @@ The window opens the way it was left: size, place, and maximized or full screen 
 - `bun run appstore:schema /path/to/openapi.oas.json` compares a local download. An Apple ZIP can be passed in the same way, with optional `--write`.
 
 Compare before updating the baseline and review the resulting Git diff for exact field changes.
+
+Confirmed form saves are recorded in the private local `form-history.git` repository in the data directory. Historical demo passwords are stored in Keychain.
