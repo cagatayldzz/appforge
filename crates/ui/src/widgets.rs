@@ -131,9 +131,13 @@ pub(crate) fn area_field_with_action(
   labelled(input.entity_id(), label.into(), Some(header), Textarea::new(input), cx)
 }
 
-/// Centers `child` in a column of at most `CONTENT_MAX_WIDTH`, so every page lines up.
+/// Centers a form in a readable column.
 pub fn centered(child: impl IntoElement) -> Div {
-  h_flex().w_full().justify_center().child(div().w_full().max_w(px(CONTENT_MAX_WIDTH)).px_6().child(child))
+  centered_with_width(child, px(CONTENT_MAX_WIDTH))
+}
+
+pub(crate) fn centered_with_width(child: impl IntoElement, width: impl Into<Length>) -> Div {
+  h_flex().w_full().justify_center().child(div().w_full().min_w_0().max_w(width.into()).px_6().child(child))
 }
 
 /// A titled group of fields: a heading with a line under it, then the fields. No boxes, so pages stay calm.

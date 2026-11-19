@@ -429,7 +429,7 @@ impl Workspace {
       .then(|| self.distribution_button("release-now", Change::Release(id.clone()), cx).primary().into_any_element());
     let release = card(tr(l, "release"), Some(tr(l, "howThisVersionGoes")), release_now, release, &c);
 
-    // The next step, in one line at the top ------------------------------------------------------------------
+    // The next step, with room for its status and action ------------------------------------------------------------------
     let (step, step_color): (SharedString, Hsla) = if version.state == "PENDING_DEVELOPER_RELEASE" {
       (tr(l, "approvedReleaseItWhen"), c.success)
     } else if matches!(version.state.as_str(), "WAITING_FOR_REVIEW" | "IN_REVIEW") {
@@ -443,25 +443,43 @@ impl Workspace {
     } else {
       (tr(l, "thisVersionIsLive"), c.success)
     };
-    let banner = h_flex()
+    let action = can_draft.then(|| {
+      self
+        .distribution_button("review-draft", Change::Draft(snapshot.app.id.clone(), id.clone(), draft), cx)
+        .primary()
+        .when(data.selected_build.is_none(), |button| button.disabled(true).tooltip(tr(l, "nextSelectABuild")))
+    });
+    let banner = v_flex()
       .w_full()
       .gap_3()
       .px_4()
       .py_3()
-      .items_center()
       .rounded_lg()
       .bg(step_color.opacity(0.12))
-      .child(div().size_2().rounded_full().bg(step_color))
-      .child(div().flex_1().font_weight(FontWeight::MEDIUM).child(step))
-      .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "version", &[&version.version_string])))
-      .child(state_badge(&version.state, &c))
-      .children(can_draft.then(|| {
-        let mut button = self.distribution_button("review-draft", Change::Draft(snapshot.app.id.clone(), id.clone(), draft), cx).primary();
-        if data.selected_build.is_none() {
-          button = button.disabled(true).tooltip(tr(l, "nextSelectABuild"));
-        }
-        button
-      }));
+      .child(
+        h_flex()
+          .gap_2()
+          .items_center()
+          .child(div().size_2().flex_none().rounded_full().bg(step_color))
+          .child(div().min_w_0().font_weight(FontWeight::MEDIUM).child(step)),
+      )
+      .child(
+        h_flex()
+          .w_full()
+          .gap_2()
+          .flex_wrap()
+          .items_center()
+          .justify_between()
+          .child(
+            h_flex()
+              .gap_3()
+              .flex_wrap()
+              .items_center()
+              .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "version", &[&version.version_string])))
+              .child(state_badge(&version.state, &c)),
+          )
+          .children(action),
+      );
     v_flex().gap_4().child(banner).child(builds).child(review).child(release).child(versions).into_any_element()
   }
 }

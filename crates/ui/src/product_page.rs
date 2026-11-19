@@ -127,13 +127,8 @@ impl Workspace {
   pub(crate) fn render_product_page(&self, app: &StoreApp, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let mut page = v_flex().gap_4().child(
-      h_flex()
-        .gap_2()
-        .flex_wrap()
-        .justify_between()
-        .children(self.locale_picker(cx))
-        .child(store_link("manage-product-media", tr(l, "manageProductPage"), store_version(app)))
-        .child(
+      h_flex().gap_3().flex_wrap().items_center().justify_between().children(self.locale_picker(cx)).child(
+        h_flex().gap_2().flex_wrap().child(store_link("manage-product-media", tr(l, "manageProductPage"), store_version(app))).child(
           Button::new("reload-product-media")
             .label(tr(l, "reload"))
             .icon(Icon::new(IconName::RefreshCw))
@@ -142,6 +137,7 @@ impl Workspace {
             .disabled(self.product_localization().is_none())
             .on_click(cx.listener(|this, _, window, cx| this.load_product_assets(true, window, cx))),
         ),
+      ),
     );
     let Some(locale) = self.product_localization() else {
       return page.child(Alert::info("no-product-locale", tr(l, "noProductLocalization")));
@@ -198,7 +194,7 @@ impl Workspace {
       let asset = &item.asset;
       let mut tile = v_flex().id(SharedString::from(asset.id.clone())).gap_2().flex_none().w_32();
       if wide {
-        tile = tile.w_80();
+        tile = tile.w_full().max_w(rems(28.));
       }
       let preview = div().w_full().h_56().rounded_md().bg(c.border).overflow_hidden();
       tile = tile.child(match &item.image {

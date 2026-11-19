@@ -6,6 +6,7 @@ use crate::{
 };
 mod ai;
 mod apps;
+mod save_preview;
 mod saving;
 mod session;
 mod settings;
@@ -324,6 +325,11 @@ impl Workspace {
     let forms = Forms::new(window, cx);
     let completion_subscriptions = [
       &forms.name,
+      &forms.subtitle,
+      &forms.marketing_url,
+      &forms.privacy_choices,
+      &forms.data_types,
+      &forms.sdks,
       &forms.keywords,
       &forms.support_url,
       &forms.first_name,
@@ -337,7 +343,10 @@ impl Workspace {
     .into_iter()
     .map(|field| cx.observe(field, |_, _, cx| cx.notify()))
     .collect::<Vec<_>>();
-    let description_subscription = cx.observe(&forms.description, |_, _, cx| cx.notify());
+    let area_subscriptions = [&forms.description, &forms.promotional, &forms.whats_new, &forms.notes]
+      .into_iter()
+      .map(|field| cx.observe(field, |_, _, cx| cx.notify()))
+      .collect::<Vec<_>>();
     let guideline_search = cx.new(|cx| InputState::new(window, cx));
     let guideline_search_subscription = cx.observe(&guideline_search, |_, _, cx| cx.notify());
     let language_names: Vec<SharedString> = Language::ALL.iter().map(|language| SharedString::new_static(language.native_name())).collect();
@@ -399,7 +408,7 @@ impl Workspace {
         ])
         .chain(model_subscriptions)
         .chain(completion_subscriptions)
-        .chain(std::iter::once(description_subscription))
+        .chain(area_subscriptions)
         .chain(std::iter::once(guideline_search_subscription))
         .collect(),
       forms,

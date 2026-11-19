@@ -2,6 +2,7 @@
 
 use crate::workspace::{DetailTab, Load, Workspace};
 use appforge_appstore::{AppSnapshot, ReviewDetail};
+use appforge_storage::PrivacyDeclaration;
 use gpui_kit::{
   component::input::{InputState, TextareaState},
   *,
@@ -29,6 +30,7 @@ pub struct Forms {
   pub sdks: Entity<InputState>,
   /// The "Sign-in required" switch of App Review.
   pub demo_required: bool,
+  pub privacy: PrivacyDeclaration,
 }
 
 fn input<T: 'static>(window: &mut Window, cx: &mut Context<T>, placeholder: &'static str) -> Entity<InputState> {
@@ -78,6 +80,7 @@ impl Forms {
       data_types: input(window, cx, "email, purchases, crash logs"),
       sdks: input(window, cx, "Firebase, AdMob"),
       demo_required: false,
+      privacy: PrivacyDeclaration::default(),
     }
   }
 
@@ -112,7 +115,7 @@ impl Forms {
 
 impl Workspace {
   pub(crate) fn review_credentials_required(&self) -> bool {
-    self.forms.demo_required || self.privacy_declaration().requires_login_to_review
+    self.forms.demo_required || self.forms.privacy.requires_login_to_review
   }
 
   /// Counts populated fields in the current draft and required confirmations.
@@ -131,12 +134,12 @@ impl Workspace {
         if self.review_credentials_required() {
           checks.extend([filled(&forms.demo_name), filled(&forms.demo_password)]);
         }
-        if self.privacy_declaration().requires_login_to_review {
+        if self.forms.privacy.requires_login_to_review {
           checks.push(forms.demo_required);
         }
         count(&checks)
       }
-      DetailTab::Privacy => count(&[filled(&forms.privacy_url), self.privacy_declaration().confirmed_in_app_store_connect]),
+      DetailTab::Privacy => count(&[filled(&forms.privacy_url), forms.privacy.confirmed_in_app_store_connect]),
       DetailTab::Distribution => {
         let Load::Ready(data) = &self.active_data()?.distribution else { return None };
         count(&[data.selected_build.is_some()])

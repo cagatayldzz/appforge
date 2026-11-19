@@ -37,7 +37,7 @@ AppForge keeps loaded pages for each app during the signed-in session. Switching
 | App Information | Name and subtitle, and the listing of the version in preparation: description, keywords, promotional text, support and marketing URLs, What's New. Counters show the limits (name and subtitle 30, keywords 100, promotional text 170). A language picker appears when the app has several languages. |
 | Distribution | iOS version history, compatible uploaded builds, review submissions and release settings. |
 | App Review | Contact, "Sign-in required" with the demo account, and the notes for the reviewer. Saving creates the review details when there are none yet. |
-| App Privacy | The privacy policy URL (saved to App Store Connect) and your own answers: collects data, tracking, App Tracking Transparency, accounts and account deletion, a reviewer sign-in, data types and third-party SDKs. The answers stay on this Mac. |
+| App Privacy | The privacy policy URL (saved to App Store Connect) and your own answers: collects data, tracking, App Tracking Transparency, accounts and account deletion, a reviewer sign-in, data types and third-party SDKs. The answers stay on this Mac after you confirm Save. |
 | Ratings and Reviews | Customer reviews, ratings and public developer replies. Publishing and deleting a reply require confirmation. |
 | Analysis | The readiness score, the findings and the AI analysis. |
 

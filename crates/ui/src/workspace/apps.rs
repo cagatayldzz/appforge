@@ -187,7 +187,7 @@ impl Workspace {
     let (Some(client), Some(app)) = (self.client.clone(), self.selected_app()) else { return };
     let id = app.id.clone();
     let data = self.app_data.entry(id.clone()).or_default();
-    if data.snapshot_task.is_some() {
+    if data.snapshot_task.is_some() || (self.saving && matches!(data.snapshot, Load::Ready(_))) {
       return;
     }
     if !matches!(data.snapshot, Load::Ready(_)) {
@@ -246,6 +246,7 @@ impl Workspace {
     let declaration = self.privacy_declaration();
     set_input(&self.forms.data_types, &declaration.data_types, window, cx);
     set_input(&self.forms.sdks, &declaration.third_party_sdks, window, cx);
+    self.forms.privacy = declaration;
     self.recompute_report();
   }
 

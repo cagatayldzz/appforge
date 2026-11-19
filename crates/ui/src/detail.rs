@@ -3,7 +3,10 @@
 use crate::{
   i18n::{tr, trf},
   theme::colors,
-  widgets::{area_field, area_field_with_action, centered, pair, required, required_mark, section, text_field, text_field_with_action, url_field},
+  widgets::{
+    area_field, area_field_with_action, centered, centered_with_width, pair, required, required_mark, section, text_field, text_field_with_action,
+    url_field,
+  },
   workspace::{DetailTab, Load, Workspace},
 };
 use appforge_appstore::App;
@@ -101,54 +104,35 @@ impl Workspace {
         .into_any_element(),
       None => title.into_any_element(),
     };
-    v_flex().flex_1().min_h_0().overflow_hidden().child(
-      v_flex()
-        .id("detail-scroll")
-        .size_full()
-        .overflow_y_scrollbar()
-        .child(centered(v_flex().pt_6().pb_6().gap_6().child(heading).children(self.render_ai_tasks(cx)).child(body))),
-    )
+    let content = v_flex().pt_6().pb_6().gap_6().child(heading).children(self.render_ai_tasks(cx)).child(body);
+    let content = match self.tab {
+      DetailTab::ProductPage => centered_with_width(content, rems(72.)),
+      DetailTab::Distribution => centered_with_width(content, rems(60.)),
+      _ => centered(content),
+    };
+    v_flex().flex_1().min_h_0().overflow_hidden().child(v_flex().id("detail-scroll").size_full().overflow_y_scrollbar().child(content))
   }
 
   /// The button that saves the page, shown in the sidebar. The Analysis page has none.
   pub(crate) fn save_control(&self, cx: &mut Context<Self>) -> Option<Button> {
     let l = self.settings.language;
-    let has_version = self.ready_snapshot().is_some_and(|snapshot| snapshot.version.is_some());
-    let tab = self.tab;
-    let (id, label, enabled): (&'static str, SharedString, bool) = match tab {
-      DetailTab::Information => ("save-information", tr(l, "save"), true),
-      DetailTab::Review => ("save-review", tr(l, "save"), has_version),
-      DetailTab::Privacy => ("save-privacy", tr(l, "save"), true),
-      DetailTab::Readiness | DetailTab::ProductPage | DetailTab::Analysis | DetailTab::Distribution | DetailTab::CustomerReviews => return None,
+    let id = match self.tab {
+      DetailTab::Information => "save-information",
+      DetailTab::Review => "save-review",
+      DetailTab::Privacy => "save-privacy",
+      _ => return None,
     };
-    let tooltip = if tab == DetailTab::Privacy { tr(l, "yourAnswersStayOn") } else { tr(l, "saveToAppStore") };
+    let dirty = self.has_pending_save(cx);
     Some(
-      self
-        .save_button(id, label, enabled, cx, move |this, window, cx| match tab {
-          DetailTab::Information => this.save_information(window, cx),
-          DetailTab::Review => this.save_review(window, cx),
-          DetailTab::Privacy => this.save_privacy(window, cx),
-          DetailTab::Readiness | DetailTab::ProductPage | DetailTab::Analysis | DetailTab::Distribution | DetailTab::CustomerReviews => {}
-        })
-        .tooltip(tooltip),
+      Button::new(id)
+        .label(tr(l, "save"))
+        .primary()
+        .small()
+        .loading(self.saving)
+        .disabled(!dirty || self.saving || self.store_write_busy || self.settings_locked)
+        .tooltip(tr(l, if dirty { "reviewSaveChanges" } else { "nothingChanged" }))
+        .on_click(cx.listener(|this, _, window, cx| this.confirm_save(window, cx))),
     )
-  }
-
-  fn save_button(
-    &self,
-    id: &'static str,
-    label: SharedString,
-    enabled: bool,
-    cx: &mut Context<Self>,
-    save: impl Fn(&mut Self, &mut Window, &mut Context<Self>) + 'static,
-  ) -> Button {
-    Button::new(id)
-      .label(label)
-      .primary()
-      .small()
-      .loading(self.saving)
-      .disabled(!enabled || self.saving || self.settings_locked)
-      .on_click(cx.listener(move |this, _, window, cx| save(this, window, cx)))
   }
 
   fn render_information(&mut self, app: &App, cx: &mut Context<Self>) -> impl IntoElement {
@@ -233,7 +217,7 @@ impl Workspace {
     if missing {
       page = page.child(Alert::info("review-missing", tr(l, "nothingIsStoredFor")));
     }
-    let sign_in_required = self.privacy_declaration().requires_login_to_review;
+    let sign_in_required = forms.privacy.requires_login_to_review;
     let mut sign_in = v_flex().gap_4().child(
       h_flex()
         .gap_1()
@@ -269,14 +253,14 @@ impl Workspace {
 
   fn render_privacy(&mut self, app: &App, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
-    let declaration = self.privacy_declaration();
+    let declaration = self.privacy_draft(cx);
     let url = app_privacy_url(app);
     let picker = self.locale_picker(cx);
     let forms = &self.forms;
     let toggle = |id: &'static str, label: SharedString, checked: bool, change: fn(&mut PrivacyDeclaration, bool), cx: &mut Context<Self>| {
-      Switch::new(id).checked(checked).label(label).on_click(cx.listener(move |this, value: &bool, window, cx| {
-        let value = *value;
-        this.update_declaration(window, cx, |declaration| change(declaration, value));
+      Switch::new(id).checked(checked).label(label).on_click(cx.listener(move |this, value: &bool, _, cx| {
+        change(&mut this.forms.privacy, *value);
+        cx.notify();
       }))
     };
     v_flex()
