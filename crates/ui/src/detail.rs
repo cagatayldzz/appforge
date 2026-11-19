@@ -4,7 +4,7 @@ use crate::{
   i18n::{tr, trf},
   theme::colors,
   widgets::{area_field, area_field_with_action, centered, pair, section, text_field, text_field_with_action, url_field},
-  workspace::{locales, DetailTab, Load, Workspace},
+  workspace::{DetailTab, Load, Workspace},
 };
 use appforge_appstore::App;
 use appforge_compliance::ListingField;
@@ -18,7 +18,7 @@ use gpui_kit::{
     scroll::ScrollableElement as _,
     spinner::Spinner,
     switch::Switch,
-    v_flex, ActiveTheme, Disableable as _, Icon, IconName, Selectable as _, Sizable as _,
+    v_flex, ActiveTheme, Disableable as _, Icon, IconName, Sizable as _,
   },
   *,
 };
@@ -55,6 +55,8 @@ impl Workspace {
     } else {
       match self.active_data().map(|data| &data.snapshot) {
         Some(Load::Ready(_)) => match self.tab {
+          DetailTab::Readiness => self.render_readiness(cx).into_any_element(),
+          DetailTab::ProductPage => self.render_product_page(&app, cx).into_any_element(),
           DetailTab::Distribution => self.render_distribution(cx),
           DetailTab::CustomerReviews => self.render_customer_reviews(cx),
           DetailTab::Information => self.render_information(&app, cx).into_any_element(),
@@ -113,7 +115,7 @@ impl Workspace {
       DetailTab::Information => ("save-information", tr(l, "save"), true),
       DetailTab::Review => ("save-review", tr(l, "save"), has_version),
       DetailTab::Privacy => ("save-privacy", tr(l, "save"), true),
-      DetailTab::Analysis | DetailTab::Distribution | DetailTab::CustomerReviews => return None,
+      DetailTab::Readiness | DetailTab::ProductPage | DetailTab::Analysis | DetailTab::Distribution | DetailTab::CustomerReviews => return None,
     };
     let tooltip = if tab == DetailTab::Privacy { tr(l, "yourAnswersStayOn") } else { tr(l, "saveToAppStore") };
     Some(
@@ -122,27 +124,10 @@ impl Workspace {
           DetailTab::Information => this.save_information(window, cx),
           DetailTab::Review => this.save_review(window, cx),
           DetailTab::Privacy => this.save_privacy(window, cx),
-          DetailTab::Analysis | DetailTab::Distribution | DetailTab::CustomerReviews => {}
+          DetailTab::Readiness | DetailTab::ProductPage | DetailTab::Analysis | DetailTab::Distribution | DetailTab::CustomerReviews => {}
         })
         .tooltip(tooltip),
     )
-  }
-
-  fn locale_picker(&mut self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
-    let available = locales(self.ready_snapshot()?);
-    if available.len() < 2 {
-      return None;
-    }
-    Some(h_flex().gap_1().flex_wrap().children(available.into_iter().map(|locale| {
-      let selected = locale == self.locale;
-      let target = locale.clone();
-      Button::new(SharedString::from(format!("locale-{locale}")))
-        .label(locale)
-        .small()
-        .outline()
-        .selected(selected)
-        .on_click(cx.listener(move |this, _, window, cx| this.select_locale(target.clone(), window, cx)))
-    })))
   }
 
   fn save_button(
@@ -163,13 +148,12 @@ impl Workspace {
   }
 
   fn render_information(&mut self, app: &App, cx: &mut Context<Self>) -> impl IntoElement {
-    let _ = app;
     let l = self.settings.language;
     let has_version = self.ready_snapshot().is_some_and(|snapshot| snapshot.version.is_some());
     let picker = self.locale_picker(cx);
     let theme = cx.theme().clone();
     let forms = &self.forms;
-    let mut page = v_flex().gap_6().children(picker);
+    let mut page = v_flex().gap_6().children(picker).child(self.render_general(app, cx));
     page = page.child(section(
       tr(l, "basics"),
       pair(
@@ -273,6 +257,7 @@ impl Workspace {
     let l = self.settings.language;
     let declaration = self.privacy_declaration();
     let url = app_privacy_url(app);
+    let picker = self.locale_picker(cx);
     let forms = &self.forms;
     let toggle = |id: &'static str, label: SharedString, checked: bool, change: fn(&mut PrivacyDeclaration, bool), cx: &mut Context<Self>| {
       Switch::new(id).checked(checked).label(label).on_click(cx.listener(move |this, value: &bool, window, cx| {
@@ -292,7 +277,15 @@ impl Workspace {
             .on_click(move |_, _, cx| cx.open_url(&url)),
         ),
       )
-      .child(section(tr(l, "privacyPolicyUrl"), url_field("open-privacy-url", tr(l, "privacyPolicyUrl"), &forms.privacy_url, l, cx)))
+      .children(picker)
+      .child(section(
+        tr(l, "privacyPolicyUrl"),
+        pair(
+          url_field("open-privacy-url", tr(l, "privacyPolicyUrl"), &forms.privacy_url, l, cx),
+          url_field("open-privacy-choices", tr(l, "privacyChoicesUrl"), &forms.privacy_choices, l, cx),
+        ),
+      ))
+      .child(section(tr(l, "productPagePreview"), self.render_privacy_preview(&declaration, cx)))
       .child(section(
         tr(l, "yourAnswers"),
         v_flex()

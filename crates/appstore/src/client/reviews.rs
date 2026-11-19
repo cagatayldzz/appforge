@@ -25,7 +25,20 @@ pub struct ReviewResponse {
 
 impl Client {
   pub fn customer_reviews(&self, app: &str) -> Result<Vec<CustomerReview>, Error> {
-    let (reviews, included) = self.get_collection(&format!("/v1/apps/{app}/customerReviews?include=response&sort=-createdDate&limit=200"))?;
+    self.reviews_at(&format!("/v1/apps/{app}/customerReviews"))
+  }
+
+  pub fn version_customer_reviews(&self, version: &str) -> Result<Vec<CustomerReview>, Error> {
+    self.reviews_at(&format!("/v1/appStoreVersions/{version}/customerReviews"))
+  }
+
+  pub fn review_versions(&self, app: &str) -> Result<Vec<(String, String)>, Error> {
+    let versions = self.get_all(&format!("/v1/apps/{app}/appStoreVersions?filter[platform]=IOS&fields[appStoreVersions]=versionString&limit=200"))?;
+    Ok(versions.iter().map(|item| (resource_id(item).to_owned(), text(item, "versionString"))).collect())
+  }
+
+  fn reviews_at(&self, path: &str) -> Result<Vec<CustomerReview>, Error> {
+    let (reviews, included) = self.get_collection(&format!("{path}?include=response&sort=-createdDate&limit=200"))?;
     let responses: HashMap<_, _> =
       included.iter().filter(|item| item["type"].as_str() == Some("customerReviewResponses")).map(|item| (resource_id(item), item)).collect();
     Ok(

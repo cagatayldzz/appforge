@@ -15,6 +15,7 @@ pub struct Forms {
   pub support_url: Entity<InputState>,
   pub marketing_url: Entity<InputState>,
   pub whats_new: Entity<TextareaState>,
+  pub privacy_choices: Entity<InputState>,
   pub privacy_url: Entity<InputState>,
   pub first_name: Entity<InputState>,
   pub last_name: Entity<InputState>,
@@ -64,6 +65,7 @@ impl Forms {
       support_url: input(window, cx, "https://example.com/support"),
       marketing_url: input(window, cx, "https://example.com"),
       whats_new: area(window, cx, "What changed in this version", 8),
+      privacy_choices: input(window, cx, "https://example.com/privacy-choices"),
       privacy_url: input(window, cx, "https://example.com/privacy"),
       first_name: input(window, cx, "First name"),
       last_name: input(window, cx, "Last name"),
@@ -83,6 +85,7 @@ impl Forms {
     let info = snapshot.info_localizations.iter().find(|item| item.locale == locale);
     set_input(&self.name, info.map_or("", |item| &item.name), window, cx);
     set_input(&self.subtitle, info.map_or("", |item| &item.subtitle), window, cx);
+    set_input(&self.privacy_choices, info.map_or("", |item| &item.privacy_choices_url), window, cx);
     set_input(&self.privacy_url, info.map_or("", |item| &item.privacy_policy_url), window, cx);
     let listing = snapshot.version_localizations.iter().find(|item| item.locale == locale);
     set_area(&self.description, listing.map_or("", |item| &item.description), window, cx);

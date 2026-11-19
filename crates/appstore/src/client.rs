@@ -1,11 +1,12 @@
 //! The blocking App Store Connect client: requests, paging, apps, versions and the app snapshot.
 
 pub(crate) mod distribution;
+pub(crate) mod product_page;
 pub(crate) mod reviews;
 
 use crate::{
   model::{attributes_object, Attributes},
-  App, AppInfoLocalization, AppSnapshot, Credentials, Error, ReviewDetail, ScreenshotSet, Version, VersionLocalization,
+  App, AppInfoLocalization, AppSnapshot, Credentials, Error, GeneralInformation, ReviewDetail, ScreenshotSet, Version, VersionLocalization,
 };
 use serde_json::{json, Value};
 use std::{
@@ -120,7 +121,7 @@ impl Client {
   }
 
   pub fn apps(&self) -> Result<Vec<App>, Error> {
-    let items = self.get_all(&format!("/v1/apps?limit={PAGE_SIZE}&fields[apps]=name,bundleId,sku,primaryLocale"))?;
+    let items = self.get_all(&format!("/v1/apps?limit={PAGE_SIZE}&fields[apps]=name,bundleId,sku,primaryLocale,contentRightsDeclaration"))?;
     Ok(items.iter().map(parse_app).collect())
   }
 
@@ -185,17 +186,30 @@ impl Client {
       let version = self.read_version(app);
       (info.join().unwrap_or_else(|_| Err(Error::Unexpected("reading App Information panicked".into()))), version)
     });
-    let (info_state, info_localizations) = info?;
+    let (info_state, info_localizations, general) = info?;
     let (version, version_localizations, screenshot_sets, review_detail) = version?;
-    Ok(AppSnapshot { app: app.clone(), info_state, info_localizations, version, version_localizations, screenshot_sets, review_detail })
+    Ok(AppSnapshot { app: app.clone(), info_state, general, info_localizations, version, version_localizations, screenshot_sets, review_detail })
   }
 
-  fn read_info(&self, app_id: &str) -> Result<(String, Vec<AppInfoLocalization>), Error> {
-    let infos = self.get_all(&format!("/v1/apps/{app_id}/appInfos"))?;
-    let Some(info) = pick_editable(&infos, &["appStoreState", "state"]) else { return Ok((String::new(), Vec::new())) };
+  fn read_info(&self, app_id: &str) -> Result<(String, Vec<AppInfoLocalization>, GeneralInformation), Error> {
+    let (infos, included) = self.get_collection(&format!(
+      "/v1/apps/{app_id}/appInfos?include=primaryCategory,primarySubcategoryOne,primarySubcategoryTwo,secondaryCategory,secondarySubcategoryOne,secondarySubcategoryTwo,ageRatingDeclaration"
+    ))?;
+    let Some(info) = pick_editable(&infos, &["appStoreState", "state"]) else {
+      return Ok((String::new(), Vec::new(), GeneralInformation::default()));
+    };
     let id = info["id"].as_str().unwrap_or_default();
-    let localizations = self.get_all(&format!("/v1/appInfos/{id}/appInfoLocalizations"))?;
-    Ok((state_of(info, &["appStoreState", "state"]), localizations.iter().map(parse_info_localization).collect()))
+    let (localizations, territories) = thread::scope(|scope| {
+      let territories = scope.spawn(|| self.territory_age_ratings(id));
+      let localizations = self.get_all(&format!("/v1/appInfos/{id}/appInfoLocalizations"));
+      (localizations, territories.join().unwrap_or_else(|_| Err(Error::Unexpected("reading territory age ratings panicked".into()))))
+    });
+    let mut general = product_page::general_information(info, &included);
+    match territories {
+      Ok(ratings) => general.territory_ratings = ratings,
+      Err(error) => general.territory_ratings_error = Some(error.to_string()),
+    }
+    Ok((state_of(info, &["appStoreState", "state"]), localizations?.iter().map(parse_info_localization).collect(), general))
   }
 
   #[allow(clippy::type_complexity)]
@@ -214,7 +228,7 @@ impl Client {
       self.get_all(&format!("/v1/appStoreVersions/{id}/appStoreVersionLocalizations"))?.iter().map(parse_version_localization).collect();
     let primary = localizations.iter().find(|localization| localization.locale == app.primary_locale).or_else(|| localizations.first());
     let screenshot_sets = match primary {
-      Some(localization) => self.read_screenshot_sets(&localization.id)?,
+      Some(localization) => self.submission_screenshots(&localization.id)?,
       None => Vec::new(),
     };
     let review_detail = self
@@ -296,6 +310,7 @@ fn parse_app(item: &Value) -> App {
     bundle_id: text(item, "bundleId"),
     sku: text(item, "sku"),
     primary_locale: text(item, "primaryLocale"),
+    content_rights: text(item, "contentRightsDeclaration"),
   }
 }
 
@@ -306,6 +321,7 @@ fn parse_info_localization(item: &Value) -> AppInfoLocalization {
     name: text(item, "name"),
     subtitle: text(item, "subtitle"),
     privacy_policy_url: text(item, "privacyPolicyUrl"),
+    privacy_choices_url: text(item, "privacyChoicesUrl"),
   }
 }
 

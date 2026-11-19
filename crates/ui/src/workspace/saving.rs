@@ -3,7 +3,7 @@
 use super::*;
 
 impl Workspace {
-  pub(super) fn run_save(
+  pub(crate) fn run_save(
     &mut self,
     window: &mut Window,
     cx: &mut Context<Self>,
@@ -31,6 +31,7 @@ impl Workspace {
               Self::success(window, cx, tr(this.settings.language, "savedToAppStore"));
               if let Some(data) = this.app_data.get_mut(&id) {
                 data.snapshot_task = None;
+                data.product_assets.clear();
                 if this.selected.as_ref() != Some(&id) {
                   data.snapshot = Load::Idle;
                 }
@@ -49,11 +50,14 @@ impl Workspace {
     cx.notify();
   }
 
-  pub(super) fn edited_info(&self, privacy_url: Option<String>, cx: &App) -> Option<(AppInfoLocalization, AppInfoLocalization)> {
+  pub(super) fn edited_info(&self, privacy_urls: Option<(String, String)>, cx: &App) -> Option<(AppInfoLocalization, AppInfoLocalization)> {
     let original = self.ready_snapshot()?.info_localizations.iter().find(|item| item.locale == self.locale)?.clone();
     let mut edited = original.clone();
-    match privacy_url {
-      Some(url) => edited.privacy_policy_url = url,
+    match privacy_urls {
+      Some((policy, choices)) => {
+        edited.privacy_policy_url = policy;
+        edited.privacy_choices_url = choices;
+      }
       None => {
         edited.name = read_input(&self.forms.name, cx);
         edited.subtitle = read_input(&self.forms.subtitle, cx);
@@ -118,7 +122,7 @@ impl Workspace {
       self.save_settings(window, cx);
       self.recompute_report();
     }
-    let info = self.edited_info(Some(read_input(&self.forms.privacy_url, cx)), cx);
+    let info = self.edited_info(Some((read_input(&self.forms.privacy_url, cx), read_input(&self.forms.privacy_choices, cx))), cx);
     self.run_save(window, cx, move |client| match &info {
       Some((edited, original)) => client.update_info_localization(edited, original),
       None => Ok(false),

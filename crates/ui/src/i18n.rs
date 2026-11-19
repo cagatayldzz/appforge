@@ -89,6 +89,10 @@ pub fn tr(language: Language, key: &'static str) -> SharedString {
   SharedString::new_static(catalog.by_key.get(key).or_else(|| catalog.from_english.get(key)).copied().unwrap_or(key))
 }
 
+pub(crate) fn translated_text(language: Language, text: &str) -> SharedString {
+  catalog(language).from_english.get(text).map_or_else(|| SharedString::from(text.to_owned()), |value| SharedString::new_static(value))
+}
+
 /// `text` in `language`, with each `{}` replaced by the next of `args`.
 pub fn trf(language: Language, key: &'static str, args: &[&str]) -> SharedString {
   let template = tr(language, key);

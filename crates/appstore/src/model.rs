@@ -9,6 +9,7 @@ pub struct App {
   pub bundle_id: String,
   pub sku: String,
   pub primary_locale: String,
+  pub content_rights: String,
 }
 
 /// The name, subtitle and privacy policy of one locale (the "App Information" page).
@@ -19,6 +20,7 @@ pub struct AppInfoLocalization {
   pub name: String,
   pub subtitle: String,
   pub privacy_policy_url: String,
+  pub privacy_choices_url: String,
 }
 
 /// The store listing text of one locale and version.
@@ -74,12 +76,23 @@ pub struct ScreenshotSet {
 pub struct AppSnapshot {
   pub app: App,
   pub info_state: String,
+  pub general: GeneralInformation,
   pub info_localizations: Vec<AppInfoLocalization>,
   pub version: Option<Version>,
   pub version_localizations: Vec<VersionLocalization>,
   /// Screenshot sets of the primary locale of the version.
   pub screenshot_sets: Vec<ScreenshotSet>,
   pub review_detail: Option<ReviewDetail>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct GeneralInformation {
+  pub id: String,
+  pub age_suitability_url: String,
+  pub categories: [String; 6],
+  pub ratings: Vec<(String, String)>,
+  pub territory_ratings: Vec<(String, String)>,
+  pub territory_ratings_error: Option<String>,
 }
 
 pub(crate) type Attributes = Vec<(&'static str, Value)>;
@@ -97,6 +110,7 @@ impl AppInfoLocalization {
     changed(&mut attributes, "name", &original.name, &self.name);
     changed(&mut attributes, "subtitle", &original.subtitle, &self.subtitle);
     changed(&mut attributes, "privacyPolicyUrl", &original.privacy_policy_url, &self.privacy_policy_url);
+    changed(&mut attributes, "privacyChoicesUrl", &original.privacy_choices_url, &self.privacy_choices_url);
     attributes
   }
 }

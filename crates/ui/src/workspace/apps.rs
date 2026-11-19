@@ -125,6 +125,9 @@ impl Workspace {
       self.back_tab = None;
       self.selected = Some(id.clone());
       self.locale.clear();
+      self.review_territory = None;
+      self.review_rating = None;
+      self.review_status = Default::default();
       self.ai = AiState::Idle;
       self.tasks.ai = None;
       self.report = None;
@@ -146,7 +149,12 @@ impl Workspace {
     if self.tab != DetailTab::CustomerReviews && self.active_data().is_some_and(|data| matches!(data.snapshot, Load::Idle)) {
       self.load_snapshot(window, cx);
     }
-    if self.tab == DetailTab::Distribution && self.active_data().is_some_and(|data| matches!(data.distribution, Load::Idle)) {
+    if self.tab == DetailTab::ProductPage {
+      self.load_product_assets(false, window, cx);
+    }
+    if matches!(self.tab, DetailTab::Distribution | DetailTab::Readiness)
+      && self.active_data().is_some_and(|data| matches!(data.distribution, Load::Idle))
+    {
       self.load_distribution(window, cx);
     }
   }
@@ -242,11 +250,15 @@ impl Workspace {
   }
 
   pub fn select_locale(&mut self, locale: String, window: &mut Window, cx: &mut Context<Self>) {
+    if self.locale == locale {
+      return;
+    }
     self.locale = locale;
     if let Some(snapshot) = self.ready_snapshot() {
       let snapshot = snapshot.clone();
       self.forms.fill_locale(&snapshot, &self.locale, window, cx);
     }
+    self.ensure_app_page(window, cx);
     cx.notify();
   }
 

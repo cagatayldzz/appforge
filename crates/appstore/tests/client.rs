@@ -80,7 +80,14 @@ fn client(url: &str) -> Client {
 }
 
 fn app() -> App {
-  App { id: "100".into(), name: "Example".into(), bundle_id: "com.example".into(), sku: "SKU".into(), primary_locale: "en-US".into() }
+  App {
+    id: "100".into(),
+    name: "Example".into(),
+    bundle_id: "com.example".into(),
+    sku: "SKU".into(),
+    primary_locale: "en-US".into(),
+    ..Default::default()
+  }
 }
 
 #[test]
@@ -149,9 +156,14 @@ fn unauthorized_and_forbidden_answers_are_actionable() {
 fn a_snapshot_reads_info_listing_screenshots_and_review_detail() {
   let (url, _) = serve(&[
     (
-      "GET /v1/apps/100/appInfos",
+      "GET /v1/apps/100/appInfos?include=primaryCategory,primarySubcategoryOne,primarySubcategoryTwo,secondaryCategory,secondarySubcategoryOne,secondarySubcategoryTwo,ageRatingDeclaration",
       200,
       r#"{"data":[{"id":"i-live","attributes":{"appStoreState":"READY_FOR_SALE"}},{"id":"i-edit","attributes":{"appStoreState":"PREPARE_FOR_SUBMISSION"}}]}"#,
+    ),
+    (
+      "GET /v1/appInfos/i-edit/territoryAgeRatings?include=territory&limit=200",
+      200,
+      r#"{"data":[{"attributes":{"appStoreAgeRating":"FOUR_PLUS"},"relationships":{"territory":{"data":{"id":"TUR","type":"territories"}}}}]}"#,
     ),
     (
       "GET /v1/appInfos/i-edit/appInfoLocalizations",
@@ -180,6 +192,8 @@ fn a_snapshot_reads_info_listing_screenshots_and_review_detail() {
     ),
   ]);
   let snapshot = client(&url).snapshot(&app()).unwrap();
+  assert_eq!(snapshot.general.territory_ratings, [("TUR".into(), "FOUR_PLUS".into())]);
+  assert!(snapshot.general.territory_ratings_error.is_none());
   assert_eq!(snapshot.info_state, "PREPARE_FOR_SUBMISSION");
   assert_eq!(snapshot.info_localizations[0].subtitle, "Sub");
   let version = snapshot.version.unwrap();
@@ -371,4 +385,58 @@ fn customer_reviews_show_existing_replies_and_write_to_the_correct_resources() {
   assert_eq!(reply["data"]["relationships"]["review"]["data"]["id"], "review-1");
   assert_eq!(requests[2].method, "DELETE");
   assert_eq!(requests[2].path, "/v1/customerReviewResponses/reply-1");
+}
+
+#[test]
+fn product_page_uses_placement_order_and_resolves_image_and_video_previews() {
+  let (url, _) = serve(&[(
+    "GET /v1/appStoreVersionLocalizations/vl1/placements?include=image,video&sort=placementGroupPosition&limit=50",
+    200,
+    r#"{"data":[
+      {"id":"header","attributes":{"placementType":"PRODUCT_PAGE_HEADER_ASSET","placementGroup":"HEADER"},
+       "relationships":{"image":{"data":{"type":"appAssetLibraryImages","id":"im"}}}},
+      {"id":"preview","attributes":{"placementType":"APP_PREVIEW","placementGroup":"IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE"},
+       "relationships":{"video":{"data":{"type":"appAssetLibraryVideos","id":"vi"}}}}
+    ],"included":[
+      {"type":"appAssetLibraryImages","id":"im","attributes":{"imageAsset":{"templateUrl":"https://images.example/{w}x{h}.{f}","width":3840,"height":1646}}},
+      {"type":"appAssetLibraryVideos","id":"vi","attributes":{"videoAsset":"https://media.example/preview.m3u8",
+       "previewFrameImage":{"image":{"templateUrl":"https://images.example/poster/{w}x{h}.{f}","width":886,"height":1920}}}}
+    ]}"#,
+  )]);
+  let placements = client(&url).product_assets("vl1").unwrap();
+  assert_eq!(placements.iter().map(|placement| placement.id.as_str()).collect::<Vec<_>>(), ["header", "preview"]);
+  assert_eq!(placements[0].thumbnail.as_deref(), Some("https://images.example/640x274.jpg"));
+  assert_eq!(placements[1].thumbnail.as_deref(), Some("https://images.example/poster/295x640.jpg"));
+  assert_eq!(placements[1].video.as_deref(), Some("https://media.example/preview.m3u8"));
+}
+
+#[test]
+fn retrying_localization_creation_only_adds_the_missing_version_record() {
+  let (url, seen) = serve(&[
+    ("GET /v1/appInfos/i1/appInfoLocalizations", 200, r#"{"data":[{"attributes":{"locale":"tr"}}]}"#),
+    ("GET /v1/appStoreVersions/v1/appStoreVersionLocalizations", 200, r#"{"data":[]}"#),
+    ("POST /v1/appStoreVersionLocalizations", 201, r#"{"data":{"id":"tr-version"}}"#),
+  ]);
+  assert!(client(&url).add_localization("i1", "v1", "tr", "Example", "https://example.com/privacy").unwrap());
+  let seen = seen.lock().unwrap();
+  let post = seen.iter().filter(|call| call.method == "POST").collect::<Vec<_>>();
+  assert_eq!(post.len(), 1);
+  let body: serde_json::Value = serde_json::from_str(&post[0].body).unwrap();
+  assert_eq!(body["data"]["attributes"]["locale"], "tr");
+  assert_eq!(body["data"]["relationships"]["appStoreVersion"]["data"]["id"], "v1");
+}
+
+#[test]
+fn a_territory_ratings_error_keeps_the_edited_version_available() {
+  let (url, _) = serve(&[
+    ("GET /v1/apps/100/appInfos", 200, r#"{"data":[{"id":"i1","attributes":{"appStoreAgeRating":"FOUR_PLUS"}}]}"#),
+    ("GET /v1/appInfos/i1/appInfoLocalizations", 200, r#"{"data":[]}"#),
+    ("GET /v1/appInfos/i1/territoryAgeRatings", 403, r#"{"errors":[{"detail":"Territory ratings are unavailable."}]}"#),
+    ("GET /v1/apps/100/appStoreVersions", 200, r#"{"data":[{"id":"v1","attributes":{"appVersionState":"PREPARE_FOR_SUBMISSION"}}]}"#),
+    ("GET /v1/appStoreVersions/v1/appStoreVersionLocalizations", 200, r#"{"data":[]}"#),
+  ]);
+  let snapshot = client(&url).snapshot(&app()).unwrap();
+  assert_eq!(snapshot.version.unwrap().id, "v1");
+  assert_eq!(snapshot.general.ratings, [("Global".into(), "FOUR_PLUS".into())]);
+  assert!(snapshot.general.territory_ratings_error.unwrap().contains("Territory ratings are unavailable."));
 }

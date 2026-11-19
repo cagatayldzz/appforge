@@ -36,14 +36,14 @@ fn counter(length: usize, limit: Option<usize>, cx: &App) -> Option<impl IntoEle
   Some(div().text_xs().text_color(color).child(format!("{length}/{limit}")))
 }
 
-fn labelled(label: SharedString, counter: Option<impl IntoElement>, input: impl IntoElement) -> impl IntoElement {
-  v_flex().gap_1().child(h_flex().justify_between().child(Label::new(label)).children(counter)).child(input)
+fn labelled(id: EntityId, label: SharedString, counter: Option<impl IntoElement>, input: impl IntoElement) -> impl IntoElement {
+  v_flex().gap_1().child(h_flex().justify_between().child(Label::new(label).id(("field-label", id))).children(counter)).child(input)
 }
 
 /// A one-line field. `limit` shows a live character counter.
 pub fn text_field(label: impl Into<SharedString>, input: &Entity<InputState>, limit: Option<usize>, cx: &App) -> impl IntoElement {
   let length = input.read(cx).value().chars().count();
-  labelled(label.into(), counter(length, limit, cx), Input::new(input))
+  labelled(input.entity_id(), label.into(), counter(length, limit, cx), Input::new(input))
 }
 
 /// The web address to open for what was typed in a URL field: `https://` is assumed when there is no scheme, and only
@@ -76,13 +76,13 @@ pub fn url_field(id: &'static str, label: impl Into<SharedString>, input: &Entit
         }
       },
     );
-  labelled(label.into(), counter(length, None, cx), Input::new(input).suffix(open))
+  labelled(input.entity_id(), label.into(), counter(length, None, cx), Input::new(input).suffix(open))
 }
 
 /// A multi-line field.
 pub fn area_field(label: impl Into<SharedString>, input: &Entity<TextareaState>, limit: Option<usize>, cx: &App) -> impl IntoElement {
   let length = input.read(cx).value().chars().count();
-  labelled(label.into(), counter(length, limit, cx), Textarea::new(input))
+  labelled(input.entity_id(), label.into(), counter(length, limit, cx), Textarea::new(input))
 }
 
 /// A listing input with its generation action inside the field.
@@ -94,7 +94,7 @@ pub(crate) fn text_field_with_action(
   cx: &App,
 ) -> impl IntoElement {
   let length = input.read(cx).value().chars().count();
-  labelled(label, counter(length, Some(limit), cx), Input::new(input).suffix(action))
+  labelled(input.entity_id(), label, counter(length, Some(limit), cx), Input::new(input).suffix(action))
 }
 
 /// A textarea with its action beside the character counter above the field, so nothing sits over the text and the
@@ -108,7 +108,7 @@ pub(crate) fn area_field_with_action(
 ) -> impl IntoElement {
   let length = input.read(cx).value().chars().count();
   let header = h_flex().gap_2().items_center().child(action).children(counter(length, Some(limit), cx));
-  labelled(label, Some(header), Textarea::new(input))
+  labelled(input.entity_id(), label, Some(header), Textarea::new(input))
 }
 
 /// Centers `child` in a column of at most `CONTENT_MAX_WIDTH`, so every page lines up.

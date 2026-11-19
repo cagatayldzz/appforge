@@ -6,6 +6,7 @@
     "dev": "bash scripts/app.sh --dev",
     "build": "bash scripts/app.sh release --build",
     "release": "bash scripts/release.sh",
+    "appstore:schema": "bun scripts/appstore-schema.ts",
     "check": "bash scripts/app.sh --check",
     "update": "bash scripts/app.sh --update",
     "icon": "bash scripts/app.sh --icon",

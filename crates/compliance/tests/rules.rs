@@ -5,7 +5,8 @@ use appforge_storage::PrivacyDeclaration;
 /// A snapshot that passes every rule.
 fn ready() -> AppSnapshot {
   AppSnapshot {
-    app: App { id: "1".into(), name: "Example".into(), bundle_id: "com.acme.example".into(), sku: "S".into(), primary_locale: "en-US".into() },
+    app: App { id: "1".into(), name: "Example".into(), bundle_id: "com.acme.example".into(), sku: "S".into(), primary_locale: "en-US".into(), ..Default::default() },
+    general: Default::default(),
     info_state: "PREPARE_FOR_SUBMISSION".into(),
     info_localizations: vec![AppInfoLocalization {
       id: "i".into(),
@@ -13,6 +14,7 @@ fn ready() -> AppSnapshot {
       name: "Example".into(),
       subtitle: "Plan your day".into(),
       privacy_policy_url: "https://acme.dev/privacy".into(),
+      ..Default::default()
     }],
     version: Some(Version { id: "v".into(), version_string: "1.0".into(), state: "PREPARE_FOR_SUBMISSION".into() }),
     version_localizations: vec![VersionLocalization {

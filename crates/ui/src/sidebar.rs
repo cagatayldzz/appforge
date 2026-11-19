@@ -212,13 +212,18 @@ impl Workspace {
     let l = self.settings.language;
     let busy = self.active_data().is_some_and(|data| match self.tab {
       DetailTab::CustomerReviews => data.reviews_task.is_some(),
-      DetailTab::Distribution => data.snapshot_task.is_some() || data.distribution_task.is_some(),
+      DetailTab::Readiness | DetailTab::Distribution => data.snapshot_task.is_some() || data.distribution_task.is_some(),
       _ => data.snapshot_task.is_some(),
     });
     let reload = Button::new("reload-snapshot").icon(Icon::new(IconName::RefreshCw)).label(tr(l, "reload")).loading(busy).outline().small().on_click(
       cx.listener(|this, _, window, cx| match this.tab {
         DetailTab::CustomerReviews => this.load_customer_reviews(window, cx),
+        DetailTab::ProductPage => this.load_product_assets(true, window, cx),
         DetailTab::Distribution if this.ready_snapshot().is_some() => this.load_distribution(window, cx),
+        DetailTab::Readiness => {
+          this.load_snapshot(window, cx);
+          this.load_distribution(window, cx);
+        }
         _ => this.load_snapshot(window, cx),
       }),
     );

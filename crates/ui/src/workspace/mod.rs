@@ -50,6 +50,8 @@ pub enum Load<T> {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DetailTab {
+  Readiness,
+  ProductPage,
   Information,
   Distribution,
   CustomerReviews,
@@ -59,10 +61,13 @@ pub enum DetailTab {
 }
 
 impl DetailTab {
-  pub const ALL: [DetailTab; 6] = [Self::Information, Self::Distribution, Self::Review, Self::Privacy, Self::CustomerReviews, Self::Analysis];
+  pub const ALL: [DetailTab; 8] =
+    [Self::Readiness, Self::Distribution, Self::ProductPage, Self::Information, Self::Review, Self::Privacy, Self::CustomerReviews, Self::Analysis];
 
   pub fn label(self) -> &'static str {
     match self {
+      Self::Readiness => "submissionReadiness",
+      Self::ProductPage => "productPageInformation",
       Self::Distribution => "distribution",
       Self::CustomerReviews => "ratingsAndReviews",
       Self::Information => "appInformation",
@@ -157,10 +162,14 @@ pub(crate) struct Tasks {
 #[derive(Default)]
 pub(crate) struct AppData {
   pub snapshot: Load<AppSnapshot>,
+  pub product_assets: HashMap<String, crate::product_page::MediaLoad>,
   pub distribution: Load<appforge_appstore::Distribution>,
   pub reviews: Load<Vec<appforge_appstore::CustomerReview>>,
   pub snapshot_task: Option<Task<()>>,
   pub distribution_task: Option<Task<()>>,
+  pub review_version: Option<String>,
+  pub review_versions: Option<Vec<(String, String)>>,
+  pub review_territories: std::collections::BTreeSet<String>,
   pub reviews_task: Option<Task<()>>,
 }
 
@@ -213,6 +222,8 @@ pub struct Workspace {
   /// The filters of the customer reviews page.
   pub(crate) review_status: crate::customer_reviews::ReviewStatus,
   pub(crate) review_rating: Option<u64>,
+  pub(crate) review_territory: Option<String>,
+  pub(crate) review_sort: crate::customer_reviews::ReviewSort,
   pub saving: bool,
   pub login: LoginForm,
   /// The language menu shared by the welcome screen, the sign-in guide and Settings. Add a language to `Language::ALL` and it shows up here.
@@ -335,7 +346,7 @@ impl Workspace {
       selected: None,
       app_data: HashMap::new(),
       store_write_busy: false,
-      tab: DetailTab::Information,
+      tab: DetailTab::Readiness,
       locale: String::new(),
       report: None,
       ai: AiState::Idle,
@@ -357,6 +368,8 @@ impl Workspace {
       show_all_apps: false,
       review_status: Default::default(),
       review_rating: None,
+      review_territory: None,
+      review_sort: Default::default(),
       saving: false,
       login,
       language_select,

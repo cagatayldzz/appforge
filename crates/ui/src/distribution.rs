@@ -1,7 +1,7 @@
 //! The Distribution page (versions, builds, review submissions, release) and the `Change` writes to App Store Connect.
 
 use crate::{
-  forms::read_input,
+  forms::{read_input, set_input},
   i18n::{tr, trf},
   theme::{colors, Colors, FONT_SIZE_SM},
   widgets::{card, state_badge},
@@ -14,9 +14,10 @@ use gpui_kit::{
     button::{Button, ButtonVariants as _},
     h_flex,
     input::{Input, InputState},
+    radio::RadioGroup,
     spinner::Spinner,
     tag::Tag,
-    v_flex, Disableable as _, Selectable as _, Sizable as _, WindowExt as _,
+    v_flex, Disableable as _, Sizable as _, WindowExt as _,
   },
   prelude::FluentBuilder as _,
   *,
@@ -187,7 +188,7 @@ impl Workspace {
     cx.notify();
   }
 
-  fn distribution_button(&self, id: impl Into<ElementId>, change: Change, cx: &mut Context<Self>) -> Button {
+  pub(crate) fn distribution_button(&self, id: impl Into<ElementId>, change: Change, cx: &mut Context<Self>) -> Button {
     let l = self.settings.language;
     Button::new(id)
       .small()
@@ -214,6 +215,14 @@ impl Workspace {
       _ => None,
     };
     let input = placeholder.map(|placeholder| cx.new(|cx| InputState::new(window, cx).placeholder(placeholder)));
+    if let (Change::Schedule(id), Some(input)) = (&change, &input) {
+      if let Some(Load::Ready(data)) = self.active_data().map(|data| &data.distribution) {
+        if let Some(version) = data.versions.iter().find(|version| &version.id == id) {
+          set_input(input, &version.release_date, window, cx);
+        }
+      }
+    }
+    let scheduled = matches!(change, Change::Schedule(_));
     let workspace = cx.entity();
     let label = change.label();
     window.open_dialog(cx, move |dialog, _, _| {
@@ -235,6 +244,7 @@ impl Workspace {
             .gap_2()
             .child(target.clone())
             .children(count.as_ref().map(|count| trf(l, "itemsInThisSubmission", &[count])))
+            .children(scheduled.then(|| tr(l, "releaseDateUtc")))
             .children(input.as_ref().map(Input::new)),
         )
         .footer(footer)
@@ -366,20 +376,12 @@ impl Workspace {
       );
     }
     let active = data.submissions.iter().any(|item| item.includes_version && item.state != "COMPLETE");
-    let can_draft = editable && data.selected_build.is_some() && !active;
+    let can_draft = editable && !active;
     if submissions.is_empty() && !can_draft {
       review = review.child(div().px_3().py_2().text_color(c.text_secondary).child(tr(l, "nothingWasSubmittedFor")));
     }
     review = review.children(self.expand_toggle("reviews", submissions.len(), cx));
-    let review = card(
-      tr(l, "appReview"),
-      None,
-      can_draft.then(|| {
-        self.distribution_button("review-draft", Change::Draft(snapshot.app.id.clone(), id.clone(), draft), cx).primary().into_any_element()
-      }),
-      review,
-      &c,
-    );
+    let review = card(tr(l, "appReview"), None, None, review, &c);
 
     // Release -------------------------------------------------------------------------------------------------
     let current = data.versions.iter().find(|item| item.id == *id);
@@ -390,12 +392,21 @@ impl Workspace {
       ("release-automatic", Change::ReleaseType(id.clone(), true), mode == "AFTER_APPROVAL"),
       ("release-schedule", Change::Schedule(id.clone()), mode == "SCHEDULED"),
     ];
-    release = release.child(h_flex().gap_1().flex_wrap().children(choices.into_iter().map(|(button, change, chosen)| {
-      self.distribution_button(button, change, cx).selected(chosen).disabled(!editable || self.store_write_busy || self.saving)
-    })));
+    let checked = choices.iter().position(|(_, _, checked)| *checked);
+    let labels = choices.iter().map(|(id, change, _)| gpui_kit::component::radio::Radio::new(*id).label(tr(l, change.label())));
+    release = release.child(
+      RadioGroup::vertical("release-options")
+        .selected_index(checked)
+        .disabled(!editable || self.store_write_busy || self.saving)
+        .children(labels)
+        .on_click(cx.listener(move |this, selected: &usize, window, cx| {
+          if Some(*selected) != checked {
+            this.confirm_distribution_change(choices[*selected].1.clone(), window, cx);
+          }
+        })),
+    );
     if let Some(item) = current.filter(|item| !item.release_date.is_empty()) {
-      release =
-        release.child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "scheduledFor", &[&short_date(&item.release_date)])));
+      release = release.child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "scheduledFor", &[&item.release_date])));
     }
     if let Some((phase, state)) = &data.phased_release {
       let change = match state.as_str() {
@@ -443,7 +454,14 @@ impl Workspace {
       .child(div().size_2().rounded_full().bg(step_color))
       .child(div().flex_1().font_weight(FontWeight::MEDIUM).child(step))
       .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "version", &[&version.version_string])))
-      .child(state_badge(&version.state, &c));
+      .child(state_badge(&version.state, &c))
+      .children(can_draft.then(|| {
+        let mut button = self.distribution_button("review-draft", Change::Draft(snapshot.app.id.clone(), id.clone(), draft), cx).primary();
+        if data.selected_build.is_none() {
+          button = button.disabled(true).tooltip(tr(l, "nextSelectABuild"));
+        }
+        button
+      }));
     v_flex().gap_4().child(banner).child(builds).child(review).child(release).child(versions).into_any_element()
   }
 }
