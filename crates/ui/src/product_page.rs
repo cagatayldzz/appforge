@@ -289,6 +289,34 @@ impl Workspace {
     });
   }
 
+  /// The license agreement: Apple's standard one (a link to its text) or the app's own, edited in App Store Connect.
+  fn license_agreement(&self, app: &StoreApp, custom: Option<bool>, c: &crate::theme::Colors) -> Div {
+    let l = self.settings.language;
+    let value = match custom {
+      Some(false) => {
+        let url = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/";
+        div()
+          .id("standard-license")
+          .cursor_pointer()
+          .text_color(c.accent)
+          .child(tr(l, "standardLicenseAgreement"))
+          .on_click(move |_, _, cx| cx.open_url(url))
+          .into_any_element()
+      }
+      Some(true) => div().text_color(c.text_secondary).child(tr(l, "customLicenseAgreement")).into_any_element(),
+      None => div().text_color(c.text_secondary).child("—").into_any_element(),
+    };
+    let edit_url = store_info(app);
+    v_flex()
+      .gap_1()
+      .child(
+        h_flex().gap_3().child(div().font_weight(FontWeight::MEDIUM).child(tr(l, "licenseAgreement"))).child(
+          div().id("edit-license").cursor_pointer().text_color(c.accent).child(tr(l, "edit")).on_click(move |_, _, cx| cx.open_url(&edit_url)),
+        ),
+      )
+      .child(value)
+  }
+
   pub(crate) fn render_general(&self, app: &StoreApp, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let c = colors(cx);
@@ -303,7 +331,7 @@ impl Workspace {
       "USES_THIRD_PARTY_CONTENT" => tr(l, "usesThirdPartyContent"),
       _ => SharedString::from("—"),
     };
-    let general = general.child(field("contentRights", &rights));
+    let general = general.child(field("contentRights", &rights)).child(self.license_agreement(app, info.and_then(|info| info.custom_license), &c));
     let mut categories = v_flex().gap_2();
     if let Some(info) = info {
       for (label, values) in [("primaryCategory", &info.categories[..3]), ("secondaryCategory", &info.categories[3..])] {
@@ -311,12 +339,14 @@ impl Workspace {
         categories = categories.child(field(label, &value));
       }
     }
+    let age_ratings = self.render_age_ratings_section(app, cx);
     v_flex()
       .gap_5()
       .child(section(
         tr(l, "generalInformation"),
         general.child(categories).child(h_flex().child(store_link("manage-general-info", tr(l, "manageCategoriesAndRights"), store_info(app)))),
       ))
+      .child(age_ratings)
       .child(section(
         tr(l, "additionalInformation"),
         h_flex()

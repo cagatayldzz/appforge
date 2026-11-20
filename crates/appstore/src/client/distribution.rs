@@ -37,6 +37,9 @@ pub struct ReviewSubmission {
   pub date: String,
   pub item_count: usize,
   pub includes_version: bool,
+  /// The versions in the submission, such as `1.0`, and who submitted it (empty when Apple does not say).
+  pub versions: Vec<String>,
+  pub submitted_by: String,
 }
 
 impl Client {
@@ -73,8 +76,10 @@ impl Client {
     distribution.phased_release = self.get_optional(&format!("/v1/appStoreVersions/{id}/appStoreVersionPhasedRelease"))?.and_then(|response| {
       response["data"].as_object().map(|_| (resource_id(&response["data"]).to_owned(), text(&response["data"], "phasedReleaseState")))
     });
-    let submissions = self
-      .get_all(&format!("/v1/apps/{app}/reviewSubmissions?filter[platform]=IOS&include=items,appStoreVersionForReview&limit[items]=50&limit=200"))?;
+    let (submissions, included) = self.get_collection(&format!(
+      "/v1/apps/{app}/reviewSubmissions?filter[platform]=IOS&include=items,appStoreVersionForReview,submittedByActor&limit[items]=50&limit=200"
+    ))?;
+    let included_by = |kind: &str, id: &str| included.iter().find(|item| item["type"] == kind && item["id"] == id);
     for item in &submissions {
       let submission = resource_id(item);
       let state = text(item, "state");
@@ -86,12 +91,31 @@ impl Client {
       } else {
         linked == Some(id)
       };
+      let mut version_ids: Vec<&str> = linked.into_iter().collect();
+      for entry in item["relationships"]["items"]["data"].as_array().into_iter().flatten() {
+        let version = entry["id"].as_str().and_then(|id| included_by("reviewSubmissionItems", id));
+        version_ids.extend(version.and_then(|item| item["relationships"]["appStoreVersion"]["data"]["id"].as_str()));
+      }
+      let mut versions: Vec<String> = Vec::new();
+      for id in version_ids {
+        let number = distribution.versions.iter().find(|version| version.id == id).map(|version| version.number.clone());
+        if let Some(number) = number.filter(|number| !versions.contains(number)) {
+          versions.push(number);
+        }
+      }
+      let submitted_by = item["relationships"]["submittedByActor"]["data"]["id"]
+        .as_str()
+        .and_then(|id| included_by("actors", id))
+        .map(|actor| format!("{} {}", text(actor, "userFirstName"), text(actor, "userLastName")).trim().to_owned())
+        .unwrap_or_default();
       distribution.submissions.push(ReviewSubmission {
         id: submission.to_owned(),
         state,
         date: text(item, "submittedDate"),
         item_count: count,
         includes_version,
+        versions,
+        submitted_by,
       });
     }
     Ok(distribution)

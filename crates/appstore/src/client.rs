@@ -196,12 +196,22 @@ impl Client {
       return Ok((String::new(), Vec::new(), GeneralInformation::default()));
     };
     let id = info["id"].as_str().unwrap_or_default();
-    let (localizations, territories) = thread::scope(|scope| {
+    let (localizations, territories, license, encryption) = thread::scope(|scope| {
       let territories = scope.spawn(|| self.territory_age_ratings(id));
+      let encryption = scope.spawn(|| self.get_all(&format!("/v1/apps/{app_id}/appEncryptionDeclarations?limit=50")));
+      let license = scope.spawn(|| self.get_optional(&format!("/v1/apps/{app_id}/endUserLicenseAgreement")));
       let localizations = self.get_all(&format!("/v1/appInfos/{id}/appInfoLocalizations"));
-      (localizations, territories.join().unwrap_or_else(|_| Err(Error::Unexpected("reading territory age ratings panicked".into()))))
+      (
+        localizations,
+        territories.join().unwrap_or_else(|_| Err(Error::Unexpected("reading territory age ratings panicked".into()))),
+        license.join().ok().and_then(Result::ok),
+        encryption.join().ok().and_then(Result::ok),
+      )
     });
     let mut general = product_page::general_information(info, &included);
+    // No agreement of its own (404) means Apple's standard one; a failed read leaves it unknown.
+    general.custom_license = license.map(|value| value.is_some_and(|value| value["data"].is_object()));
+    general.encryption = encryption.map(|items| items.iter().map(product_page::parse_encryption).collect());
     match territories {
       Ok(ratings) => general.territory_ratings = ratings,
       Err(error) => general.territory_ratings_error = Some(error.to_string()),

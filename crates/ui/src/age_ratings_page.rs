@@ -1,4 +1,4 @@
-//! The Age Ratings page, a sub-page of App Information: the ratings Apple returns and where to change them.
+//! The Age Ratings section of App Information: the ratings Apple returns and where to change them.
 
 use crate::{
   i18n::{tr, trf},
@@ -14,7 +14,7 @@ use gpui_kit::{
 };
 
 impl Workspace {
-  pub(crate) fn render_age_ratings(&self, app: &StoreApp, cx: &mut Context<Self>) -> impl IntoElement {
+  pub(crate) fn render_age_ratings_section(&self, app: &StoreApp, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let c = colors(cx);
     let info = self.ready_snapshot().map(|snapshot| &snapshot.general);
@@ -45,7 +45,7 @@ impl Workspace {
     if info.is_none_or(|info| info.ratings.is_empty() && info.territory_ratings.is_empty() && info.territory_ratings_error.is_none()) {
       ratings = ratings.child(tr(l, "noAgeRatings"));
     }
-    v_flex().gap_5().child(section(
+    section(
       tr(l, "ageRatings"),
       v_flex().gap_3().child(ratings).child(territories).children(info.map(|info| field("ageSuitabilityUrl", &info.age_suitability_url))).child(
         h_flex()
@@ -62,6 +62,6 @@ impl Workspace {
           }))
           .child(store_link("manage-age-ratings", tr(l, "manageAgeRatings"), store_info(app))),
       ),
-    ))
+    )
   }
 }

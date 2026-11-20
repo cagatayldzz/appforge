@@ -224,10 +224,10 @@ impl Workspace {
     // Without a version there is no version page to open; the Product Page row stays as the way in.
     let version = if version_chip.is_some() { Vec::new() } else { vec![self.page_item(DetailTab::ProductPage, cx)] };
     let general = vec![
-      self.page_item(DetailTab::Information, cx).default_open(true).children([self.page_item(DetailTab::AgeRatings, cx)]),
+      self.page_item(DetailTab::Information, cx),
       self.page_item(DetailTab::Compliance, cx),
       // App Review is the list of submissions, as in App Store Connect; the review contact and notes are on the version page.
-      self.page_link(tr(l, "appReview"), self.tab == DetailTab::ProductPage && self.product_tab == 3, None, DetailTab::ProductPage, Some(3), cx),
+      self.page_link(tr(l, "appReview"), self.tab == DetailTab::Submissions, None, DetailTab::Submissions, None, cx),
     ];
     let trust = [DetailTab::Privacy, DetailTab::Accessibility, DetailTab::CustomerReviews].map(|tab| self.page_item(tab, cx)).to_vec();
     let mut menu = |id: &'static str, items: Vec<SidebarMenuItem>| {
@@ -250,7 +250,7 @@ impl Workspace {
   fn version_chip(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
     let c = colors(cx);
     let version = self.ready_snapshot().and_then(|snapshot| snapshot.version.as_ref())?;
-    let selected = self.tab == DetailTab::ProductPage && self.product_tab != 3;
+    let selected = self.tab == DetailTab::ProductPage;
     let label = format!("{} {}", version.version_string, crate::widgets::state_label(&version.state));
     Some(
       h_flex()
@@ -336,7 +336,7 @@ impl Workspace {
       DetailTab::ProductPage if self.product_tab == 1 => {
         media_locale.and_then(|locale| data.product_assets.get(locale)).is_some_and(|entry| entry.task.is_some())
       }
-      DetailTab::Distribution => data.snapshot_task.is_some() || data.distribution_task.is_some(),
+      DetailTab::Distribution | DetailTab::Submissions => data.snapshot_task.is_some() || data.distribution_task.is_some(),
       _ => data.snapshot_task.is_some(),
     });
     let reload = Button::new("reload-snapshot")
@@ -351,7 +351,7 @@ impl Workspace {
       .on_click(cx.listener(|this, _, window, cx| match this.effective_tab() {
         DetailTab::CustomerReviews => this.refresh_customer_reviews(true, window, cx),
         DetailTab::ProductPage if this.product_tab == 1 => this.load_product_assets(true, window, cx),
-        DetailTab::Distribution if this.ready_snapshot().is_some() => this.refresh_distribution(true, window, cx),
+        DetailTab::Distribution | DetailTab::Submissions if this.ready_snapshot().is_some() => this.refresh_distribution(true, window, cx),
         tab => this.refresh_snapshot(Some(tab), window, cx),
       }));
     let save = self.save_control(cx);

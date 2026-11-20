@@ -58,12 +58,12 @@ pub enum Load<T> {
 pub enum DetailTab {
   ProductPage,
   Information,
-  /// A sub-page of App Information, listed under it in the sidebar.
-  AgeRatings,
   /// Pages that App Store Connect owns (the API has no endpoint for them): a short explanation and a link.
   Compliance,
   Accessibility,
   Distribution,
+  /// The submissions sent to App Review, listed under App Review in the sidebar.
+  Submissions,
   CustomerReviews,
   Review,
   Privacy,
@@ -75,8 +75,8 @@ impl DetailTab {
     Self::Distribution,
     Self::ProductPage,
     Self::Information,
-    Self::AgeRatings,
     Self::Compliance,
+    Self::Submissions,
     Self::Review,
     Self::Privacy,
     Self::Accessibility,
@@ -90,8 +90,8 @@ impl DetailTab {
       Self::Distribution => "distribution",
       Self::CustomerReviews => "ratingsAndReviews",
       Self::Information => "appInformation",
-      Self::AgeRatings => "ageRatings",
       Self::Compliance => "appCompliance",
+      Self::Submissions => "appReview",
       Self::Accessibility => "appAccessibility",
       Self::Review => "appReview",
       Self::Privacy => "appPrivacy",

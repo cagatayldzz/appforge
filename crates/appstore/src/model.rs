@@ -157,6 +157,21 @@ pub struct GeneralInformation {
   pub ratings: Vec<(String, String)>,
   pub territory_ratings: Vec<(String, String)>,
   pub territory_ratings_error: Option<String>,
+  /// Whether the app has its own license agreement (`Some(true)`) or Apple's standard one (`Some(false)`); `None` when unknown.
+  pub custom_license: Option<bool>,
+  /// The export compliance (encryption) declarations of the app; `None` when Apple could not be asked.
+  pub encryption: Option<Vec<EncryptionDeclaration>>,
+}
+
+/// One export compliance declaration: `state` is `CREATED`, `IN_REVIEW`, `APPROVED`, `REJECTED`, `INVALID` or `EXPIRED`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct EncryptionDeclaration {
+  pub state: String,
+  pub created: String,
+  pub exempt: bool,
+  pub proprietary: bool,
+  pub third_party: bool,
+  pub french_store: bool,
 }
 
 pub(crate) type Attributes = Vec<(&'static str, Value)>;

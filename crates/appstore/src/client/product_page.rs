@@ -1,7 +1,7 @@
 //! Product page placements and general App Store information.
 
 use super::{text, Client};
-use crate::{Error, GeneralInformation, ScreenshotSet};
+use crate::{EncryptionDeclaration, Error, GeneralInformation, ScreenshotSet};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap};
 
@@ -77,6 +77,18 @@ fn thumbnail(image: &Value) -> Option<String> {
   let longest = width.max(height);
   let size = |dimension: u64| ((dimension as f64 / longest as f64 * 640.0).round() as u64).max(1).to_string();
   Some(format!("https://{}", template.replace("{w}", &size(width)).replace("{h}", &size(height)).replace("{f}", "jpg")))
+}
+
+pub(super) fn parse_encryption(item: &Value) -> EncryptionDeclaration {
+  let flag = |name: &str| item["attributes"][name].as_bool().unwrap_or_default();
+  EncryptionDeclaration {
+    state: text(item, "appEncryptionDeclarationState"),
+    created: text(item, "createdDate"),
+    exempt: flag("exempt"),
+    proprietary: flag("containsProprietaryCryptography"),
+    third_party: flag("containsThirdPartyCryptography"),
+    french_store: flag("availableOnFrenchStore"),
+  }
 }
 
 pub(super) fn general_information(info: &Value, included: &[Value]) -> GeneralInformation {

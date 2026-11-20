@@ -20,6 +20,7 @@ mod localization;
 mod login;
 mod privacy_preview;
 mod product_page;
+mod review_submissions;
 mod settings_view;
 mod setup;
 mod sidebar;
