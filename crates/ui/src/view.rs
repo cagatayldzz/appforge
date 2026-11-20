@@ -1,12 +1,17 @@
 //! `Render for Workspace`: the title band and which screen shows.
 
 use crate::{
-  i18n::tr,
+  i18n::{tr, trf},
   theme::{colors, FONT_SIZE, FONT_SIZE_SM},
   workspace::{Load, Workspace},
 };
 use gpui_kit::{
-  component::{h_flex, spinner::Spinner, v_flex, ActiveTheme, TitleBar},
+  component::{
+    button::{Button, ButtonVariants as _},
+    h_flex,
+    spinner::Spinner,
+    v_flex, ActiveTheme, Icon, IconName, Sizable as _, TitleBar,
+  },
   *,
 };
 
@@ -34,6 +39,16 @@ impl Render for Workspace {
       h_flex().flex_1().min_h_0().child(self.render_rail(cx)).children(sidebar).child(main).into_any_element()
     };
     let c = colors(cx);
+    // After a jump from another page, a way back to it sits in the title bar, next to the window buttons.
+    let back = self.back_tab.filter(|_| self.client.is_some() && !self.show_settings && !self.showing_all_apps()).map(|origin| {
+      Button::new("back-to-page")
+        .icon(Icon::new(IconName::ArrowLeft))
+        .label(tr(l, origin.label()))
+        .ghost()
+        .small()
+        .tooltip(trf(l, "backTo", &[&tr(l, origin.label())]))
+        .on_click(cx.listener(|this, _, window, cx| this.go_back(window, cx)))
+    });
     v_flex()
       .size_full()
       .bg(theme.background)
@@ -45,6 +60,7 @@ impl Render for Workspace {
           .bg(c.rail)
           .border_b_1()
           .border_color(c.border)
+          .children(back)
           // The name sits in the middle of the band; the traffic lights stay at its left edge.
           .child(
             h_flex().flex_1().justify_center().text_size(FONT_SIZE_SM).font_weight(FontWeight::MEDIUM).text_color(c.text_secondary).child("AppForge"),

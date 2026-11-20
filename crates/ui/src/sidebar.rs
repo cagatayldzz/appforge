@@ -152,7 +152,6 @@ impl Workspace {
     });
     // One tile: the score, the version and where it stands at Apple. It opens the Analysis page.
     let tooltip = trf(l, "openPage", &[&tr(l, DetailTab::Analysis.label())]);
-    let open = self.tab == DetailTab::Analysis;
     let loading = self.active_data().is_some_and(|data| matches!(data.snapshot, Load::Idle | Load::Loading));
     let placeholder = || {
       h_flex()
@@ -174,10 +173,9 @@ impl Workspace {
       .items_center()
       .rounded_lg()
       .border_1()
-      .border_color(if open { c.control_border } else { c.border })
+      .border_color(c.border)
       .cursor_pointer()
-      .when(open, |tile| tile.bg(c.selected))
-      .when(!open, |tile| tile.hover(move |tile| tile.bg(c.hover)))
+      .hover(move |tile| tile.bg(c.hover))
       .children(score)
       .child(v_flex().flex_1().min_w_0().gap_1().text_size(FONT_SIZE_SM).children(version.map(|version| {
         v_flex()

@@ -1,11 +1,14 @@
 //! The AppForge interface: sign in to App Store Connect, browse apps, edit App Information, App Review and
 //! App Privacy, and see what could get an app rejected.
 
+mod age_rating;
 mod analysis;
 mod apps_view;
 mod customer_reviews;
 mod detail;
 mod distribution;
+mod finding_card;
+mod finding_fix;
 mod forms;
 mod guide_art;
 mod guidelines;

@@ -94,11 +94,17 @@ pub(super) fn general_information(info: &Value, included: &[Value]) -> GeneralIn
   .filter_map(|(label, key)| Some((label.to_owned(), info["attributes"][key].as_str()?.to_owned())))
   .collect();
   let declaration = &info["relationships"]["ageRatingDeclaration"]["data"];
-  let age_suitability_url = included
-    .iter()
-    .find(|item| item["type"] == declaration["type"] && item["id"] == declaration["id"])
-    .map_or_else(String::new, |item| text(item, "developerAgeRatingInfoUrl"));
-  GeneralInformation { id: info["id"].as_str().unwrap_or_default().into(), categories, ratings, age_suitability_url, ..Default::default() }
+  let age_declaration =
+    included.iter().find(|item| item["type"] == declaration["type"] && item["id"] == declaration["id"]).map(super::age_rating::parse_declaration);
+  let age_suitability_url = age_declaration.as_ref().map_or_else(String::new, |item| item.info_url.clone());
+  GeneralInformation {
+    id: info["id"].as_str().unwrap_or_default().into(),
+    categories,
+    ratings,
+    age_suitability_url,
+    age_declaration,
+    ..Default::default()
+  }
 }
 
 impl Client {

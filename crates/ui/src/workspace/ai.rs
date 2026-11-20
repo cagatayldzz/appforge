@@ -3,11 +3,7 @@
 use super::*;
 use gpui_kit::component::{button::Button, Sizable as _};
 
-struct AiAnalysisNotice;
-
-fn analysis_progress(message: SharedString, window: &mut Window, cx: &mut App) {
-  window.push_notification(Notification::info(message).id::<AiAnalysisNotice>().autohide(false), cx);
-}
+use super::ai_progress::{self, AiAnalysisNotice, Sent, Stage};
 
 impl Workspace {
   /// Counts what an AI request used and keeps the totals on disk.
@@ -64,24 +60,25 @@ impl Workspace {
     let playbook = self.playbook.clone();
     let guidelines = self.guidelines.clone();
     let data_dir = self.data_dir.clone();
+    let sent = Sent { provider: provider.label().into(), model: model.clone().into(), project: folder.is_some(), findings: report.findings.len() };
     let initial = tr(language, "projectAnalysisCheckingKey");
     self.ai = AiState::Running(initial.clone());
-    analysis_progress(initial, window, cx);
+    ai_progress::show(Stage::CheckingKey, initial, language, &sent, window, cx);
     self.tasks.ai = Some(cx.spawn_in(window, async move |this, cx| {
       let (progress, updates) = async_channel::unbounded();
       let worker = cx.background_spawn(async move {
-        let report_progress = |message| {
-          let _ = progress.try_send(message);
+        let report_progress = |stage, message| {
+          let _ = progress.try_send((stage, message));
         };
         let key = secrets.get(SecretKey::ApiKey(provider)).map_err(|error| error.to_string())?.ok_or_else(|| missing_key.to_string())?;
         let project = if let Some(folder) = folder {
-          report_progress(tr(language, "projectAnalysisReadingSource"));
+          report_progress(Stage::ReadingSource, tr(language, "projectAnalysisReadingSource"));
           Some(appforge_project::summarize_for_review(&folder).map_err(|error| trf(language, "couldNotReadThe", &[&error.to_string()]).to_string())?)
         } else {
           None
         };
         let playbook = if playbook.is_empty() {
-          report_progress(tr(language, "projectAnalysisLoadingRules"));
+          report_progress(Stage::LoadingRules, tr(language, "projectAnalysisLoadingRules"));
           Playbook::refresh(&data_dir).unwrap_or(playbook)
         } else {
           playbook
@@ -94,12 +91,12 @@ impl Workspace {
         let context = Some((language_name, project.as_ref().map(|summary| summary.text.as_str())));
         analyze_project_with_ai(&client, provider, &key, &model, &snapshot, &declaration, &report, &playbook, &guidelines, context, |stage| {
           use appforge_compliance::AiReviewStage;
-          report_progress(match stage {
-            AiReviewStage::PreparingRequest => tr(language, "projectAnalysisPreparing"),
-            AiReviewStage::WaitingForProvider => trf(language, "projectAnalysisWaiting", &[provider.label()]),
-            AiReviewStage::RetryingProvider => trf(language, "projectAnalysisRetrying", &[provider.label()]),
-            AiReviewStage::ReadingResponse => tr(language, "projectAnalysisReadingResponse"),
-          });
+          match stage {
+            AiReviewStage::PreparingRequest => report_progress(Stage::Preparing, tr(language, "projectAnalysisPreparing")),
+            AiReviewStage::WaitingForProvider => report_progress(Stage::Waiting, trf(language, "projectAnalysisWaiting", &[provider.label()])),
+            AiReviewStage::RetryingProvider => report_progress(Stage::Retrying, trf(language, "projectAnalysisRetrying", &[provider.label()])),
+            AiReviewStage::ReadingResponse => report_progress(Stage::ReadingResponse, tr(language, "projectAnalysisReadingResponse")),
+          }
         })
         .map(|(review, usage)| {
           let entry =
@@ -114,11 +111,11 @@ impl Workspace {
           _ => error.to_string(),
         })
       });
-      while let Ok(message) = updates.recv().await {
+      while let Ok((stage, message)) = updates.recv().await {
         if this
           .update_in(cx, |this, window, cx| {
             this.ai = AiState::Running(message.clone());
-            analysis_progress(message, window, cx);
+            ai_progress::show(stage, message, this.settings.language, &sent, window, cx);
             cx.notify();
           })
           .is_err()

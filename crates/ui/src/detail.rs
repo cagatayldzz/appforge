@@ -1,7 +1,7 @@
 //! The open app's page: heading, the loaded body, and the App Information, App Review and App Privacy forms.
 
 use crate::{
-  i18n::{tr, trf},
+  i18n::tr,
   theme::colors,
   widgets::{
     area_field, area_field_with_action, centered_with_width, page_columns, page_columns_with_primary, pair, required, required_mark, section,
@@ -83,24 +83,7 @@ impl Workspace {
     };
     // The pages are listed in the sidebar, so the page says which one it is; it scrolls under that heading.
     let title = div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, self.tab.label()));
-    // After a jump from another page, a way back to it comes first.
-    let heading = match self.back_tab {
-      Some(origin) => h_flex()
-        .gap_3()
-        .items_center()
-        .child(
-          Button::new("back-to-page")
-            .icon(Icon::new(IconName::ArrowLeft))
-            .label(tr(l, origin.label()))
-            .outline()
-            .small()
-            .tooltip(trf(l, "backTo", &[&tr(l, origin.label())]))
-            .on_click(cx.listener(|this, _, window, cx| this.go_back(window, cx))),
-        )
-        .child(title)
-        .into_any_element(),
-      None => title.into_any_element(),
-    };
+    let heading = title;
     let heading = h_flex().gap_3().flex_wrap().items_center().justify_between().child(heading).children(self.form_history_button(cx));
     let content = v_flex().pt_6().pb_6().gap_6().child(heading).child(body);
     let max_width = match self.tab {
@@ -215,7 +198,7 @@ impl Workspace {
         .child(section(
           tr(l, "whatsNewInThis"),
           area_field_with_action(
-            tr(l, "whatsNewInThis"),
+            required(tr(l, "whatsNewInThis")),
             &forms.whats_new,
             WHATS_NEW_LIMIT,
             self.field_generate_button(ListingField::WhatsNew, cx),

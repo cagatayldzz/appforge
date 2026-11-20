@@ -16,4 +16,7 @@ pub use client::product_page::ProductAsset;
 pub use client::reviews::{CustomerReview, ReviewResponse};
 pub use client::{Client, DEFAULT_BASE_URL};
 pub use error::Error;
-pub use model::{App, AppInfoLocalization, AppSnapshot, GeneralInformation, ReviewDetail, ScreenshotSet, Version, VersionLocalization};
+pub use model::{
+  AgeRatingDeclaration, App, AppInfoLocalization, AppSnapshot, GeneralInformation, ReviewDetail, ScreenshotSet, Version, VersionLocalization,
+  AGE_FLAG_KEYS, AGE_LEVEL_KEYS,
+};

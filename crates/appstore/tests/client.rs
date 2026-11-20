@@ -440,3 +440,35 @@ fn a_territory_ratings_error_keeps_the_edited_version_available() {
   assert_eq!(snapshot.general.ratings, [("Global".into(), "FOUR_PLUS".into())]);
   assert!(snapshot.general.territory_ratings_error.unwrap().contains("Territory ratings are unavailable."));
 }
+
+#[test]
+fn the_age_rating_declaration_is_read_and_only_changed_answers_are_patched() {
+  let (url, seen) = serve(&[
+    (
+      "GET /v1/apps/100/appInfos",
+      200,
+      r#"{"data":[{"id":"i1","attributes":{},"relationships":{"ageRatingDeclaration":{"data":{"type":"ageRatingDeclarations","id":"a1"}}}}],
+         "included":[{"type":"ageRatingDeclarations","id":"a1","attributes":{"contests":"INFREQUENT_OR_MILD","advertising":true,"ageRatingOverrideV2":"NINE_PLUS"}}]}"#,
+    ),
+    ("GET /v1/appInfos/i1/appInfoLocalizations", 200, r#"{"data":[]}"#),
+    ("GET /v1/appInfos/i1/territoryAgeRatings", 200, r#"{"data":[]}"#),
+    ("GET /v1/apps/100/appStoreVersions", 200, r#"{"data":[]}"#),
+    ("PATCH /v1/ageRatingDeclarations/a1", 200, r#"{"data":{}}"#),
+  ]);
+  let client = client(&url);
+  let original = client.snapshot(&app()).unwrap().general.age_declaration.expect("the declaration is read from the included resources");
+  assert_eq!(original.levels[1], "INFREQUENT_OR_MILD");
+  assert_eq!(original.levels[0], "NONE");
+  assert!(original.flags[0]);
+  assert_eq!(original.age_override, "NINE_PLUS");
+  let mut edited = original.clone();
+  assert!(!client.update_age_rating(&edited, &original).unwrap(), "nothing changed, nothing sent");
+  edited.levels[1] = "NONE".into();
+  edited.flags[1] = true;
+  assert!(client.update_age_rating(&edited, &original).unwrap());
+  let seen = seen.lock().unwrap();
+  let patch = seen.iter().find(|request| request.method == "PATCH").expect("a patch was sent");
+  let body: serde_json::Value = serde_json::from_str(&patch.body).unwrap();
+  assert_eq!(body["data"]["type"], "ageRatingDeclarations");
+  assert_eq!(body["data"]["attributes"], serde_json::json!({"contests": "NONE", "gambling": true}));
+}

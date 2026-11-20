@@ -1,9 +1,9 @@
 //! The Analysis page: score, checklist, AI analysis and rules.
 
 use crate::{
-  i18n::{tr, translated_text, trf},
+  i18n::{tr, trf},
   theme::{colors, FONT_SIZE_SM},
-  widgets::{page_columns, setting_row, severity_badge},
+  widgets::{page_columns_with_primary, setting_row},
   workspace::{AiState, DetailTab, Workspace},
 };
 use appforge_compliance::{Category, Finding, Severity, Verdict, PLAYBOOK_REPOSITORY};
@@ -58,9 +58,9 @@ impl AnalysisTab {
   }
 }
 
-const SEVERITIES: [Severity; 3] = [Severity::Critical, Severity::Warning, Severity::Info];
+pub(crate) const SEVERITIES: [Severity; 3] = [Severity::Critical, Severity::Warning, Severity::Info];
 
-fn severity_color(severity: Severity, c: &crate::theme::Colors) -> Hsla {
+pub(crate) fn severity_color(severity: Severity, c: &crate::theme::Colors) -> Hsla {
   match severity {
     Severity::Critical => c.danger,
     Severity::Warning => c.warning,
@@ -68,7 +68,7 @@ fn severity_color(severity: Severity, c: &crate::theme::Colors) -> Hsla {
   }
 }
 
-fn page_of(category: Category) -> DetailTab {
+pub(crate) fn page_of(category: Category) -> DetailTab {
   match category {
     Category::AppInformation => DetailTab::Information,
     Category::AppReview => DetailTab::Review,
@@ -97,100 +97,6 @@ impl Workspace {
       .iter()
       .flat_map(|&tab| self.page_requirements(tab, cx).into_iter().flatten().filter_map(move |(label, done)| (!done).then_some((tab, label))))
       .collect()
-  }
-
-  /// Critical findings and warnings start open, tips closed; a click flips that for one finding.
-  fn finding_open(&self, key: &str, severity: Severity) -> bool {
-    (severity != Severity::Info) != self.toggled_findings.contains(key)
-  }
-
-  /// One finding: a header that opens and closes it, and, open, what is wrong, how to fix it and where.
-  fn finding_row(&self, scope: &'static str, finding: &Finding, cx: &mut Context<Self>) -> impl IntoElement {
-    let l = self.settings.language;
-    let c = colors(cx);
-    let key = format!("{scope}-{}-{}", finding.id, finding.title);
-    let open = self.finding_open(&key, finding.severity);
-    let tab = page_of(finding.category);
-    let toggle_key = key.clone();
-    let mut header = h_flex()
-      .id(SharedString::from(format!("finding-{key}")))
-      .w_full()
-      .gap_2()
-      .items_center()
-      .cursor_pointer()
-      .child(Icon::new(if open { IconName::ChevronDown } else { IconName::ChevronRight }).small().text_color(c.text_secondary))
-      .child(severity_badge(finding.severity, l, cx))
-      .child(div().flex_1().min_w_0().font_weight(FontWeight::SEMIBOLD).child(translated_text(l, &finding.title)))
-      .child(div().flex_shrink_0().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, finding.category.label())))
-      .on_click(cx.listener(move |this, _, _, cx| {
-        if !this.toggled_findings.remove(&toggle_key) {
-          this.toggled_findings.insert(toggle_key.clone());
-        }
-        cx.notify();
-      }));
-    if !finding.guideline.is_empty() {
-      header =
-        header.child(div().flex_shrink_0().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "guideline", &[&finding.guideline])));
-    }
-    let mut card = v_flex().w_full().p_3().gap_3().rounded_lg().border_1().border_color(c.border).child(header);
-    if open {
-      let source = self.guidelines.rule(&finding.guideline).map(|rule| {
-        let url = rule.url();
-        Button::new(SharedString::from(format!("guideline-{key}")))
-          .label(tr(l, "viewAppleRule"))
-          .small()
-          .ghost()
-          .on_click(move |_, _, cx| cx.open_url(&url))
-      });
-      card = card
-        .child(div().pl_6().text_color(c.text_secondary).child(translated_text(l, &finding.detail)))
-        .child(
-          v_flex()
-            .ml_6()
-            .p_3()
-            .gap_1()
-            .rounded_md()
-            .bg(c.surface)
-            .child(div().text_size(FONT_SIZE_SM).font_weight(FontWeight::SEMIBOLD).text_color(c.text_secondary).child(tr(l, "howToFix")))
-            .child(div().child(translated_text(l, &finding.fix))),
-        )
-        .child(
-          h_flex()
-            .pl_6()
-            .gap_2()
-            .child(
-              Button::new(SharedString::from(format!("go-{key}")))
-                .label(trf(l, "openPage", &[&tr(l, finding.category.label())]))
-                .small()
-                .outline()
-                .on_click(cx.listener(move |this, _, window, cx| {
-                  this.jump_to(tab, window, cx);
-                })),
-            )
-            .children(source),
-        );
-    }
-    card
-  }
-
-  /// Findings under a heading per severity, the worst first.
-  fn finding_groups(&self, scope: &'static str, findings: &[Finding], cx: &mut Context<Self>) -> Div {
-    let l = self.settings.language;
-    let c = colors(cx);
-    let mut groups = v_flex().w_full().gap_5();
-    for severity in SEVERITIES {
-      let items: Vec<&Finding> = findings.iter().filter(|finding| finding.severity == severity).collect();
-      if items.is_empty() {
-        continue;
-      }
-      let heading = h_flex()
-        .gap_2()
-        .items_center()
-        .child(div().size_2().rounded_full().bg(severity_color(severity, &c)))
-        .child(div().font_weight(FontWeight::SEMIBOLD).child(format!("{} · {}", tr(l, severity.label()), items.len())));
-      groups = groups.child(v_flex().gap_2().child(heading).children(items.into_iter().map(|finding| self.finding_row(scope, finding, cx))));
-    }
-    groups
   }
 
   /// How many findings wait on each page, as buttons that open it: the answer to "where do I go".
@@ -347,7 +253,7 @@ impl Workspace {
     };
     let findings = v_flex().gap_5().child(tabs).child(content);
     if wide {
-      page_columns(true, findings, summary).into_any_element()
+      page_columns_with_primary(true, 0.68, findings, summary).into_any_element()
     } else {
       v_flex().gap_5().child(summary).child(findings).into_any_element()
     }

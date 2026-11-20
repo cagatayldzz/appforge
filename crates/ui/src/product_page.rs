@@ -281,7 +281,7 @@ impl Workspace {
     });
   }
 
-  pub(crate) fn render_general(&self, app: &StoreApp, cx: &App) -> impl IntoElement {
+  pub(crate) fn render_general(&self, app: &StoreApp, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let c = colors(cx);
     let info = self.ready_snapshot().map(|snapshot| &snapshot.general);
@@ -340,12 +340,21 @@ impl Workspace {
       ))
       .child(section(
         tr(l, "ageRatings"),
-        v_flex()
-          .gap_3()
-          .child(ratings)
-          .child(territories)
-          .children(info.map(|info| field("ageSuitabilityUrl", &info.age_suitability_url)))
-          .child(h_flex().child(store_link("manage-age-ratings", tr(l, "manageAgeRatings"), store_info(app)))),
+        v_flex().gap_3().child(ratings).child(territories).children(info.map(|info| field("ageSuitabilityUrl", &info.age_suitability_url))).child(
+          h_flex()
+            .gap_2()
+            .flex_wrap()
+            .children(info.is_some_and(|info| info.age_declaration.is_some()).then(|| {
+              Button::new("edit-age-ratings")
+                .label(tr(l, "editAgeRatings"))
+                .icon(Icon::new(IconName::Settings))
+                .small()
+                .outline()
+                .disabled(self.store_write_busy || self.saving)
+                .on_click(cx.listener(|this, _, window, cx| this.open_age_rating_editor(window, cx)))
+            }))
+            .child(store_link("manage-age-ratings", tr(l, "manageAgeRatings"), store_info(app))),
+        ),
       ))
       .child(section(
         tr(l, "additionalInformation"),

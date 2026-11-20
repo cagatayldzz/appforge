@@ -148,7 +148,7 @@ impl Workspace {
     cx.notify();
   }
 
-  fn field_value(&self, field: ListingField, cx: &App) -> String {
+  pub(crate) fn field_value(&self, field: ListingField, cx: &App) -> String {
     match field {
       ListingField::Name => read_input(&self.forms.name, cx),
       ListingField::Subtitle => read_input(&self.forms.subtitle, cx),
@@ -159,7 +159,7 @@ impl Workspace {
     }
   }
 
-  fn apply_field_draft(&self, field: ListingField, draft: &str, window: &mut Window, cx: &mut Context<Self>) {
+  pub(crate) fn apply_field_draft(&self, field: ListingField, draft: &str, window: &mut Window, cx: &mut Context<Self>) {
     match field {
       ListingField::Name => set_input(&self.forms.name, draft, window, cx),
       ListingField::Subtitle => set_input(&self.forms.subtitle, draft, window, cx),
@@ -171,7 +171,7 @@ impl Workspace {
   }
 
   /// The AI has no API key yet: say so, and offer to open the page where it is added.
-  fn ask_to_connect_ai(&mut self, provider: Provider, window: &mut Window, cx: &mut Context<Self>) {
+  pub(crate) fn ask_to_connect_ai(&self, provider: Provider, window: &mut Window, cx: &mut Context<Self>) {
     let l = self.settings.language;
     let workspace = cx.entity();
     let button_label = tr(l, "openSettings");
@@ -231,5 +231,17 @@ pub(crate) fn field_label(field: ListingField) -> &'static str {
     ListingField::Keywords => "keywords",
     ListingField::PromotionalText => "promotionalText",
     ListingField::WhatsNew => "whatsNewInThis",
+  }
+}
+
+/// The text of `field` in a listing that was sent to the AI.
+pub(crate) fn listing_value(listing: &ListingFields, field: ListingField) -> String {
+  match field {
+    ListingField::Name => listing.name.clone(),
+    ListingField::Subtitle => listing.subtitle.clone(),
+    ListingField::Description => listing.description.clone(),
+    ListingField::Keywords => listing.keywords.clone(),
+    ListingField::PromotionalText => listing.promotional_text.clone(),
+    ListingField::WhatsNew => listing.whats_new.clone(),
   }
 }

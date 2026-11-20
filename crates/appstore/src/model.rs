@@ -85,9 +85,71 @@ pub struct AppSnapshot {
   pub review_detail: Option<ReviewDetail>,
 }
 
+/// The content questions of the age rating, each answered `NONE`, `INFREQUENT_OR_MILD` or `FREQUENT_OR_INTENSE`, in Apple's names.
+pub const AGE_LEVEL_KEYS: [&str; 12] = [
+  "alcoholTobaccoOrDrugUseOrReferences",
+  "contests",
+  "gamblingSimulated",
+  "horrorOrFearThemes",
+  "matureOrSuggestiveThemes",
+  "medicalOrTreatmentInformation",
+  "profanityOrCrudeHumor",
+  "sexualContentGraphicAndNudity",
+  "sexualContentOrNudity",
+  "violenceCartoonOrFantasy",
+  "violenceRealistic",
+  "violenceRealisticProlongedGraphicOrSadistic",
+];
+
+/// The yes or no questions of the age rating.
+pub const AGE_FLAG_KEYS: [&str; 9] = [
+  "advertising",
+  "gambling",
+  "healthOrWellnessTopics",
+  "lootBox",
+  "messagingAndChat",
+  "parentalControls",
+  "ageAssurance",
+  "unrestrictedWebAccess",
+  "userGeneratedContent",
+];
+
+/// The answers behind the age ratings. `levels` follows `AGE_LEVEL_KEYS` and `flags` follows `AGE_FLAG_KEYS`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct AgeRatingDeclaration {
+  pub id: String,
+  pub levels: [String; 12],
+  pub flags: [bool; 9],
+  /// `NONE`, `NINE_PLUS`, `THIRTEEN_PLUS`, `SIXTEEN_PLUS`, `EIGHTEEN_PLUS` or `UNRATED`: raises the rating Apple calculates.
+  pub age_override: String,
+  /// `NONE`, `FIFTEEN_PLUS` or `NINETEEN_PLUS`.
+  pub korea_override: String,
+  pub info_url: String,
+}
+
+impl AgeRatingDeclaration {
+  /// The attributes of `self` that differ from `original`, named as App Store Connect names them.
+  pub(crate) fn changes_from(&self, original: &Self) -> Attributes {
+    let mut attributes = Attributes::new();
+    for (index, key) in AGE_LEVEL_KEYS.iter().enumerate() {
+      changed(&mut attributes, key, &original.levels[index], &self.levels[index]);
+    }
+    for (index, key) in AGE_FLAG_KEYS.iter().enumerate() {
+      if self.flags[index] != original.flags[index] {
+        attributes.push((key, Value::Bool(self.flags[index])));
+      }
+    }
+    changed(&mut attributes, "ageRatingOverrideV2", &original.age_override, &self.age_override);
+    changed(&mut attributes, "koreaAgeRatingOverride", &original.korea_override, &self.korea_override);
+    attributes
+  }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GeneralInformation {
   pub id: String,
+  /// The declaration the ratings come from, when Apple returned one.
+  pub age_declaration: Option<AgeRatingDeclaration>,
   pub age_suitability_url: String,
   pub categories: [String; 6],
   pub ratings: Vec<(String, String)>,

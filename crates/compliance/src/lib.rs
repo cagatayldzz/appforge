@@ -3,6 +3,7 @@
 //! reads both.
 
 mod ai_cache;
+mod ai_fix;
 mod ai_review;
 mod guidelines;
 
@@ -12,6 +13,7 @@ mod report;
 mod rules;
 
 pub use ai_cache::{AiCache, CachedReview};
+pub use ai_fix::{can_fix, fix_finding, parse_fix_answer, Fix, FixField};
 pub use ai_review::{analyze_project_with_ai, analyze_with_ai, describe, parse_ai_answer, AiReview, AiReviewError, AiReviewStage};
 pub use guidelines::{Guideline, GuidelineChanges, Guidelines, GUIDELINES_URL};
 pub use listing_draft::{

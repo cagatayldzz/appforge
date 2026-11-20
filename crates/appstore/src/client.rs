@@ -1,5 +1,6 @@
 //! The blocking App Store Connect client: requests, paging, apps, versions and the app snapshot.
 
+pub(crate) mod age_rating;
 pub(crate) mod distribution;
 pub(crate) mod product_page;
 pub(crate) mod reviews;

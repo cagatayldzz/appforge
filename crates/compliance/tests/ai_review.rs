@@ -133,3 +133,26 @@ fn listing_generation_requests_one_field_and_applies_its_character_limit() {
   let request = received.recv().unwrap();
   assert!(request.contains("Edit only the subtitle field. Character limit: 30."));
 }
+
+#[test]
+fn an_ai_fix_keeps_only_known_non_empty_fields_of_the_findings_category_within_limits() {
+  use appforge_compliance::{parse_fix_answer, Category, FixField, ListingField};
+  let answer = format!(
+    "Here you go:\n```json\n{{\"summary\": \"Shortened it\", \"changes\": [\
+      {{\"field\": \"subtitle\", \"value\": \"{}\"}},\
+      {{\"field\": \"keywords\", \"value\": \"a, b ,c\"}},\
+      {{\"field\": \"review_notes\", \"value\": \"not for this category\"}},\
+      {{\"field\": \"whats_new\", \"value\": \"  \"}},\
+      {{\"field\": \"unknown\", \"value\": \"x\"}},\
+      {{\"field\": \"subtitle\", \"value\": \"second\"}}]}}\n```",
+    "s".repeat(50)
+  );
+  let fix = parse_fix_answer(&answer, Category::AppInformation).unwrap();
+  assert_eq!(fix.summary, "Shortened it");
+  assert_eq!(fix.changes.len(), 2);
+  assert_eq!(fix.changes[0], (FixField::Listing(ListingField::Subtitle), "s".repeat(30)));
+  assert_eq!(fix.changes[1], (FixField::Listing(ListingField::Keywords), "a,b,c".to_owned()));
+  let notes = parse_fix_answer(&answer, Category::AppReview).unwrap();
+  assert_eq!(notes.changes, [(FixField::ReviewNotes, "not for this category".to_owned())]);
+  assert!(parse_fix_answer("no json", Category::AppInformation).is_err());
+}

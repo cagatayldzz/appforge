@@ -22,6 +22,7 @@ fn ready() -> AppSnapshot {
       locale: "en-US".into(),
       description: "Example helps you plan every day with reminders, lists and a calendar that works offline. Share lists with family and keep everything in sync across your devices.".into(),
       keywords: "planner,todo,calendar".into(),
+      whats_new: "Faster lists and a new calendar view.".into(),
       support_url: "https://acme.dev/support".into(),
       ..Default::default()
     }],
@@ -84,6 +85,15 @@ fn missing_support_and_privacy_urls_and_placeholders_are_critical() {
     let finding = report.findings.iter().find(|finding| finding.id == id).unwrap_or_else(|| panic!("missing {id}"));
     assert_eq!(finding.severity, Severity::Critical);
   }
+}
+
+#[test]
+fn empty_release_notes_are_critical_in_every_locale() {
+  let mut snapshot = ready();
+  snapshot.version_localizations[0].whats_new = "  ".into();
+  let report = check(&snapshot, &declared());
+  let finding = report.findings.iter().find(|finding| finding.id == "listing.whats-new-missing").expect("missing release notes finding");
+  assert_eq!(finding.severity, Severity::Critical);
 }
 
 #[test]

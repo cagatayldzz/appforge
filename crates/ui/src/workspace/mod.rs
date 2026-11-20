@@ -6,6 +6,7 @@ use crate::{
 };
 mod ai;
 mod ai_dialog;
+mod ai_progress;
 mod apps;
 mod form_history;
 pub(crate) mod refresh;
@@ -163,6 +164,7 @@ pub(crate) struct Tasks {
   pub(crate) usage: Option<Task<()>>,
   pub(crate) folder: Option<Task<()>>,
   pub(crate) draft: Option<Task<()>>,
+  pub(crate) fix: Option<Task<()>>,
   pub(crate) store_write: Option<Task<()>>,
 }
 
@@ -242,6 +244,8 @@ pub struct Workspace {
   pub(crate) tasks: Tasks,
   /// The AI is writing the store listing.
   pub drafting: Option<ListingField>,
+  /// The key of the finding the AI is fixing.
+  pub(crate) fixing: Option<String>,
 }
 
 /// How a model shows in its menu: its name and what a million tokens cost, input / output.
@@ -420,6 +424,7 @@ impl Workspace {
       settings_form,
       tasks: Tasks::default(),
       drafting: None,
+      fixing: None,
     };
     if this.settings_locked {
       this.login.error = Some(

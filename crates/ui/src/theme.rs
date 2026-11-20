@@ -28,7 +28,7 @@ pub(crate) struct Colors {
   /// A slightly raised surface: the status bar, the tab strip.
   pub surface_alt: Hsla,
   pub border: Hsla,
-  /// The outline of a field or a checkbox: stronger than `border`, which only separates areas.
+  /// The outline of a checkbox and of hovered or selected tiles: stronger than `border`. Fields and buttons use `border`.
   pub control_border: Hsla,
   /// The row that is chosen.
   pub selected: Hsla,
@@ -162,7 +162,7 @@ pub(crate) fn apply_theme(window: &mut Window, cx: &mut App) {
     colors.sidebar_primary = c.accent;
     colors.sidebar_primary_foreground = c.on_accent;
     colors.border = c.border;
-    colors.input = c.control_border;
+    colors.input = c.border;
     colors.title_bar = c.rail;
     colors.title_bar_border = c.border;
     colors.status_bar = c.surface_alt;

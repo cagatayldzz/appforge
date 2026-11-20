@@ -59,7 +59,7 @@ fn cut(text: &str, limit: usize) -> String {
 }
 
 /// Keywords are separated by commas without spaces.
-fn tidy_keywords(text: &str) -> String {
+pub(crate) fn tidy_keywords(text: &str) -> String {
   let joined = text.split(',').map(str::trim).filter(|word| !word.is_empty()).collect::<Vec<_>>().join(",");
   let cut = cut(&joined, KEYWORDS_LIMIT);
   // A word cut in the middle is worse than a shorter list.
