@@ -26,7 +26,7 @@ On the far left is a narrow bar:
 - Under it, one button per app, with its icon (the icon comes with the app's latest build in App Store Connect; an app with no build yet shows its first letter).
 - **Settings** at the bottom.
 
-With an app open, the column next to the bar shows the app (icon, name, bundle id, version and where it stands at Apple, and the **score**, which opens the Analysis page), its six pages as a menu, and **Reload** and **Save** at the bottom.
+With an app open, the column next to the bar shows the app (icon, name, bundle id, version and where it stands at Apple, and the **score**, which opens the Analysis page), its pages as a menu (the score opens Analysis, which is not in the menu), and **Reload** and **Save** at the bottom.
 
 ## Your apps
 

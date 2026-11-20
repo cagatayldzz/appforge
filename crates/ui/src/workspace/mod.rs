@@ -19,7 +19,7 @@ mod updates;
 use appforge_ai::Provider;
 use appforge_appstore::{App as StoreApp, AppInfoLocalization, AppSnapshot, Client, Credentials, ReviewDetail, VersionLocalization};
 use appforge_compliance::{analyze_project_with_ai, check, AiReview, Guidelines, ListingField, Playbook, Report};
-use appforge_storage::{AppleAccount, IconCache, Keychain, Language, PrivacyDeclaration, SecretKey, SecretStore, Settings, UsageLedger};
+use appforge_storage::{AppleAccount, FileSecrets, IconCache, Keychain, Language, PrivacyDeclaration, SecretKey, SecretStore, Settings, UsageLedger};
 use gpui_kit::{
   component::{
     input::InputState,
@@ -59,6 +59,8 @@ pub enum DetailTab {
   Readiness,
   ProductPage,
   Information,
+  /// A sub-page of App Information, listed under it in the sidebar.
+  AgeRatings,
   Distribution,
   CustomerReviews,
   Review,
@@ -67,8 +69,17 @@ pub enum DetailTab {
 }
 
 impl DetailTab {
-  pub const ALL: [DetailTab; 8] =
-    [Self::Readiness, Self::Distribution, Self::ProductPage, Self::Information, Self::Review, Self::Privacy, Self::CustomerReviews, Self::Analysis];
+  pub const ALL: [DetailTab; 9] = [
+    Self::Readiness,
+    Self::Distribution,
+    Self::ProductPage,
+    Self::Information,
+    Self::AgeRatings,
+    Self::Review,
+    Self::Privacy,
+    Self::CustomerReviews,
+    Self::Analysis,
+  ];
 
   pub fn label(self) -> &'static str {
     match self {
@@ -77,6 +88,7 @@ impl DetailTab {
       Self::Distribution => "distribution",
       Self::CustomerReviews => "ratingsAndReviews",
       Self::Information => "appInformation",
+      Self::AgeRatings => "ageRatings",
       Self::Review => "appReview",
       Self::Privacy => "appPrivacy",
       Self::Analysis => "analysis",
@@ -214,6 +226,8 @@ pub struct Workspace {
   pub(crate) distribution_expanded: std::collections::HashSet<&'static str>,
   pub(crate) back_tab: Option<DetailTab>,
   pub(crate) analysis_tab: crate::analysis::AnalysisTab,
+  /// The open part of App Information: 0 the fields to fill, 1 the display-only details.
+  pub(crate) information_tab: usize,
   /// Findings whose open or closed state was flipped by a click (keys of `finding_row`).
   pub(crate) toggled_findings: std::collections::HashSet<String>,
   pub playbook: Playbook,
@@ -254,6 +268,15 @@ pub(crate) fn model_label(info: &appforge_ai::ModelInfo) -> String {
 }
 
 /// The menu of the models of `provider`, with the one in use chosen.
+/// Release builds keep secrets in the Keychain; development builds use a private file, so the Keychain never asks for its password.
+fn secret_store(data_dir: &std::path::Path) -> Arc<dyn SecretStore> {
+  if cfg!(debug_assertions) {
+    Arc::new(FileSecrets::new(data_dir.join("dev-secrets.json")))
+  } else {
+    Arc::new(Keychain)
+  }
+}
+
 fn model_select(
   provider: Provider,
   ai: &appforge_storage::AiSettings,
@@ -367,6 +390,7 @@ impl Workspace {
         this.set_language(*language, window, cx);
       }
     });
+    let secrets = secret_store(&data_dir);
     let mut this = Self {
       data_dir,
       updates: updates::Updates::default(),
@@ -374,7 +398,7 @@ impl Workspace {
       settings_locked,
       usage,
       usage_locked,
-      secrets: Arc::new(Keychain),
+      secrets,
       client: None,
       starting: true,
       apps: Load::Idle,
@@ -390,6 +414,7 @@ impl Workspace {
       distribution_expanded: Default::default(),
       back_tab: None,
       analysis_tab: Default::default(),
+      information_tab: 0,
       toggled_findings: Default::default(),
       playbook,
       guidelines: Arc::new(Guidelines::default()),

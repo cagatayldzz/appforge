@@ -21,6 +21,7 @@ use gpui_kit::{
     scroll::ScrollableElement as _,
     skeleton::Skeleton,
     switch::Switch,
+    tab::{Tab, TabBar},
     v_flex, ActiveTheme, Disableable as _, Icon, IconName, Sizable as _,
   },
   *,
@@ -61,7 +62,8 @@ impl Workspace {
           DetailTab::ProductPage => self.render_product_page(&app, cx).into_any_element(),
           DetailTab::Distribution => self.render_distribution(wide, cx),
           DetailTab::CustomerReviews => self.render_customer_reviews(cx),
-          DetailTab::Information => self.render_information(&app, wide, cx).into_any_element(),
+          DetailTab::Information => self.render_information(&app, cx).into_any_element(),
+          DetailTab::AgeRatings => self.render_age_ratings(&app, cx).into_any_element(),
           DetailTab::Review => self.render_review(wide, cx).into_any_element(),
           DetailTab::Privacy => self.render_privacy(&app, wide, cx).into_any_element(),
           DetailTab::Analysis => self.render_analysis(wide, cx).into_any_element(),
@@ -81,18 +83,23 @@ impl Workspace {
         _ => self.detail_loading(wide, cx).into_any_element(),
       }
     };
-    // The pages are listed in the sidebar, so the page says which one it is; it scrolls under that heading.
+    // The pages are listed in the sidebar, so the page says which one it is; the heading stays fixed while the body scrolls under it.
     let title = div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, self.tab.label()));
-    let heading = title;
-    let heading = h_flex().gap_3().flex_wrap().items_center().justify_between().child(heading).children(self.form_history_button(cx));
-    let content = v_flex().pt_6().pb_6().gap_6().child(heading).child(body);
+    let heading = h_flex().py_4().gap_3().flex_wrap().items_center().justify_between().child(title).children(self.form_history_button(cx));
+    let content = v_flex().pt_6().pb_6().gap_6().child(body);
     let max_width = match self.tab {
       DetailTab::ProductPage | DetailTab::CustomerReviews => rems(90.),
       _ if wide => rems(86.),
       _ => rems(60.),
     };
+    let header = v_flex().flex_none().w_full().border_b_1().border_color(colors(cx).border).child(centered_with_width(heading, max_width));
     let content = centered_with_width(content, max_width);
-    v_flex().flex_1().min_h_0().overflow_hidden().child(v_flex().id("detail-scroll").size_full().overflow_y_scrollbar().child(content))
+    v_flex()
+      .flex_1()
+      .min_h_0()
+      .overflow_hidden()
+      .child(header)
+      .child(v_flex().id("detail-scroll").flex_1().min_h_0().w_full().overflow_y_scrollbar().child(content))
   }
 
   fn detail_loading(&self, wide: bool, cx: &gpui_kit::App) -> Div {
@@ -146,7 +153,7 @@ impl Workspace {
     Some(h_flex().gap_2().flex_wrap().items_center().child(div().text_sm().text_color(c.text_secondary).child(label)).child(self.locale_picker(cx)?))
   }
 
-  fn render_information(&mut self, app: &App, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
+  fn render_information(&mut self, app: &App, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let version = self.ready_snapshot().and_then(|snapshot| snapshot.version.as_ref());
     let picker = self.compact_locale_picker(cx);
@@ -210,7 +217,17 @@ impl Workspace {
     } else {
       page = page.child(div().text_sm().text_color(theme.muted_foreground).child(tr(l, "thisAppHasNo")));
     }
-    v_flex().gap_6().children(picker).child(page_columns_with_primary(wide, 0.65, page, general))
+    // The fields to fill and the details that are only shown are two tabs, so the form stays short.
+    let tabs = TabBar::new("information-tabs")
+      .underline()
+      .selected_index(self.information_tab)
+      .children([Tab::new().label(tr(l, "fieldsToFill")), Tab::new().label(tr(l, "displayOnly"))])
+      .on_click(cx.listener(|this, index, _, cx| {
+        this.information_tab = *index;
+        cx.notify();
+      }));
+    let body = if self.information_tab == 0 { v_flex().gap_6().children(picker).child(page).into_any_element() } else { general.into_any_element() };
+    v_flex().gap_6().child(tabs).child(body)
   }
 
   fn render_review(&mut self, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {

@@ -3,6 +3,7 @@
 
 mod about;
 mod age_rating;
+mod age_ratings_page;
 mod analysis;
 mod apps_view;
 mod customer_reviews;

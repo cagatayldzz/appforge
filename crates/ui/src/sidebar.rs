@@ -206,17 +206,20 @@ impl Workspace {
       .into_any_element()
   }
 
-  /// The pages of the open app, one under the other.
+  /// The pages of the open app, one under the other. Analysis is not listed: it is no App Store Connect page, and the score tile opens it.
   fn page_rows(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
     let l = self.settings.language;
     let c = colors(cx);
     DetailTab::ALL
       .iter()
+      .filter(|tab| **tab != DetailTab::Analysis)
       .map(|tab| {
         let tab = *tab;
         list_row(SharedString::from(format!("page-{}", tab.label())), self.tab == tab, cx)
           .py_2()
           .justify_between()
+          // The sub-pages sit under their page, indented.
+          .when(tab == DetailTab::AgeRatings, |row| row.pl_6().text_color(c.text_secondary))
           .child(div().min_w_0().truncate().child(tr(l, tab.label())))
           .children(self.page_needs_attention(tab, cx).map(|attention| {
             let (color, label) = if attention { (c.warning, tr(l, "pageStatusNeedsAttention")) } else { (c.success, tr(l, "ready")) };

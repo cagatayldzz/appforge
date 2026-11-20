@@ -62,6 +62,14 @@ fn display_name(value: &str) -> String {
     .join(" ")
 }
 
+/// A label over its value (or a dash), the look of every display-only detail.
+pub(crate) fn info_field(l: appforge_storage::Language, c: &crate::theme::Colors, key: &'static str, value: &str) -> Div {
+  v_flex()
+    .gap_1()
+    .child(div().font_weight(FontWeight::MEDIUM).child(tr(l, key)))
+    .child(div().text_color(c.text_secondary).child(if value.is_empty() { "—".into() } else { SharedString::from(value.to_owned()) }))
+}
+
 impl Workspace {
   pub(crate) fn product_localization(&self) -> Option<&str> {
     self.ready_snapshot()?.version_localizations.iter().find(|item| item.locale == self.locale).map(|item| item.id.as_str())
@@ -285,12 +293,7 @@ impl Workspace {
     let l = self.settings.language;
     let c = colors(cx);
     let info = self.ready_snapshot().map(|snapshot| &snapshot.general);
-    let field = |key: &'static str, value: &str| {
-      v_flex()
-        .gap_1()
-        .child(div().font_weight(FontWeight::MEDIUM).child(tr(l, key)))
-        .child(div().text_color(c.text_secondary).child(if value.is_empty() { "—".into() } else { SharedString::from(value.to_owned()) }))
-    };
+    let field = |key: &'static str, value: &str| info_field(l, &c, key, value);
     let general = v_flex()
       .gap_3()
       .child(pair(field("bundleId", &app.bundle_id), field("sku", &app.sku)))
@@ -302,59 +305,17 @@ impl Workspace {
     };
     let general = general.child(field("contentRights", &rights));
     let mut categories = v_flex().gap_2();
-    let mut ratings = h_flex().gap_3().flex_wrap();
     if let Some(info) = info {
       for (label, values) in [("primaryCategory", &info.categories[..3]), ("secondaryCategory", &info.categories[3..])] {
         let value = values.iter().filter(|item| !item.is_empty()).map(|item| display_name(item)).collect::<Vec<_>>().join(" / ");
         categories = categories.child(field(label, &value));
       }
-      ratings = ratings.children(
-        info
-          .ratings
-          .iter()
-          .map(|(label, value)| field(if label == "Global" { "globalRating" } else { "regionalRating" }, &format!("{label} · {value}"))),
-      );
-    }
-    let mut territories = v_flex().gap_2();
-    if let Some(info) = info {
-      if let Some(error) = &info.territory_ratings_error {
-        territories = territories.child(Alert::warning("territory-ratings-error", SharedString::from(error.clone())));
-      } else if !info.territory_ratings.is_empty() {
-        let mut groups = std::collections::BTreeMap::<&str, usize>::new();
-        for (_, rating) in &info.territory_ratings {
-          *groups.entry(rating).or_default() += 1;
-        }
-        territories = territories.child(h_flex().gap_3().flex_wrap().children(
-          groups.into_iter().map(|(rating, count)| field("regionalRating", &trf(l, "ageRatingTerritoryCount", &[rating, &count.to_string()]))),
-        ));
-      }
-    }
-    if info.is_none_or(|info| info.ratings.is_empty() && info.territory_ratings.is_empty() && info.territory_ratings_error.is_none()) {
-      ratings = ratings.child(tr(l, "noAgeRatings"));
     }
     v_flex()
       .gap_5()
       .child(section(
         tr(l, "generalInformation"),
         general.child(categories).child(h_flex().child(store_link("manage-general-info", tr(l, "manageCategoriesAndRights"), store_info(app)))),
-      ))
-      .child(section(
-        tr(l, "ageRatings"),
-        v_flex().gap_3().child(ratings).child(territories).children(info.map(|info| field("ageSuitabilityUrl", &info.age_suitability_url))).child(
-          h_flex()
-            .gap_2()
-            .flex_wrap()
-            .children(info.is_some_and(|info| info.age_declaration.is_some()).then(|| {
-              Button::new("edit-age-ratings")
-                .label(tr(l, "editAgeRatings"))
-                .icon(Icon::new(IconName::Settings))
-                .small()
-                .outline()
-                .disabled(self.store_write_busy || self.saving)
-                .on_click(cx.listener(|this, _, window, cx| this.open_age_rating_editor(window, cx)))
-            }))
-            .child(store_link("manage-age-ratings", tr(l, "manageAgeRatings"), store_info(app))),
-        ),
       ))
       .child(section(
         tr(l, "additionalInformation"),

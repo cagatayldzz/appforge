@@ -15,7 +15,7 @@ pub enum SecretKey {
 }
 
 impl SecretKey {
-  fn account(self) -> String {
+  pub(crate) fn account(self) -> String {
     match self {
       Self::ApplePrivateKey => "apple-private-key".into(),
       Self::ApiKey(Provider::OpenAi) => "openai-api-key".into(),
@@ -31,6 +31,12 @@ pub struct SecretError(String);
 impl fmt::Display for SecretError {
   fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(formatter, "Keychain error: {}", self.0)
+  }
+}
+
+impl SecretError {
+  pub(crate) fn new(message: String) -> Self {
+    Self(message)
   }
 }
 

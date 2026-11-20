@@ -63,7 +63,7 @@ A title band (drag area, the rail color) sits above the content.
 **Signed in**: three columns.
 
 - The **activity bar** (56 px): the Apps button, one avatar button per app (its icon, or its first letter), and Settings at the bottom.
-- The **sidebar** (280 px): at the top the open app (icon, name, bundle id, the version with where it stands at Apple, and the review score, which opens the Analysis page), under it the eight pages of the app as a menu, and at the bottom Reload and Save (sidebar Save on App Information, App Review and App Privacy). While Settings is open it lists the pages of Settings instead. It does not show while the grid of all apps is open.
+- The **sidebar** (280 px): at the top the open app (icon, name, bundle id, the version with where it stands at Apple, and the review score, which opens the Analysis page), under it the seven pages of the app as a menu (Analysis is not listed; the score tile opens it), and at the bottom Reload and Save (sidebar Save on App Information, App Review and App Privacy). While Settings is open it lists the pages of Settings instead. It does not show while the grid of all apps is open.
 - The **main area**: the page, which scrolls, in flat sections (a heading with a line under it, no boxes). The grid of all apps (`apps_view.rs`, three columns) takes the whole width.
 
 The app has eight pages: **Submission Readiness**, **Distribution**, **Product Page Information**, **App Information**, **App Review**, **App Privacy**, **Ratings and Reviews**, and **Analysis**. Settings has General, Account, AI provider, Code folders, Rules and About.
@@ -93,7 +93,7 @@ The interface language (English or Türkçe) is `Settings.language`. Texts live 
 | `apple-guidelines.json` | The last validated Apple guidelines catalog, check time and latest per-rule changes. |
 | `playbook/` | The cached compliance playbook, refreshed weekly. |
 
-Secrets (the `.p8` key, AI API keys) are only in the macOS Keychain, service `AppForge`.
+Secrets (the `.p8` key, AI API keys) are only in the macOS Keychain, service `AppForge`, in release builds. Development builds (`bun run dev`) keep them in `dev-secrets.json` in the data directory (mode 0600, `FileSecrets`), because an ad-hoc signed build is new every time and the Keychain would ask for its password after each build. Sign in again once in a development build.
 
 ## Window state
 
