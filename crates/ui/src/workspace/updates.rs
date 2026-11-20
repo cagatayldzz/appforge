@@ -1,10 +1,19 @@
 //! Background update checks, verified downloads and the settings controls.
 
 use super::Workspace;
-use crate::i18n::{tr, trf};
+use crate::{
+  i18n::{tr, trf},
+  theme::{colors, FONT_SIZE_SM},
+};
 use appforge_updater::{Release, Staged};
 use gpui_kit::{
-  component::{button::Button, checkbox::Checkbox, h_flex, v_flex, Disableable as _, Sizable as _},
+  component::{
+    button::{Button, ButtonVariants as _},
+    checkbox::Checkbox,
+    h_flex,
+    separator::Separator,
+    v_flex, Disableable as _, Icon, IconName, Sizable as _,
+  },
   *,
 };
 
@@ -130,53 +139,120 @@ impl Workspace {
     cx.notify();
   }
 
+  /// The updates card of About: what the state is in a colored dot and a sentence, one main action for the next step,
+  /// the notes of the release that is available, and the check on launch.
   pub(crate) fn render_updates(&self, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
+    let c = colors(cx);
     let busy = self.updates.task.is_some();
     let staged = self.updates.staged.is_some();
-    let status = match &self.updates.status {
-      Status::Idle if cfg!(debug_assertions) => tr(l, "updatesReleaseOnly"),
-      Status::Idle => tr(l, "updatesIdle"),
-      Status::Checking => tr(l, "checkingForUpdates"),
-      Status::Current => tr(l, "upToDate"),
-      Status::Available => trf(l, "updateAvailable", &[self.updates.release.as_ref().map_or("", |release| &release.version)]),
-      Status::Downloading => tr(l, "downloadingUpdate"),
-      Status::Staged => tr(l, "updateReady"),
-      Status::Restarting => tr(l, "restartingToUpdate"),
-      Status::Failed(error) => trf(l, "updateFailed", &[error]),
+    let (dot, status) = match &self.updates.status {
+      Status::Idle if cfg!(debug_assertions) => (c.text_secondary, tr(l, "updatesReleaseOnly")),
+      Status::Idle => (c.text_secondary, tr(l, "updatesIdle")),
+      Status::Checking => (c.info, tr(l, "checkingForUpdates")),
+      Status::Current => (c.success, tr(l, "upToDate")),
+      Status::Available => (c.accent, trf(l, "updateAvailable", &[self.updates.release.as_ref().map_or("", |release| &release.version)])),
+      Status::Downloading => (c.info, tr(l, "downloadingUpdate")),
+      Status::Staged => (c.success, tr(l, "updateReady")),
+      Status::Restarting => (c.info, tr(l, "restartingToUpdate")),
+      Status::Failed(error) => (c.danger, trf(l, "updateFailed", &[error])),
     };
+    // One main action: install when ready, download when found, otherwise check again.
+    let action = if staged {
+      Button::new("restart-app-update")
+        .icon(Icon::new(IconName::RefreshCw))
+        .label(tr(l, "restartToUpdate"))
+        .primary()
+        .disabled(busy || self.saving || self.store_write_busy)
+        .on_click(cx.listener(|this, _, window, cx| this.restart_to_update(window, cx)))
+    } else if self.updates.release.is_some() {
+      Button::new("download-app-update")
+        .icon(Icon::new(IconName::ArrowDown))
+        .label(tr(l, "downloadUpdate"))
+        .primary()
+        .loading(matches!(self.updates.status, Status::Downloading))
+        .disabled(busy)
+        .on_click(cx.listener(|this, _, window, cx| this.download_update(window, cx)))
+    } else {
+      Button::new("check-app-updates")
+        .icon(Icon::new(IconName::RefreshCw))
+        .label(tr(l, "checkForUpdates"))
+        .outline()
+        .loading(matches!(self.updates.status, Status::Checking))
+        .disabled(cfg!(debug_assertions) || busy)
+        .on_click(cx.listener(|this, _, window, cx| this.check_updates(true, window, cx)))
+    };
+    let notes = self.updates.release.as_ref().map(|release| {
+      let page_url = release.page_url.clone();
+      let notes_text = release.plain_notes();
+      let lines = notes_text.lines().filter(|line| !line.trim().is_empty()).map(|line| match line.strip_prefix("• ") {
+        Some(item) => h_flex()
+          .gap_2()
+          .items_start()
+          .text_size(FONT_SIZE_SM)
+          .child(div().pt_1p5().child(div().size_1().rounded_full().bg(c.text_secondary)))
+          .child(div().flex_1().min_w_0().child(item.to_string()))
+          .into_any_element(),
+        None => {
+          div().pt_1().text_size(FONT_SIZE_SM).font_weight(FontWeight::MEDIUM).text_color(c.text_secondary).child(line.to_string()).into_any_element()
+        }
+      });
+      v_flex()
+        .w_full()
+        .gap_2()
+        .child(
+          h_flex()
+            .w_full()
+            .items_center()
+            .justify_between()
+            .child(div().font_weight(FontWeight::MEDIUM).child(trf(l, "whatsNewIn", &[&release.version])))
+            .child(
+              Button::new("open-release-page")
+                .icon(Icon::new(IconName::ExternalLink))
+                .label(tr(l, "viewOnGithub"))
+                .ghost()
+                .small()
+                .on_click(move |_, _, cx| cx.open_url(&page_url)),
+            ),
+        )
+        .child(
+          v_flex()
+            .id("release-notes")
+            .max_h(rems(14.))
+            .overflow_y_scroll()
+            .gap_1()
+            .p_3()
+            .rounded_md()
+            .border_1()
+            .border_color(c.border)
+            .bg(c.surface_alt)
+            .children(lines.collect::<Vec<_>>()),
+        )
+    });
     v_flex()
-      .gap_2()
-      .pb_4()
-      .child(div().font_weight(FontWeight::SEMIBOLD).child(tr(l, "appUpdates")))
-      .child(div().text_sm().child(status))
-      .children(self.updates.release.as_ref().map(|release| div().text_sm().child(release.plain_notes())))
+      .w_full()
+      .gap_4()
       .child(
         h_flex()
-          .gap_2()
+          .w_full()
+          .gap_3()
           .flex_wrap()
+          .items_center()
+          .justify_between()
           .child(
-            Button::new("check-app-updates")
-              .small()
-              .label(tr(l, "checkForUpdates"))
-              .disabled(cfg!(debug_assertions) || busy || staged)
-              .on_click(cx.listener(|this, _, window, cx| this.check_updates(true, window, cx))),
+            h_flex()
+              .flex_1()
+              .flex_basis(rems(12.))
+              .min_w_0()
+              .gap_2()
+              .items_center()
+              .child(div().flex_none().size_2().rounded_full().bg(dot))
+              .child(div().min_w_0().child(status)),
           )
-          .children((self.updates.release.is_some() && !staged).then(|| {
-            Button::new("download-app-update")
-              .small()
-              .label(tr(l, "downloadUpdate"))
-              .disabled(busy)
-              .on_click(cx.listener(|this, _, window, cx| this.download_update(window, cx)))
-          }))
-          .children(staged.then(|| {
-            Button::new("restart-app-update")
-              .small()
-              .label(tr(l, "restartToUpdate"))
-              .disabled(busy || self.saving || self.store_write_busy)
-              .on_click(cx.listener(|this, _, window, cx| this.restart_to_update(window, cx)))
-          })),
+          .child(action),
       )
+      .children(notes)
+      .child(Separator::horizontal())
       .child(
         Checkbox::new("check-updates-on-launch").label(tr(l, "checkUpdatesOnLaunch")).checked(!self.settings.skip_update_check_on_launch).on_click(
           cx.listener(|this, checked, window, cx| {

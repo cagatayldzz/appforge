@@ -297,24 +297,7 @@ impl Workspace {
           cx,
         ))
         .into_any_element(),
-      SettingsPage::About => {
-        let data_dir = self.data_dir.clone();
-        page_columns(
-          wide,
-          self.render_updates(cx),
-          setting_row(
-            trf(l, "appforgeVersion", &[env!("CARGO_PKG_VERSION")]),
-            Some(tr(l, "settingsAndNotesAre")),
-            Button::new("settings-data-folder")
-              .icon(Icon::new(IconName::FolderOpen))
-              .label(tr(l, "showDataFolder"))
-              .outline()
-              .on_click(move |_, _, cx| cx.reveal_path(&data_dir)),
-            cx,
-          ),
-        )
-        .into_any_element()
-      }
+      SettingsPage::About => self.about_body(cx),
     }
   }
 
@@ -324,7 +307,7 @@ impl Workspace {
     let heading = v_flex().gap_1().child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, self.settings_page.label()))).children(
       (self.settings_page == SettingsPage::AiProvider).then(|| div().text_size(FONT_SIZE_SM).text_color(muted).child(tr(l, "aiAnalysisUsesYour"))),
     );
-    let split = wide && matches!(self.settings_page, SettingsPage::AiProvider | SettingsPage::About);
+    let split = wide && self.settings_page == SettingsPage::AiProvider;
     let body = self.settings_page_body(split, cx);
     let width = if split { rems(86.) } else { rems(62.) };
     v_flex()
