@@ -9,7 +9,7 @@ use crate::{
 };
 use appforge_appstore::{App as StoreApp, AGE_LEVEL_KEYS};
 use gpui_kit::{
-  component::{alert::Alert, h_flex, v_flex},
+  component::{alert::Alert, h_flex, v_flex, Icon, IconName},
   *,
 };
 
@@ -97,17 +97,43 @@ impl Workspace {
 
   /// "This item requires your attention", as App Store Connect shows it when Apple rejected what was submitted.
   /// The API does not return Apple's reasons; the link opens the submission in App Store Connect.
-  pub(crate) fn rejection_notice(&self, app: &StoreApp) -> Option<AnyElement> {
+  pub(crate) fn rejection_notice(&self, app: &StoreApp, cx: &mut Context<Self>) -> Option<AnyElement> {
     let l = self.settings.language;
     let Some(Load::Ready(data)) = self.active_data().map(|data| &data.distribution) else { return None };
     let rejected =
       data.submissions.iter().filter(|item| item.includes_version && item.state == "UNRESOLVED_ISSUES").max_by(|a, b| a.date.cmp(&b.date))?;
     let url = format!("https://appstoreconnect.apple.com/apps/{}/distribution/reviewsubmissions/details/{}", app.id, rejected.id);
+    let c = colors(cx);
+    let open = url.clone();
+    // One box as in App Store Connect: the notice and the link to the submission together. The API does not return Apple's reasons
+    // (the guideline numbers); they are on the submission details page.
     Some(
-      v_flex()
-        .gap_2()
-        .child(Alert::error("submission-rejected", tr(l, "submissionRejected")).title(tr(l, "requiresAttention")))
-        .child(h_flex().child(store_link("view-submission", tr(l, "viewSubmission"), url)))
+      h_flex()
+        .id("submission-rejected")
+        .w_full()
+        .gap_3()
+        .p_4()
+        .items_start()
+        .rounded_md()
+        .border_1()
+        .border_color(c.danger.opacity(0.4))
+        .bg(c.danger.opacity(0.1))
+        .child(Icon::new(IconName::CircleX).text_color(c.danger).mt_0p5())
+        .child(
+          v_flex()
+            .gap_1()
+            .child(div().font_weight(FontWeight::SEMIBOLD).text_color(c.danger).child(tr(l, "requiresAttention")))
+            .child(div().child(tr(l, "submissionRejected")))
+            .child(
+              div()
+                .id("view-submission")
+                .mt_2()
+                .cursor_pointer()
+                .text_color(c.accent)
+                .child(tr(l, "viewSubmission"))
+                .on_click(move |_, _, cx| cx.open_url(&open)),
+            ),
+        )
         .into_any_element(),
     )
   }

@@ -210,7 +210,7 @@ impl Workspace {
       _ => self.render_distribution(wide, cx),
     };
     // The rejection notice comes first, as in App Store Connect, whichever tab is open.
-    let rejection = self.rejection_notice(app);
+    let rejection = self.rejection_notice(app, cx);
     v_flex().gap_6().children(rejection).child(tabs).child(body)
   }
 
