@@ -132,8 +132,10 @@ impl Workspace {
             ("description", !forms.description.read(cx).value().trim().is_empty()),
             ("keywords", filled(&forms.keywords)),
             ("supportUrl", filled(&forms.support_url)),
-            ("whatsNewInThis", !forms.whats_new.read(cx).value().trim().is_empty()),
           ]);
+        }
+        if snapshot.version.as_ref().is_some_and(|version| version.supports_release_notes) {
+          checks.push(("whatsNewInThis", !forms.whats_new.read(cx).value().trim().is_empty()));
         }
         checks
       }

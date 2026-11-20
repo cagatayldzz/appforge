@@ -56,6 +56,8 @@ pub struct Version {
   pub id: String,
   pub version_string: String,
   pub state: String,
+  /// Apple exposes release notes only after the first version on this platform.
+  pub supports_release_notes: bool,
 }
 
 impl Version {

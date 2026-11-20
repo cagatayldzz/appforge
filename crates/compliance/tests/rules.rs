@@ -16,7 +16,7 @@ fn ready() -> AppSnapshot {
       privacy_policy_url: "https://acme.dev/privacy".into(),
       ..Default::default()
     }],
-    version: Some(Version { id: "v".into(), version_string: "1.0".into(), state: "PREPARE_FOR_SUBMISSION".into() }),
+    version: Some(Version { id: "v".into(), version_string: "1.1".into(), state: "PREPARE_FOR_SUBMISSION".into(), supports_release_notes: true }),
     version_localizations: vec![VersionLocalization {
       id: "l".into(),
       locale: "en-US".into(),
@@ -94,6 +94,14 @@ fn empty_release_notes_are_critical_in_every_locale() {
   let report = check(&snapshot, &declared());
   let finding = report.findings.iter().find(|finding| finding.id == "listing.whats-new-missing").expect("missing release notes finding");
   assert_eq!(finding.severity, Severity::Critical);
+}
+
+#[test]
+fn first_release_does_not_require_release_notes() {
+  let mut snapshot = ready();
+  snapshot.version.as_mut().unwrap().supports_release_notes = false;
+  snapshot.version_localizations[0].whats_new.clear();
+  assert!(!ids(&check(&snapshot, &declared())).contains(&"listing.whats-new-missing"));
 }
 
 #[test]

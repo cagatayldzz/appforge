@@ -116,7 +116,11 @@ impl Workspace {
             promotional_text: plan.text("promotionalText", &original.promotional_text, area(&forms.promotional)),
             support_url: plan.text("supportUrl", &original.support_url, input(&forms.support_url)),
             marketing_url: plan.text("marketingUrl", &original.marketing_url, input(&forms.marketing_url)),
-            whats_new: plan.text("whatsNewInThis", &original.whats_new, area(&forms.whats_new)),
+            whats_new: if snapshot.version.as_ref().is_some_and(|version| version.supports_release_notes) {
+              plan.text("whatsNewInThis", &original.whats_new, area(&forms.whats_new))
+            } else {
+              original.whats_new.clone()
+            },
             ..original.clone()
           };
           if &edited != original {

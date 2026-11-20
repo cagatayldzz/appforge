@@ -199,14 +199,14 @@ fn listing(rules: &mut Rules, snapshot: &AppSnapshot) {
         "Shorten it.",
       );
     }
-    if localization.whats_new.trim().is_empty() {
+    if version.supports_release_notes && localization.whats_new.trim().is_empty() {
       rules.add(
         "listing.whats-new-missing",
         Severity::Critical,
         Category::AppInformation,
         "2.3",
         &format!("What's New is empty{place}"),
-        "AppForge treats the release notes of this version as required.",
+        "Apple requires release notes for version updates.",
         "Write what changed in this version, in the words your users know.",
       );
     }

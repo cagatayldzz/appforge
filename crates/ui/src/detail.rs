@@ -148,7 +148,7 @@ impl Workspace {
 
   fn render_information(&mut self, app: &App, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
-    let has_version = self.ready_snapshot().is_some_and(|snapshot| snapshot.version.is_some());
+    let version = self.ready_snapshot().and_then(|snapshot| snapshot.version.as_ref());
     let picker = self.compact_locale_picker(cx);
     let theme = cx.theme().clone();
     let forms = &self.forms;
@@ -160,7 +160,7 @@ impl Workspace {
         text_field_with_action(tr(l, "subtitle"), &forms.subtitle, SUBTITLE_LIMIT, self.field_generate_button(ListingField::Subtitle, cx), cx),
       ),
     ));
-    if has_version {
+    if let Some(version) = version {
       page = page
         .child(section(
           tr(l, "storeListing"),
@@ -194,8 +194,9 @@ impl Workspace {
             url_field("open-support-url", required(tr(l, "supportUrl")), &forms.support_url, l, cx),
             url_field("open-marketing-url", tr(l, "marketingUrl"), &forms.marketing_url, l, cx),
           ),
-        ))
-        .child(section(
+        ));
+      if version.supports_release_notes {
+        page = page.child(section(
           tr(l, "whatsNewInThis"),
           area_field_with_action(
             required(tr(l, "whatsNewInThis")),
@@ -205,6 +206,7 @@ impl Workspace {
             cx,
           ),
         ));
+      }
     } else {
       page = page.child(div().text_sm().text_color(theme.muted_foreground).child(tr(l, "thisAppHasNo")));
     }

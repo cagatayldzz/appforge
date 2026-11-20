@@ -173,11 +173,7 @@ impl Client {
   fn current_version(&self, app_id: &str) -> Result<Option<Version>, Error> {
     let fields = "fields[appStoreVersions]=versionString,appVersionState,appStoreState";
     let versions = self.get_all(&format!("/v1/apps/{app_id}/appStoreVersions?filter[platform]=IOS&limit=20&{fields}"))?;
-    Ok(pick_editable(&versions, &["appVersionState", "appStoreState"]).map(|version| Version {
-      id: version["id"].as_str().unwrap_or_default().to_owned(),
-      version_string: version["attributes"]["versionString"].as_str().unwrap_or_default().to_owned(),
-      state: state_of(version, &["appVersionState", "appStoreState"]),
-    }))
+    Ok(select_version(&versions))
   }
 
   /// Reads everything about `app`: App Information, the listing of its current version, screenshots and review details.
@@ -216,15 +212,10 @@ impl Client {
   #[allow(clippy::type_complexity)]
   fn read_version(&self, app: &App) -> Result<(Option<Version>, Vec<VersionLocalization>, Vec<ScreenshotSet>, Option<ReviewDetail>), Error> {
     let versions = self.get_all(&format!("/v1/apps/{}/appStoreVersions?filter[platform]=IOS&limit=20", app.id))?;
-    let Some(version) = pick_editable(&versions, &["appVersionState", "appStoreState"]) else {
+    let Some(summary) = select_version(&versions) else {
       return Ok((None, Vec::new(), Vec::new(), None));
     };
-    let id = version["id"].as_str().unwrap_or_default().to_owned();
-    let summary = Version {
-      id: id.clone(),
-      version_string: version["attributes"]["versionString"].as_str().unwrap_or_default().to_owned(),
-      state: state_of(version, &["appVersionState", "appStoreState"]),
-    };
+    let id = &summary.id;
     let localizations: Vec<VersionLocalization> =
       self.get_all(&format!("/v1/appStoreVersions/{id}/appStoreVersionLocalizations"))?.iter().map(parse_version_localization).collect();
     let primary = localizations.iter().find(|localization| localization.locale == app.primary_locale).or_else(|| localizations.first());
@@ -302,6 +293,17 @@ fn state_of(item: &Value, names: &[&str]) -> String {
 fn pick_editable<'a>(items: &'a [Value], state_names: &[&str]) -> Option<&'a Value> {
   let editable = |item: &&Value| Version { state: state_of(item, state_names), ..Default::default() }.is_editable();
   items.iter().find(editable).or_else(|| items.first())
+}
+
+fn select_version(versions: &[Value]) -> Option<Version> {
+  let states = &["appVersionState", "appStoreState"];
+  let version = pick_editable(versions, states)?;
+  Some(Version {
+    id: version["id"].as_str().unwrap_or_default().to_owned(),
+    version_string: text(version, "versionString"),
+    state: state_of(version, states),
+    supports_release_notes: versions.len() > 1,
+  })
 }
 
 fn parse_app(item: &Value) -> App {

@@ -199,6 +199,7 @@ fn a_snapshot_reads_info_listing_screenshots_and_review_detail() {
   let version = snapshot.version.unwrap();
   assert_eq!(version.id, "v-edit");
   assert!(version.is_editable());
+  assert!(version.supports_release_notes);
   assert_eq!(snapshot.version_localizations[0].keywords, "a,b");
   assert_eq!(snapshot.screenshot_sets[0].count, 2);
   let review = snapshot.review_detail.unwrap();
@@ -221,6 +222,7 @@ fn a_missing_review_detail_is_none_not_an_error() {
   let snapshot = client(&url).snapshot(&app()).unwrap();
   assert!(snapshot.review_detail.is_none());
   assert!(snapshot.info_localizations.is_empty());
+  assert!(!snapshot.version.unwrap().supports_release_notes);
 }
 
 #[test]
