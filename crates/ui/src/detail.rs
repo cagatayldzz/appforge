@@ -1,7 +1,7 @@
 //! The open app's page: heading, the loaded body, and the App Information, App Review and App Privacy forms.
 
 use crate::{
-  i18n::tr,
+  i18n::{tr, trf},
   theme::colors,
   widgets::{
     area_field, area_field_with_action, centered_with_width, page_columns, page_columns_with_primary, pair, required, required_mark, section,
@@ -58,11 +58,12 @@ impl Workspace {
     } else {
       match self.active_data().map(|data| &data.snapshot) {
         Some(Load::Ready(_)) => match self.tab {
-          DetailTab::Readiness => self.render_readiness(wide, cx).into_any_element(),
-          DetailTab::ProductPage => self.render_product_page(&app, cx).into_any_element(),
+          DetailTab::ProductPage => self.render_product(&app, wide, cx).into_any_element(),
           DetailTab::Distribution => self.render_distribution(wide, cx),
           DetailTab::CustomerReviews => self.render_customer_reviews(cx),
           DetailTab::Information => self.render_information(&app, cx).into_any_element(),
+          DetailTab::Compliance => self.render_store_only(&app, "compliance", "appComplianceHelp", cx).into_any_element(),
+          DetailTab::Accessibility => self.render_store_only(&app, "accessibility", "appAccessibilityHelp", cx).into_any_element(),
           DetailTab::AgeRatings => self.render_age_ratings(&app, cx).into_any_element(),
           DetailTab::Review => self.render_review(wide, cx).into_any_element(),
           DetailTab::Privacy => self.render_privacy(&app, wide, cx).into_any_element(),
@@ -84,7 +85,11 @@ impl Workspace {
       }
     };
     // The pages are listed in the sidebar, so the page says which one it is; the heading stays fixed while the body scrolls under it.
-    let title = div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, self.tab.label()));
+    let title = match (self.tab, self.ready_snapshot().and_then(|snapshot| snapshot.version.as_ref())) {
+      (DetailTab::ProductPage, Some(version)) => trf(l, "iosAppVersion", &[&version.version_string]),
+      _ => tr(l, self.tab.label()),
+    };
+    let title = div().text_xl().font_weight(FontWeight::SEMIBOLD).child(title);
     let heading = h_flex().py_4().gap_3().flex_wrap().items_center().justify_between().child(title).children(self.form_history_button(cx));
     let content = v_flex().pt_6().pb_6().gap_6().child(body);
     let max_width = match self.tab {
@@ -128,8 +133,9 @@ impl Workspace {
   /// The button that saves the page, shown in the sidebar. The Analysis page has none.
   pub(crate) fn save_control(&self, cx: &mut Context<Self>) -> Option<Button> {
     let l = self.settings.language;
-    let id = match self.tab {
+    let id = match self.effective_tab() {
       DetailTab::Information => "save-information",
+      DetailTab::ProductPage => "save-product-page",
       DetailTab::Review => "save-review",
       DetailTab::Privacy => "save-privacy",
       _ => return None,
@@ -155,68 +161,16 @@ impl Workspace {
 
   fn render_information(&mut self, app: &App, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
-    let version = self.ready_snapshot().and_then(|snapshot| snapshot.version.as_ref());
     let picker = self.compact_locale_picker(cx);
-    let theme = cx.theme().clone();
     let forms = &self.forms;
     let general = self.render_general(app, cx);
-    let mut page = v_flex().gap_6().child(section(
+    let basics = section(
       tr(l, "basics"),
       pair(
         text_field_with_action(required(tr(l, "appName")), &forms.name, NAME_LIMIT, self.field_generate_button(ListingField::Name, cx), cx),
         text_field_with_action(tr(l, "subtitle"), &forms.subtitle, SUBTITLE_LIMIT, self.field_generate_button(ListingField::Subtitle, cx), cx),
       ),
-    ));
-    if let Some(version) = version {
-      page = page
-        .child(section(
-          tr(l, "storeListing"),
-          v_flex()
-            .gap_4()
-            .child(area_field_with_action(
-              required(tr(l, "description")),
-              &forms.description,
-              DESCRIPTION_LIMIT,
-              self.field_generate_button(ListingField::Description, cx),
-              cx,
-            ))
-            .child(text_field_with_action(
-              required(tr(l, "keywords")),
-              &forms.keywords,
-              KEYWORDS_LIMIT,
-              self.field_generate_button(ListingField::Keywords, cx),
-              cx,
-            ))
-            .child(area_field_with_action(
-              tr(l, "promotionalText"),
-              &forms.promotional,
-              PROMOTIONAL_LIMIT,
-              self.field_generate_button(ListingField::PromotionalText, cx),
-              cx,
-            )),
-        ))
-        .child(section(
-          tr(l, "links"),
-          pair(
-            url_field("open-support-url", required(tr(l, "supportUrl")), &forms.support_url, l, cx),
-            url_field("open-marketing-url", tr(l, "marketingUrl"), &forms.marketing_url, l, cx),
-          ),
-        ));
-      if version.supports_release_notes {
-        page = page.child(section(
-          tr(l, "whatsNewInThis"),
-          area_field_with_action(
-            required(tr(l, "whatsNewInThis")),
-            &forms.whats_new,
-            WHATS_NEW_LIMIT,
-            self.field_generate_button(ListingField::WhatsNew, cx),
-            cx,
-          ),
-        ));
-      }
-    } else {
-      page = page.child(div().text_sm().text_color(theme.muted_foreground).child(tr(l, "thisAppHasNo")));
-    }
+    );
     // The fields to fill and the details that are only shown are two tabs, so the form stays short.
     let tabs = TabBar::new("information-tabs")
       .underline()
@@ -226,8 +180,88 @@ impl Workspace {
         this.information_tab = *index;
         cx.notify();
       }));
-    let body = if self.information_tab == 0 { v_flex().gap_6().children(picker).child(page).into_any_element() } else { general.into_any_element() };
+    let body =
+      if self.information_tab == 0 { v_flex().gap_6().children(picker).child(basics).into_any_element() } else { general.into_any_element() };
     v_flex().gap_6().child(tabs).child(body)
+  }
+
+  /// The version page, as in App Store Connect: Product Page Information (listing texts and media), the review information
+  /// and the builds, submissions and release of the open version.
+  fn render_product(&mut self, app: &App, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
+    let l = self.settings.language;
+    let tabs = TabBar::new("product-tabs")
+      .underline()
+      .selected_index(self.product_tab)
+      .children([
+        Tab::new().label(tr(l, "listingTexts")),
+        Tab::new().label(tr(l, "mediaTab")),
+        Tab::new().label(tr(l, "appReviewInformation")),
+        Tab::new().label(tr(l, "buildsAndRelease")),
+      ])
+      .on_click(cx.listener(|this, index, window, cx| {
+        this.product_tab = *index;
+        this.ensure_app_page(window, cx);
+        cx.notify();
+      }));
+    let body = match self.product_tab {
+      0 => self.render_listing(cx).into_any_element(),
+      1 => self.render_product_page(app, cx).into_any_element(),
+      2 => self.render_review(wide, cx).into_any_element(),
+      _ => self.render_distribution(wide, cx),
+    };
+    // The rejection notice comes first, as in App Store Connect, whichever tab is open.
+    let rejection = self.rejection_notice(app);
+    v_flex().gap_6().children(rejection).child(tabs).child(body)
+  }
+
+  fn render_listing(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    let l = self.settings.language;
+    let version = self.ready_snapshot().and_then(|snapshot| snapshot.version.as_ref());
+    let picker = self.compact_locale_picker(cx);
+    let theme = cx.theme().clone();
+    let forms = &self.forms;
+    // The fields in the order of App Store Connect, without headings of our own.
+    let mut page = v_flex().gap_4();
+    if let Some(version) = version {
+      if version.supports_release_notes {
+        page = page.child(area_field_with_action(
+          required(tr(l, "whatsNewInThis")),
+          &forms.whats_new,
+          WHATS_NEW_LIMIT,
+          self.field_generate_button(ListingField::WhatsNew, cx),
+          cx,
+        ));
+      }
+      page = page
+        .child(area_field_with_action(
+          tr(l, "promotionalText"),
+          &forms.promotional,
+          PROMOTIONAL_LIMIT,
+          self.field_generate_button(ListingField::PromotionalText, cx),
+          cx,
+        ))
+        .child(area_field_with_action(
+          required(tr(l, "description")),
+          &forms.description,
+          DESCRIPTION_LIMIT,
+          self.field_generate_button(ListingField::Description, cx),
+          cx,
+        ))
+        .child(text_field_with_action(
+          required(tr(l, "keywords")),
+          &forms.keywords,
+          KEYWORDS_LIMIT,
+          self.field_generate_button(ListingField::Keywords, cx),
+          cx,
+        ))
+        .child(pair(
+          url_field("open-support-url", required(tr(l, "supportUrl")), &forms.support_url, l, cx),
+          url_field("open-marketing-url", tr(l, "marketingUrl"), &forms.marketing_url, l, cx),
+        ));
+    } else {
+      page = page.child(div().text_sm().text_color(theme.muted_foreground).child(tr(l, "thisAppHasNo")));
+    }
+    v_flex().gap_6().children(picker).child(page)
   }
 
   fn render_review(&mut self, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
@@ -279,7 +313,7 @@ impl Workspace {
           .child(pair(text_field(required(tr(l, "phone")), &forms.phone, None, cx), text_field(required(tr(l, "email")), &forms.email, None, cx))),
       ))
       .child(section(tr(l, "signInHeading"), sign_in));
-    let notes = section(tr(l, "notesForTheReviewer"), area_field(tr(l, "notes"), &forms.notes, None, cx));
+    let notes = area_field(tr(l, "notes"), &forms.notes, None, cx);
     page.child(page_columns_with_primary(wide, 0.40, account, notes))
   }
 

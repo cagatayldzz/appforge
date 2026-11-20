@@ -92,10 +92,10 @@ impl Workspace {
     let input = |field| read_input(field, cx);
     let area = |field| read_area(field, cx);
 
-    if matches!(self.tab, DetailTab::Information | DetailTab::Privacy) {
+    if matches!(self.effective_tab(), DetailTab::Information | DetailTab::Privacy) {
       if let Some(original) = snapshot.info_localizations.iter().find(|item| item.locale == self.locale) {
         let mut edited = original.clone();
-        if self.tab == DetailTab::Information {
+        if self.effective_tab() == DetailTab::Information {
           edited.name = plan.text("appName", &original.name, input(&forms.name));
           edited.subtitle = plan.text("subtitle", &original.subtitle, input(&forms.subtitle));
         } else {
@@ -107,8 +107,8 @@ impl Workspace {
         }
       }
     }
-    match self.tab {
-      DetailTab::Information => {
+    match self.effective_tab() {
+      DetailTab::ProductPage => {
         if let Some(original) = snapshot.version_localizations.iter().find(|item| item.locale == self.locale) {
           let edited = VersionLocalization {
             description: plan.text("description", &original.description, area(&forms.description)),
@@ -179,7 +179,7 @@ impl Workspace {
     if plan.changes.is_empty() || self.saving || self.store_write_busy || self.settings_locked {
       return;
     }
-    let (tab, locale, language) = (self.tab, self.locale.clone(), self.settings.language);
+    let (tab, locale, language) = (self.effective_tab(), self.locale.clone(), self.settings.language);
     let workspace = cx.weak_entity();
     window.open_dialog(cx, move |dialog, _, cx| {
       let (workspace, app, locale, plan) = (workspace.clone(), app.clone(), locale.clone(), plan.clone());
@@ -236,7 +236,7 @@ impl Workspace {
               workspace
                 .update(cx, |this, cx| {
                   if this.selected.as_ref() != Some(&app)
-                    || this.tab != tab
+                    || this.effective_tab() != tab
                     || this.locale != locale
                     || this.saving
                     || this.store_write_busy
@@ -288,7 +288,7 @@ impl Workspace {
     let Some(client) = self.client.clone() else { return };
     let history = self.form_history();
     let secrets = self.secrets.clone();
-    let tab = self.tab;
+    let tab = self.effective_tab();
     self.saving = true;
     if let Some(data) = self.app_data.get_mut(&app) {
       data.snapshot_task = None;

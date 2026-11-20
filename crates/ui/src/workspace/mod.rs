@@ -56,11 +56,13 @@ pub enum Load<T> {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DetailTab {
-  Readiness,
   ProductPage,
   Information,
   /// A sub-page of App Information, listed under it in the sidebar.
   AgeRatings,
+  /// Pages that App Store Connect owns (the API has no endpoint for them): a short explanation and a link.
+  Compliance,
+  Accessibility,
   Distribution,
   CustomerReviews,
   Review,
@@ -69,26 +71,28 @@ pub enum DetailTab {
 }
 
 impl DetailTab {
-  pub const ALL: [DetailTab; 9] = [
-    Self::Readiness,
+  pub const ALL: [DetailTab; 10] = [
     Self::Distribution,
     Self::ProductPage,
     Self::Information,
     Self::AgeRatings,
+    Self::Compliance,
     Self::Review,
     Self::Privacy,
+    Self::Accessibility,
     Self::CustomerReviews,
     Self::Analysis,
   ];
 
   pub fn label(self) -> &'static str {
     match self {
-      Self::Readiness => "submissionReadiness",
       Self::ProductPage => "productPageInformation",
       Self::Distribution => "distribution",
       Self::CustomerReviews => "ratingsAndReviews",
       Self::Information => "appInformation",
       Self::AgeRatings => "ageRatings",
+      Self::Compliance => "appCompliance",
+      Self::Accessibility => "appAccessibility",
       Self::Review => "appReview",
       Self::Privacy => "appPrivacy",
       Self::Analysis => "analysis",
@@ -228,6 +232,8 @@ pub struct Workspace {
   pub(crate) analysis_tab: crate::analysis::AnalysisTab,
   /// The open part of App Information: 0 the fields to fill, 1 the display-only details.
   pub(crate) information_tab: usize,
+  /// The open part of Product Page Information: 0 the listing texts, 1 the media.
+  pub(crate) product_tab: usize,
   /// Findings whose open or closed state was flipped by a click (keys of `finding_row`).
   pub(crate) toggled_findings: std::collections::HashSet<String>,
   pub playbook: Playbook,
@@ -407,7 +413,7 @@ impl Workspace {
       selected: None,
       app_data: HashMap::new(),
       store_write_busy: false,
-      tab: DetailTab::Readiness,
+      tab: DetailTab::ProductPage,
       locale: String::new(),
       report: None,
       ai: AiState::Idle,
@@ -415,6 +421,7 @@ impl Workspace {
       back_tab: None,
       analysis_tab: Default::default(),
       information_tab: 0,
+      product_tab: 0,
       toggled_findings: Default::default(),
       playbook,
       guidelines: Arc::new(Guidelines::default()),

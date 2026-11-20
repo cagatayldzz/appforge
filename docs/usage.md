@@ -34,9 +34,11 @@ AppForge keeps loaded pages for each app during the signed-in session. Switching
 
 | Page | Shows and edits |
 | --- | --- |
-| App Information | Name and subtitle, and the listing of the version in preparation: description, keywords, promotional text, support and marketing URLs, What's New. Counters show the limits (name and subtitle 30, keywords 100, promotional text 170). A language picker appears when the app has several languages. |
-| Distribution | iOS version history, compatible uploaded builds, review submissions and release settings. |
-| App Review | Contact, "Sign-in required" with the demo account, and the notes for the reviewer. Saving creates the review details when there are none yet. |
+| iOS App Version (the version chip) | The version page, as in App Store Connect, with a rejection notice on top when Apple rejected a submission. Tabs: **Listing texts** (description, keywords, promotional text, support and marketing URLs, What's New; counters show the limits: keywords 100, promotional text 170), **Media** (header, screenshots and previews), **App Review Information** (contact, sign-in, notes) and **Build and release** (versions, builds, submissions and release settings). A language picker appears when the app has several languages. |
+| App Information | Two tabs. **Fields to fill**: name and subtitle (30 characters each). **Display only**: bundle ID, SKU, categories and content rights. |
+| Age Ratings | Under App Information: the ratings Apple returns, the editor and the link to App Store Connect. |
+| App Compliance, App Accessibility | App Store Connect owns these; the page explains them and links there. |
+| App Review | The review submissions of the open version: submit, cancel and where each stands (the last tab of the version page). The contact, sign-in and notes for the reviewer are in the **App Review Information** tab. Saving creates the review details when there are none yet. |
 | App Privacy | The privacy policy URL (saved to App Store Connect) and your own answers: collects data, tracking, App Tracking Transparency, accounts and account deletion, a reviewer sign-in, data types and third-party SDKs. The answers stay on this Mac after you confirm Save. |
 | Ratings and Reviews | Customer reviews, ratings and public developer replies. Publishing and deleting a reply require confirmation. |
 | Analysis | The readiness score, the findings and the AI analysis. |
@@ -47,14 +49,14 @@ App Store Connect's API cannot read or write the App Privacy (nutrition label) a
 
 ## Distribute an iOS version
 
-1. Open **Distribution** and create a version if there is no editable version.
+1. Open the version page (the version chip) and its **Build and release** tab, and create a version if there is no editable version.
 2. In **Builds**, select a valid build that has already been uploaded to Apple.
 3. Choose manual release, release after approval, or a scheduled release. Enter a scheduled date and time in ISO 8601 format, such as `2027-01-31T12:00:00Z` for UTC. Eligible updates can use phased release.
 4. Add the version to a review draft, then choose **Submit for review**. Use **Reload** to check its status. A version approved for manual release has a **Release this version** action.
 
 ## Write with AI
 
-Use the AI icon inside a listing field on **App Information**. The confirmation shows the selected field, app, language, and model. **Generate** requests one draft for the selected field.
+Use the AI icon inside a listing field on **Product Page Information** (or the name and subtitle on **App Information**). The confirmation shows the selected field, app, language, and model. **Generate** requests one draft for the selected field.
 
 If the provider key or source folder is missing, AppForge helps you configure it before generating. Review the draft and press **Save** to send your edits to App Store Connect. AppForge skips the draft if you change the selected app, language, or field while the request is running.
 
@@ -74,7 +76,7 @@ The AI analysis dialog shows the last successful review for the active app versi
 
 ## Version history
 
-App Information, App Review and App Privacy have a **Version history** button. Confirmed saves add a local revision with a timestamp and field-by-field changes. **Load as draft** fills the form with the selected revision. Use **Save** and confirm the preview to apply the restored values and record a new revision. History for App Information and App Privacy is scoped to the selected store language. Demo passwords are kept in Keychain.
+The version page's listing and review tabs, App Information and App Privacy have a **Version history** button. Confirmed saves add a local revision with a timestamp and field-by-field changes. **Load as draft** fills the form with the selected revision. Use **Save** and confirm the preview to apply the restored values and record a new revision. History for App Information and App Privacy is scoped to the selected store language. Demo passwords are kept in Keychain.
 
 ## Settings
 

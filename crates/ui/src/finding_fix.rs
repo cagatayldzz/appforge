@@ -7,7 +7,7 @@ use crate::{
   workspace::{DetailTab, Workspace},
 };
 use appforge_ai::Client;
-use appforge_compliance::{can_fix, fix_finding, Category, Finding, FixField, ListingFields};
+use appforge_compliance::{can_fix, fix_finding, Finding, FixField, ListingField, ListingFields};
 use appforge_storage::SecretKey;
 use gpui_kit::{
   component::{
@@ -22,11 +22,12 @@ pub(crate) fn fixable(finding: &Finding) -> bool {
   can_fix(finding.category)
 }
 
-fn page_for(category: Category) -> DetailTab {
-  if category == Category::AppReview {
-    DetailTab::Review
-  } else {
-    DetailTab::Information
+/// The page a fix lands on: the review notes, the name and the subtitle, or the listing texts.
+fn page_for_field(field: FixField) -> DetailTab {
+  match field {
+    FixField::ReviewNotes => DetailTab::Review,
+    FixField::Listing(ListingField::Name | ListingField::Subtitle) => DetailTab::Information,
+    FixField::Listing(_) => DetailTab::ProductPage,
   }
 }
 
@@ -57,7 +58,7 @@ impl Workspace {
       return;
     }
     let model = self.model_in_use().unwrap_or_default();
-    let page = tr(l, page_for(finding.category).label());
+    let page = tr(l, crate::analysis::finding_page(&finding).label());
     let with_project = self.selected_app().is_some_and(|app| self.settings.code_folders.get(&app.id).is_some_and(|folder| folder.is_dir()));
     let workspace = cx.entity();
     let c = crate::theme::colors(cx);
@@ -115,7 +116,6 @@ impl Workspace {
     let notes = read_area(&self.forms.notes, cx);
     let sent = (current.clone(), notes.clone());
     let (target_app, target_locale, session) = (app.id, locale.clone(), self.client.clone());
-    let category = finding.category;
     self.fixing = Some(format!("{}-{}", finding.id, finding.title));
     self.tasks.fix = Some(cx.spawn_in(window, async move |this, cx| {
       let result = cx
@@ -145,7 +145,7 @@ impl Workspace {
                 let reason = if fix.summary.is_empty() { tr(l, "fixNothingChanged") } else { fix.summary.clone().into() };
                 Self::warning(window, cx, reason);
               } else {
-                this.apply_fix(&fix.changes, &sent, category, l, window, cx);
+                this.apply_fix(&fix.changes, &sent, l, window, cx);
               }
             }
             Err(error) => Self::error(window, cx, error),
@@ -162,12 +162,12 @@ impl Workspace {
     &mut self,
     changes: &[(FixField, String)],
     sent: &(ListingFields, String),
-    category: Category,
     l: appforge_storage::Language,
     window: &mut Window,
     cx: &mut Context<Self>,
   ) {
     let mut applied = Vec::new();
+    let mut applied_fields = Vec::new();
     for (field, value) in changes {
       let before = match field {
         FixField::Listing(field) => crate::listing_ai::listing_value(&sent.0, *field),
@@ -181,12 +181,15 @@ impl Workspace {
         FixField::ReviewNotes => set_area(&self.forms.notes, value, window, cx),
       }
       applied.push(tr(l, Self::fix_label(*field)).to_string());
+      applied_fields.push(*field);
     }
     if applied.is_empty() {
       Self::warning(window, cx, tr(l, "theDraftWasSkipped"));
       return;
     }
-    self.jump_to(page_for(category), window, cx);
+    if let Some((field, _)) = changes.iter().find(|(field, _)| applied_fields.contains(field)) {
+      self.jump_to(page_for_field(*field), window, cx);
+    }
     Self::success(window, cx, trf(l, "fixApplied", &[&applied.join(", ")]));
   }
 }

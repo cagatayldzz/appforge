@@ -1,7 +1,7 @@
 //! One finding of the Analysis page as a card, and the findings grouped by severity.
 
 use crate::{
-  analysis::{page_of, severity_color, SEVERITIES},
+  analysis::{finding_page, severity_color, SEVERITIES},
   finding_fix::fixable,
   i18n::{tr, translated_text, trf},
   theme::{colors, FONT_SIZE_SM},
@@ -30,7 +30,7 @@ impl Workspace {
     let c = colors(cx);
     let key = format!("{scope}-{}-{}", finding.id, finding.title);
     let open = self.finding_open(&key, finding.severity);
-    let tab = page_of(finding.category);
+    let tab = finding_page(finding);
     let toggle_key = key.clone();
     let mut meta = h_flex()
       .gap_2()

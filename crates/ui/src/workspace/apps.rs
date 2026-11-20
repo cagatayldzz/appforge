@@ -100,12 +100,32 @@ impl Workspace {
   }
 
   /// Opens a page from a link inside another page, remembering where it came from.
+  /// The page whose data and Save the screen works on: the version page is several pages in one (as in App Store Connect), and
+  /// its tabs save, reload and keep history like the pages they stand for.
+  pub(crate) fn effective_tab(&self) -> DetailTab {
+    match (self.tab, self.product_tab) {
+      (DetailTab::ProductPage, 2) => DetailTab::Review,
+      (DetailTab::ProductPage, 3) => DetailTab::Distribution,
+      (tab, _) => tab,
+    }
+  }
+
+  /// Opens a page. Review and Distribution are tabs of the version page, which also holds the Product Page.
   pub(crate) fn jump_to(&mut self, tab: DetailTab, window: &mut Window, cx: &mut Context<Self>) {
+    let (tab, sub) = match tab {
+      DetailTab::ProductPage => (DetailTab::ProductPage, Some(0)),
+      DetailTab::Review => (DetailTab::ProductPage, Some(2)),
+      DetailTab::Distribution => (DetailTab::ProductPage, Some(3)),
+      tab => (tab, None),
+    };
     if self.tab != tab {
       self.back_tab = Some(self.tab);
       self.tab = tab;
-      self.ensure_app_page(window, cx);
     }
+    if let Some(sub) = sub {
+      self.product_tab = sub;
+    }
+    self.ensure_app_page(window, cx);
     cx.notify();
   }
 
@@ -148,10 +168,10 @@ impl Workspace {
     if self.tab != DetailTab::CustomerReviews && self.active_data().is_some_and(|data| matches!(data.snapshot, Load::Idle)) {
       self.load_snapshot(window, cx);
     }
-    if self.tab == DetailTab::ProductPage {
+    if self.tab == DetailTab::ProductPage && self.product_tab == 1 {
       self.load_product_assets(false, window, cx);
     }
-    if matches!(self.tab, DetailTab::Distribution | DetailTab::Readiness | DetailTab::Analysis)
+    if matches!(self.tab, DetailTab::ProductPage | DetailTab::Distribution | DetailTab::Analysis)
       && self.active_data().is_some_and(|data| matches!(data.distribution, Load::Idle))
     {
       self.load_distribution(window, cx);
@@ -223,7 +243,7 @@ impl Workspace {
               data.snapshot = Load::Ready(snapshot);
               if active {
                 this.fill_snapshot_forms(window, cx);
-                if matches!(from, Some(DetailTab::Readiness | DetailTab::Distribution)) {
+                if matches!(from, Some(DetailTab::Distribution)) {
                   this.refresh_distribution(true, window, cx);
                 }
                 this.ensure_app_page(window, cx);

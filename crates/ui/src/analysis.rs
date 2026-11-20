@@ -70,11 +70,21 @@ pub(crate) fn severity_color(severity: Severity, c: &crate::theme::Colors) -> Hs
 
 pub(crate) fn page_of(category: Category) -> DetailTab {
   match category {
-    Category::AppInformation => DetailTab::Information,
+    // The listing texts are on the Product Page page; only the name and the subtitle stay on App Information (see `finding_page`).
+    Category::AppInformation => DetailTab::ProductPage,
     Category::AppReview => DetailTab::Review,
     Category::AppPrivacy => DetailTab::Privacy,
     Category::Distribution => DetailTab::Distribution,
     Category::ProductPage => DetailTab::ProductPage,
+  }
+}
+
+/// The page that holds what a finding is about: its category's page, except for the app name and the subtitle.
+pub(crate) fn finding_page(finding: &Finding) -> DetailTab {
+  if finding.category == Category::AppInformation && (finding.id.starts_with("info.name") || finding.id.starts_with("info.subtitle")) {
+    DetailTab::Information
+  } else {
+    page_of(finding.category)
   }
 }
 
@@ -84,8 +94,8 @@ impl Workspace {
     let rule_issue = self
       .report
       .as_ref()
-      .is_some_and(|report| report.findings.iter().any(|finding| page_of(finding.category) == tab && finding.severity != Severity::Info));
-    let ai_issue = matches!(&self.ai, AiState::Done(review) if review.findings.iter().any(|finding| page_of(finding.category) == tab && !finding.fix.trim().is_empty()));
+      .is_some_and(|report| report.findings.iter().any(|finding| finding_page(finding) == tab && finding.severity != Severity::Info));
+    let ai_issue = matches!(&self.ai, AiState::Done(review) if review.findings.iter().any(|finding| finding_page(finding) == tab && !finding.fix.trim().is_empty()));
     if rule_issue || ai_issue {
       return Some(true);
     }
@@ -200,11 +210,14 @@ impl Workspace {
           checklist = checklist.child(v_flex().gap_2().child(div().font_weight(FontWeight::SEMIBOLD).child(tr(l, "missingRequirements"))).children(
             missing.into_iter().map(|(tab, label)| {
               h_flex().gap_2().flex_wrap().items_center().justify_between().child(div().child(tr(l, label))).child(
-                Button::new(SharedString::from(format!("missing-{label}")))
-                  .small()
-                  .outline()
-                  .label(tr(l, tab.label()))
-                  .on_click(cx.listener(move |this, _, window, cx| this.jump_to(tab, window, cx))),
+                Button::new(SharedString::from(format!("missing-{label}"))).small().outline().label(tr(l, tab.label())).on_click(cx.listener(
+                  move |this, _, window, cx| {
+                    this.jump_to(tab, window, cx);
+                    if label == "appPreviewsAndScreenshots" {
+                      this.product_tab = 1;
+                    }
+                  },
+                )),
               )
             }),
           ));

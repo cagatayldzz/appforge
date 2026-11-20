@@ -50,7 +50,8 @@ impl HistoryDraft {
       self.password = None;
     }
     let applied = |label: &str| match tab {
-      DetailTab::Information => (info && INFORMATION.contains(&label)) || (listing && LISTING.contains(&label)),
+      DetailTab::Information => info && INFORMATION.contains(&label),
+      DetailTab::ProductPage => listing && LISTING.contains(&label),
       DetailTab::Privacy => (info && PRIVACY_LINKS.contains(&label)) || (privacy && PRIVACY_ANSWERS.contains(&label)),
       DetailTab::Review => review,
       _ => false,
@@ -79,8 +80,9 @@ impl Workspace {
   fn history_scope(&self) -> Option<String> {
     let app = self.selected.as_deref()?;
     let issuer = self.settings.apple.as_ref()?.issuer_id.as_str();
-    let (page, locale) = match self.tab {
+    let (page, locale) = match self.effective_tab() {
       DetailTab::Information => ("information", self.locale.as_str()),
+      DetailTab::ProductPage => ("listing", self.locale.as_str()),
       DetailTab::Privacy => ("privacy", self.locale.as_str()),
       DetailTab::Review => ("review", ""),
       _ => return None,
@@ -232,6 +234,7 @@ impl Workspace {
   }
 
   fn fill_history_draft(&mut self, values: &HistoryValues, password: &str, window: &mut Window, cx: &mut Context<Self>) {
+    let is_review = self.effective_tab() == DetailTab::Review;
     let forms = &mut self.forms;
     for (key, field) in [
       ("appName", &forms.name),
@@ -274,7 +277,7 @@ impl Workspace {
         *field = value == "saveValueYes";
       }
     }
-    if self.tab == DetailTab::Review {
+    if is_review {
       set_input(&forms.demo_password, password, window, cx);
     }
     Self::success(window, cx, tr(self.settings.language, "historyDraftLoaded"));

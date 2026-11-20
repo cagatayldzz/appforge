@@ -125,20 +125,7 @@ impl Workspace {
     let forms = &self.forms;
     let filled = |field: &Entity<InputState>| !field.read(cx).value().trim().is_empty();
     Some(match tab {
-      DetailTab::Information => {
-        let mut checks = vec![("appName", filled(&forms.name))];
-        if has_version {
-          checks.extend([
-            ("description", !forms.description.read(cx).value().trim().is_empty()),
-            ("keywords", filled(&forms.keywords)),
-            ("supportUrl", filled(&forms.support_url)),
-          ]);
-        }
-        if snapshot.version.as_ref().is_some_and(|version| version.supports_release_notes) {
-          checks.push(("whatsNewInThis", !forms.whats_new.read(cx).value().trim().is_empty()));
-        }
-        checks
-      }
+      DetailTab::Information => vec![("appName", filled(&forms.name))],
       DetailTab::Review if has_version => {
         let mut checks = vec![
           ("firstName", filled(&forms.first_name)),
@@ -161,7 +148,18 @@ impl Workspace {
         let Load::Ready(data) = &self.active_data()?.distribution else { return None };
         vec![("nextSelectABuild", data.selected_build.is_some())]
       }
-      DetailTab::ProductPage if has_version => vec![("appPreviewsAndScreenshots", snapshot.screenshot_sets.iter().any(|set| set.count > 0))],
+      DetailTab::ProductPage if has_version => {
+        let mut checks = vec![
+          ("description", !forms.description.read(cx).value().trim().is_empty()),
+          ("keywords", filled(&forms.keywords)),
+          ("supportUrl", filled(&forms.support_url)),
+        ];
+        if snapshot.version.as_ref().is_some_and(|version| version.supports_release_notes) {
+          checks.push(("whatsNewInThis", !forms.whats_new.read(cx).value().trim().is_empty()));
+        }
+        checks.push(("appPreviewsAndScreenshots", snapshot.screenshot_sets.iter().any(|set| set.count > 0)));
+        checks
+      }
       _ => return None,
     })
   }

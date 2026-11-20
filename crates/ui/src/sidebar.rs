@@ -220,26 +220,22 @@ impl Workspace {
     let group_label =
       |text: SharedString| div().px_2().pt_3().pb_1().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(text).into_any_element();
     let divider = || div().mx_2().mt_2().h_px().bg(c.border).into_any_element();
-    let readiness = self.page_item(DetailTab::Readiness, cx);
     let version_chip = self.version_chip(cx);
-    let version = match version_chip {
-      Some(_) => vec![self.page_item(DetailTab::ProductPage, cx)],
-      None => [DetailTab::Distribution, DetailTab::ProductPage].map(|tab| self.page_item(tab, cx)).to_vec(),
-    };
+    // Without a version there is no version page to open; the Product Page row stays as the way in.
+    let version = if version_chip.is_some() { Vec::new() } else { vec![self.page_item(DetailTab::ProductPage, cx)] };
     let general = vec![
       self.page_item(DetailTab::Information, cx).default_open(true).children([self.page_item(DetailTab::AgeRatings, cx)]),
-      self.page_item(DetailTab::Review, cx),
+      self.page_item(DetailTab::Compliance, cx),
+      // App Review is the list of submissions, as in App Store Connect; the review contact and notes are on the version page.
+      self.page_link(tr(l, "appReview"), self.tab == DetailTab::ProductPage && self.product_tab == 3, None, DetailTab::ProductPage, Some(3), cx),
     ];
-    let trust = [DetailTab::Privacy, DetailTab::CustomerReviews].map(|tab| self.page_item(tab, cx)).to_vec();
+    let trust = [DetailTab::Privacy, DetailTab::Accessibility, DetailTab::CustomerReviews].map(|tab| self.page_item(tab, cx)).to_vec();
     let mut menu = |id: &'static str, items: Vec<SidebarMenuItem>| {
       div().pl_2().child(SidebarMenu::new().gap_0p5().children(items).render(id, window, cx)).into_any_element()
     };
     vec![
-      menu("pages-readiness", vec![readiness]),
-      divider(),
       group_title(tr(l, "sidebarIosApp")),
-      version_chip.unwrap_or_else(|| div().into_any_element()),
-      menu("pages-version", version),
+      version_chip.unwrap_or_else(|| menu("pages-version", version)),
       divider(),
       group_title(tr(l, "general")),
       menu("pages-general", general),
@@ -250,11 +246,11 @@ impl Workspace {
     ]
   }
 
-  /// The version under "iOS App", the way App Store Connect shows it: a grey chip with where the version stands at Apple. It opens Distribution.
+  /// The version under "iOS App", the way App Store Connect shows it: a grey chip with where the version stands at Apple. It opens the version page.
   fn version_chip(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
     let c = colors(cx);
     let version = self.ready_snapshot().and_then(|snapshot| snapshot.version.as_ref())?;
-    let selected = self.tab == DetailTab::Distribution;
+    let selected = self.tab == DetailTab::ProductPage && self.product_tab != 3;
     let label = format!("{} {}", version.version_string, crate::widgets::state_label(&version.state));
     Some(
       h_flex()
@@ -273,7 +269,8 @@ impl Workspace {
         .child(div().size_2().flex_none().rounded_full().bg(crate::widgets::state_color(&version.state, &c)))
         .child(div().min_w_0().truncate().child(label))
         .on_click(cx.listener(|this, _, window, cx| {
-          this.tab = DetailTab::Distribution;
+          this.tab = DetailTab::ProductPage;
+          this.product_tab = 0;
           this.back_tab = None;
           this.ensure_app_page(window, cx);
           cx.notify();
@@ -285,14 +282,26 @@ impl Workspace {
   /// One page of the open app: its name and, when something waits on it, a status dot. Analysis has no item; the score tile opens it.
   fn page_item(&self, tab: DetailTab, cx: &mut Context<Self>) -> SidebarMenuItem {
     let l = self.settings.language;
+    let status = self.page_needs_attention(tab, cx);
+    self.page_link(tr(l, tab.label()), self.tab == tab, status, tab, None, cx)
+  }
+
+  /// A row that opens `tab` (and, on the version page, one of its tabs).
+  fn page_link(
+    &self,
+    label: SharedString,
+    active: bool,
+    attention: Option<bool>,
+    tab: DetailTab,
+    sub: Option<usize>,
+    cx: &mut Context<Self>,
+  ) -> SidebarMenuItem {
+    let l = self.settings.language;
     let c = colors(cx);
     let workspace = cx.entity();
-    let status = self.page_needs_attention(tab, cx).map(|attention| {
-      let (color, label) = if attention { (c.warning, tr(l, "pageStatusNeedsAttention")) } else { (c.success, tr(l, "ready")) };
-      (color, label)
-    });
-    SidebarMenuItem::new(tr(l, tab.label()))
-      .active(self.tab == tab)
+    let status = attention.map(|attention| if attention { (c.warning, tr(l, "pageStatusNeedsAttention")) } else { (c.success, tr(l, "ready")) });
+    SidebarMenuItem::new(label)
+      .active(active)
       .when_some(status, |item, (color, label)| {
         item.suffix(move |_, _| {
           let label = label.clone();
@@ -308,6 +317,9 @@ impl Workspace {
       .on_click(move |_, window, cx| {
         workspace.update(cx, |this, cx| {
           this.tab = tab;
+          if let Some(sub) = sub {
+            this.product_tab = sub;
+          }
           this.back_tab = None;
           this.ensure_app_page(window, cx);
           cx.notify();
@@ -319,22 +331,26 @@ impl Workspace {
   fn page_actions(&self, cx: &mut Context<Self>) -> AnyElement {
     let l = self.settings.language;
     let media_locale = self.product_localization();
-    let busy = self.active_data().is_some_and(|data| match self.tab {
+    let busy = self.active_data().is_some_and(|data| match self.effective_tab() {
       DetailTab::CustomerReviews => data.reviews_task.is_some(),
-      DetailTab::ProductPage => media_locale.and_then(|locale| data.product_assets.get(locale)).is_some_and(|entry| entry.task.is_some()),
-      DetailTab::Readiness | DetailTab::Distribution => data.snapshot_task.is_some() || data.distribution_task.is_some(),
+      DetailTab::ProductPage if self.product_tab == 1 => {
+        media_locale.and_then(|locale| data.product_assets.get(locale)).is_some_and(|entry| entry.task.is_some())
+      }
+      DetailTab::Distribution => data.snapshot_task.is_some() || data.distribution_task.is_some(),
       _ => data.snapshot_task.is_some(),
     });
     let reload = Button::new("reload-snapshot")
       .icon(Icon::new(IconName::RefreshCw))
       .label(tr(l, "reload"))
       .loading(busy)
-      .disabled(busy || self.saving || self.store_write_busy || (self.tab == DetailTab::ProductPage && media_locale.is_none()))
+      .disabled(
+        busy || self.saving || self.store_write_busy || (self.tab == DetailTab::ProductPage && self.product_tab == 1 && media_locale.is_none()),
+      )
       .outline()
       .small()
-      .on_click(cx.listener(|this, _, window, cx| match this.tab {
+      .on_click(cx.listener(|this, _, window, cx| match this.effective_tab() {
         DetailTab::CustomerReviews => this.refresh_customer_reviews(true, window, cx),
-        DetailTab::ProductPage => this.load_product_assets(true, window, cx),
+        DetailTab::ProductPage if this.product_tab == 1 => this.load_product_assets(true, window, cx),
         DetailTab::Distribution if this.ready_snapshot().is_some() => this.refresh_distribution(true, window, cx),
         tab => this.refresh_snapshot(Some(tab), window, cx),
       }));
