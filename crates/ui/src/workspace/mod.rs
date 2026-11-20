@@ -439,6 +439,11 @@ impl Workspace {
         .chain([
           cx.observe_window_appearance(window, |_, window, cx| crate::theme::apply_theme(window, cx)),
           cx.observe_window_bounds(window, |this, window, cx| this.remember_window(window, cx)),
+          // Quitting right after a resize must not lose the new size: write it now instead of after the delay.
+          cx.on_app_quit(|this, _| {
+            this.save_window_now();
+            async {}
+          }),
         ])
         .chain(model_subscriptions)
         .chain(completion_subscriptions)

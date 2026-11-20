@@ -34,7 +34,7 @@ impl Render for Workspace {
       self.render_login(cx).into_any_element()
     } else {
       // The grid of all apps takes the whole width; every other page has the sidebar next to it.
-      let sidebar = (!self.showing_all_apps()).then(|| self.render_sidebar(cx));
+      let sidebar = (!self.showing_all_apps()).then(|| self.render_sidebar(window, cx));
       let main = v_flex().flex_1().h_full().min_w_0().min_h_0().overflow_hidden().child(self.render_main(window, cx));
       h_flex().flex_1().min_h_0().child(self.render_rail(cx)).children(sidebar).child(main).into_any_element()
     };

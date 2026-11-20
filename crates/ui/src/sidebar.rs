@@ -10,8 +10,13 @@ use crate::{
 use appforge_compliance::Verdict;
 use gpui_kit::{
   component::{
-    button::Button, h_flex, scroll::ScrollableElement as _, skeleton::Skeleton, tooltip::Tooltip, v_flex, Disableable as _, Icon, IconName,
-    Sizable as _,
+    button::Button,
+    h_flex,
+    scroll::ScrollableElement as _,
+    sidebar::{SidebarItem as _, SidebarMenu, SidebarMenuItem},
+    skeleton::Skeleton,
+    tooltip::Tooltip,
+    v_flex, Disableable as _, Icon, IconName, Sizable as _,
   },
   prelude::FluentBuilder as _,
   *,
@@ -81,7 +86,7 @@ impl Workspace {
   }
 
   /// The column next to the activity bar: the apps, or the pages of Settings while Settings is open.
-  pub(crate) fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+  pub(crate) fn render_sidebar(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
     let c = colors(cx);
     let l = self.settings.language;
     let title = |text: SharedString, action: Option<AnyElement>| {
@@ -99,7 +104,7 @@ impl Workspace {
     let (header, rows, actions) = if self.show_settings {
       (title(tr(l, "settings"), None), self.settings_rows(cx), None)
     } else if let Some(app) = self.selected_app().filter(|_| !self.show_all_apps) {
-      (self.app_identity(&app, cx), self.page_rows(cx), Some(self.page_actions(cx)))
+      (self.app_identity(&app, cx), self.page_rows(window, cx), Some(self.page_actions(cx)))
     } else {
       (title(tr(l, "apps"), Some(self.reload_button(cx).into_any_element())), Vec::new(), None)
     };
@@ -206,40 +211,108 @@ impl Workspace {
       .into_any_element()
   }
 
-  /// The pages of the open app, one under the other. Analysis is not listed: it is no App Store Connect page, and the score tile opens it.
-  fn page_rows(&self, cx: &mut Context<Self>) -> Vec<AnyElement> {
+  /// The pages of the open app, grouped the way App Store Connect groups them. A page with sub-pages opens and closes like a tree.
+  fn page_rows(&self, window: &mut Window, cx: &mut Context<Self>) -> Vec<AnyElement> {
     let l = self.settings.language;
     let c = colors(cx);
-    DetailTab::ALL
-      .iter()
-      .filter(|tab| **tab != DetailTab::Analysis)
-      .map(|tab| {
-        let tab = *tab;
-        list_row(SharedString::from(format!("page-{}", tab.label())), self.tab == tab, cx)
-          .py_2()
-          .justify_between()
-          // The sub-pages sit under their page, indented.
-          .when(tab == DetailTab::AgeRatings, |row| row.pl_6().text_color(c.text_secondary))
-          .child(div().min_w_0().truncate().child(tr(l, tab.label())))
-          .children(self.page_needs_attention(tab, cx).map(|attention| {
-            let (color, label) = if attention { (c.warning, tr(l, "pageStatusNeedsAttention")) } else { (c.success, tr(l, "ready")) };
-            div()
-              .id("page-status")
-              .size_2()
-              .flex_none()
-              .rounded_full()
-              .bg(color)
-              .tooltip(move |window, cx| Tooltip::new(label.clone()).build(window, cx))
-          }))
-          .on_click(cx.listener(move |this, _, window, cx| {
-            this.tab = tab;
-            this.back_tab = None;
-            this.ensure_app_page(window, cx);
-            cx.notify();
-          }))
-          .into_any_element()
+    let group_title =
+      |text: SharedString| div().px_2().pt_3().pb_1().text_size(FONT_SIZE).font_weight(FontWeight::SEMIBOLD).child(text).into_any_element();
+    let group_label =
+      |text: SharedString| div().px_2().pt_3().pb_1().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(text).into_any_element();
+    let divider = || div().mx_2().mt_2().h_px().bg(c.border).into_any_element();
+    let readiness = self.page_item(DetailTab::Readiness, cx);
+    let version_chip = self.version_chip(cx);
+    let version = match version_chip {
+      Some(_) => vec![self.page_item(DetailTab::ProductPage, cx)],
+      None => [DetailTab::Distribution, DetailTab::ProductPage].map(|tab| self.page_item(tab, cx)).to_vec(),
+    };
+    let general = vec![
+      self.page_item(DetailTab::Information, cx).default_open(true).children([self.page_item(DetailTab::AgeRatings, cx)]),
+      self.page_item(DetailTab::Review, cx),
+    ];
+    let trust = [DetailTab::Privacy, DetailTab::CustomerReviews].map(|tab| self.page_item(tab, cx)).to_vec();
+    let mut menu = |id: &'static str, items: Vec<SidebarMenuItem>| {
+      div().pl_2().child(SidebarMenu::new().gap_0p5().children(items).render(id, window, cx)).into_any_element()
+    };
+    vec![
+      menu("pages-readiness", vec![readiness]),
+      divider(),
+      group_title(tr(l, "sidebarIosApp")),
+      version_chip.unwrap_or_else(|| div().into_any_element()),
+      menu("pages-version", version),
+      divider(),
+      group_title(tr(l, "general")),
+      menu("pages-general", general),
+      divider(),
+      group_title(tr(l, "sidebarAppStore")),
+      group_label(tr(l, "sidebarTrustAndSafety")),
+      menu("pages-trust", trust),
+    ]
+  }
+
+  /// The version under "iOS App", the way App Store Connect shows it: a grey chip with where the version stands at Apple. It opens Distribution.
+  fn version_chip(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+    let c = colors(cx);
+    let version = self.ready_snapshot().and_then(|snapshot| snapshot.version.as_ref())?;
+    let selected = self.tab == DetailTab::Distribution;
+    let label = format!("{} {}", version.version_string, crate::widgets::state_label(&version.state));
+    Some(
+      h_flex()
+        .id("page-version")
+        .mx_2()
+        .mt_1()
+        .px_2()
+        .py_1p5()
+        .gap_2()
+        .items_center()
+        .rounded_md()
+        .cursor_pointer()
+        .text_size(FONT_SIZE_SM)
+        .bg(if selected { c.selected } else { c.hover })
+        .hover(move |chip| chip.bg(c.selected))
+        .child(div().size_2().flex_none().rounded_full().bg(crate::widgets::state_color(&version.state, &c)))
+        .child(div().min_w_0().truncate().child(label))
+        .on_click(cx.listener(|this, _, window, cx| {
+          this.tab = DetailTab::Distribution;
+          this.back_tab = None;
+          this.ensure_app_page(window, cx);
+          cx.notify();
+        }))
+        .into_any_element(),
+    )
+  }
+
+  /// One page of the open app: its name and, when something waits on it, a status dot. Analysis has no item; the score tile opens it.
+  fn page_item(&self, tab: DetailTab, cx: &mut Context<Self>) -> SidebarMenuItem {
+    let l = self.settings.language;
+    let c = colors(cx);
+    let workspace = cx.entity();
+    let status = self.page_needs_attention(tab, cx).map(|attention| {
+      let (color, label) = if attention { (c.warning, tr(l, "pageStatusNeedsAttention")) } else { (c.success, tr(l, "ready")) };
+      (color, label)
+    });
+    SidebarMenuItem::new(tr(l, tab.label()))
+      .active(self.tab == tab)
+      .when_some(status, |item, (color, label)| {
+        item.suffix(move |_, _| {
+          let label = label.clone();
+          div()
+            .id("page-status")
+            .size_2()
+            .flex_none()
+            .rounded_full()
+            .bg(color)
+            .tooltip(move |window, cx| Tooltip::new(label.clone()).build(window, cx))
+        })
       })
-      .collect()
+      .on_click(move |_, window, cx| {
+        workspace.update(cx, |this, cx| {
+          this.tab = tab;
+          this.back_tab = None;
+          this.ensure_app_page(window, cx);
+          cx.notify();
+        })
+      })
   }
 
   /// Actions for the open app, pinned below the sidebar pages.

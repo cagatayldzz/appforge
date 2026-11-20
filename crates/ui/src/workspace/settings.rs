@@ -46,6 +46,16 @@ impl Workspace {
     }));
   }
 
+  /// Writes the remembered window place now; used when the app quits before the delayed write.
+  pub(super) fn save_window_now(&mut self) {
+    if self.settings_locked || self.settings.window.is_none() {
+      return;
+    }
+    if let Err(error) = self.settings.save(&self.data_dir.join("settings.json")) {
+      eprintln!("Could not save the window place: {error}");
+    }
+  }
+
   /// Asks for the folder that holds the source code of an app and remembers it.
   pub fn choose_code_folder(&mut self, app_id: String, then_generate: Option<ListingField>, window: &mut Window, cx: &mut Context<Self>) {
     let receiver = cx.prompt_for_paths(PathPromptOptions {

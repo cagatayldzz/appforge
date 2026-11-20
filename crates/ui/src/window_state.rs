@@ -11,17 +11,17 @@ const DEFAULT_HEIGHT: f32 = 760.;
 pub const MIN_WIDTH: f32 = 800.;
 pub const MIN_HEIGHT: f32 = 550.;
 
-/// Where and how big the window opens: as it was left last time, unless that place is no longer on a screen
-/// (a display was unplugged), in which case it opens in the middle of the main one.
+/// Where and how big the window opens: as it was left last time. The size always comes back; the place too, unless it is
+/// no longer on a screen (a display was unplugged), in which case the window opens in the middle of the main display.
 pub fn initial_window_bounds(cx: &App) -> WindowBounds {
   let default = WindowBounds::Windowed(Bounds::centered(None, size(px(DEFAULT_WIDTH), px(DEFAULT_HEIGHT)), cx));
   let Some(saved) = Settings::load(&data_dir().join("settings.json")).ok().and_then(|settings| settings.window) else { return default };
-  let bounds = Bounds::new(
+  let mut bounds = Bounds::new(
     point(px(saved.x as f32), px(saved.y as f32)),
     size(px((saved.width as f32).max(MIN_WIDTH)), px((saved.height as f32).max(MIN_HEIGHT))),
   );
   if !cx.displays().iter().any(|display| display.bounds().contains(&bounds.center())) {
-    return default;
+    bounds = Bounds::centered(None, bounds.size, cx);
   }
   match saved.mode {
     WindowMode::Windowed => WindowBounds::Windowed(bounds),

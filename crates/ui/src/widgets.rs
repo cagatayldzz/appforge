@@ -299,20 +299,25 @@ pub fn list_row(id: impl Into<ElementId>, selected: bool, cx: &App) -> Stateful<
 }
 
 /// "PREPARE_FOR_SUBMISSION" as "Prepare for submission".
-fn state_label(state: &str) -> String {
+pub(crate) fn state_label(state: &str) -> String {
   let lower = state.replace('_', " ").to_lowercase();
   let mut characters = lower.chars();
   characters.next().map(|first| first.to_uppercase().collect::<String>() + characters.as_str()).unwrap_or_default()
 }
 
 /// Where the version stands at Apple: a dot in the color of the state, then its name.
-pub fn state_badge(state: &str, c: &Colors) -> Div {
-  let color = match state {
+/// The color of where a version stands at Apple.
+pub fn state_color(state: &str, c: &Colors) -> Hsla {
+  match state {
     "READY_FOR_SALE" | "READY_FOR_DISTRIBUTION" | "ACCEPTED" | "PENDING_DEVELOPER_RELEASE" => c.success,
     "REJECTED" | "METADATA_REJECTED" | "DEVELOPER_REJECTED" | "INVALID_BINARY" => c.danger,
     "PREPARE_FOR_SUBMISSION" => c.warning,
     _ => c.info,
-  };
+  }
+}
+
+pub fn state_badge(state: &str, c: &Colors) -> Div {
+  let color = state_color(state, c);
   h_flex().gap_1p5().items_center().child(div().size_2().rounded_full().bg(color)).child(div().text_color(c.text).child(state_label(state)))
 }
 
