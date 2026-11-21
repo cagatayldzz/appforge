@@ -206,13 +206,16 @@ impl Client {
         localizations,
         territories.join().unwrap_or_else(|_| Err(Error::Unexpected("reading territory age ratings panicked".into()))),
         license.join().ok().and_then(Result::ok),
-        encryption.join().ok().and_then(Result::ok),
+        encryption.join().unwrap_or_else(|_| Err(Error::Unexpected("reading export compliance panicked".into()))),
       )
     });
     let mut general = product_page::general_information(info, &included);
     // No agreement of its own (404) means Apple's standard one; a failed read leaves it unknown.
     general.custom_license = license.map(|value| value.is_some_and(|value| value["data"].is_object()));
-    general.encryption = encryption.map(|items| items.iter().map(product_page::parse_encryption).collect());
+    match encryption {
+      Ok(items) => general.encryption = Some(items.iter().map(product_page::parse_encryption).collect()),
+      Err(error) => general.encryption_error = Some(error.to_string()),
+    }
     match territories {
       Ok(ratings) => general.territory_ratings = ratings,
       Err(error) => general.territory_ratings_error = Some(error.to_string()),

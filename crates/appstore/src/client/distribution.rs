@@ -21,6 +21,8 @@ pub struct StoreBuild {
   pub state: String,
   pub expired: bool,
   pub internal_only: bool,
+  /// The export compliance answer of the build; `None` while it is not answered.
+  pub uses_non_exempt_encryption: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -74,6 +76,7 @@ impl Client {
         state: text(item, "processingState"),
         expired: item["attributes"]["expired"].as_bool().unwrap_or(false),
         internal_only: item["attributes"]["buildAudienceType"].as_str() == Some("INTERNAL_ONLY"),
+        uses_non_exempt_encryption: item["attributes"]["usesNonExemptEncryption"].as_bool(),
       })
       .collect();
     distribution.selected_build =
@@ -141,6 +144,11 @@ impl Client {
       json!({"app": relationship("apps", app)}),
     )?;
     Ok(())
+  }
+
+  /// Answers the export compliance question of a build: whether it uses encryption that is not exempt.
+  pub fn set_build_encryption(&self, build: &str, uses_non_exempt: bool) -> Result<(), Error> {
+    self.patch_attributes("builds", build, vec![("usesNonExemptEncryption", Value::Bool(uses_non_exempt))]).map(|_| ())
   }
 
   pub fn select_version_build(&self, version: &str, build: &str) -> Result<(), Error> {

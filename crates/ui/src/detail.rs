@@ -4,8 +4,8 @@ use crate::{
   i18n::{tr, trf},
   theme::colors,
   widgets::{
-    area_field, area_field_with_action, centered_with_width, page_columns, page_columns_with_primary, page_section, pair, required, required_mark,
-    section, text_field, text_field_with_action, url_field,
+    area_field, area_field_with_action, card, centered_with_width, page_columns, page_columns_with_primary, pair, required, required_mark, section,
+    text_field, text_field_with_action, url_field,
   },
   workspace::{DetailTab, Load, Workspace},
 };
@@ -156,18 +156,12 @@ impl Workspace {
     )
   }
 
-  fn compact_locale_picker(&self, cx: &mut Context<Self>) -> Option<Div> {
-    let label = tr(self.settings.language, "storeListingLanguage");
-    let c = colors(cx);
-    Some(h_flex().gap_2().flex_wrap().items_center().child(div().text_sm().text_color(c.text_secondary).child(label)).child(self.locale_picker(cx)?))
-  }
-
   /// App Information as App Store Connect lays it out, one page that scrolls: the intro, the compliance notice, Localizable Information,
   /// then what `render_general` lists.
   fn render_information(&mut self, app: &App, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let c = colors(cx);
-    let picker = self.compact_locale_picker(cx);
+    let picker = self.locale_picker(cx);
     let forms = &self.forms;
     let general = self.render_general(app, cx);
     let notice = v_flex().gap_2().child(Alert::info("regulatory-notice", tr(l, "regulatoryNotice"))).child(
@@ -179,14 +173,29 @@ impl Workspace {
         .child(tr(l, "goToAppCompliance"))
         .on_click(cx.listener(|this, _, window, cx| this.jump_to(DetailTab::Compliance, window, cx))),
     );
-    let basics = page_section(
+    let basics = card(
       tr(l, "basics"),
-      v_flex().gap_4().children(picker).child(pair(
+      None,
+      picker.map(|picker| {
+        h_flex()
+          .gap_2()
+          .items_center()
+          .child(div().text_size(crate::theme::FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "storeListingLanguage")))
+          .child(picker)
+          .into_any_element()
+      }),
+      pair(
         text_field_with_action(required(tr(l, "appName")), &forms.name, NAME_LIMIT, self.field_generate_button(ListingField::Name, cx), cx),
         text_field_with_action(tr(l, "subtitle"), &forms.subtitle, SUBTITLE_LIMIT, self.field_generate_button(ListingField::Subtitle, cx), cx),
-      )),
+      ),
+      &c,
     );
-    v_flex().gap_6().child(div().text_color(c.text_secondary).child(tr(l, "appInformationHelp"))).child(notice).child(basics).child(general)
+    v_flex()
+      .gap_4()
+      .child(div().text_size(crate::theme::FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "appInformationHelp")))
+      .child(notice)
+      .child(basics)
+      .child(general)
   }
 
   /// The version page as App Store Connect lays it out, one page that scrolls: the notices, Product Page Information (with its
@@ -338,7 +347,7 @@ impl Workspace {
     let l = self.settings.language;
     let declaration = self.privacy_draft(cx);
     let url = app_privacy_url(app);
-    let picker = self.compact_locale_picker(cx);
+    let picker = self.locale_picker(cx);
     let forms = &self.forms;
     let toggle = |id: &'static str, label: SharedString, checked: bool, change: fn(&mut PrivacyDeclaration, bool), cx: &mut Context<Self>| {
       Switch::new(id).checked(checked).label(label).on_click(cx.listener(move |this, value: &bool, _, cx| {

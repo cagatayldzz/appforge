@@ -237,6 +237,7 @@ impl Workspace {
     };
     let key = read_input(key_input, cx);
     if key.is_empty() {
+      self.editing_key = None;
       Self::success(window, cx, trf(self.settings.language, "settingsSaved", &[provider.label()]));
       cx.notify();
       return;
@@ -249,6 +250,7 @@ impl Workspace {
           match result {
             Ok(()) => {
               this.has_key.insert(provider, true);
+              this.editing_key = None;
               let input = match provider {
                 Provider::OpenAi => this.settings_form.openai_key.clone(),
                 Provider::Anthropic => this.settings_form.anthropic_key.clone(),
@@ -264,6 +266,18 @@ impl Workspace {
     }));
   }
 
+  /// Opens the field of a saved key so a new one can be typed.
+  pub(crate) fn start_key_edit(&mut self, provider: Provider, window: &mut Window, cx: &mut Context<Self>) {
+    self.editing_key = Some(provider);
+    let input = match provider {
+      Provider::OpenAi => self.settings_form.openai_key.clone(),
+      Provider::Anthropic => self.settings_form.anthropic_key.clone(),
+    };
+    let handle = input.read(cx).focus_handle(cx);
+    window.defer(cx, move |window, cx| window.focus(&handle, cx));
+    cx.notify();
+  }
+
   pub fn remove_key(&mut self, provider: Provider, window: &mut Window, cx: &mut Context<Self>) {
     let secrets = self.secrets.clone();
     self.tasks.secrets = Some(cx.spawn_in(window, async move |this, cx| {
@@ -273,6 +287,7 @@ impl Workspace {
           match result {
             Ok(()) => {
               this.has_key.insert(provider, false);
+              this.editing_key = None;
               Self::success(window, cx, trf(this.settings.language, "apiKeyRemoved", &[provider.label()]));
             }
             Err(error) => Self::error(window, cx, error.to_string()),

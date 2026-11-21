@@ -61,6 +61,7 @@ impl Workspace {
             .child(tr(l, "encryptionProvideBefore"))
             .child(Button::new("upload-encryption-docs").label(tr(l, "upload")).primary().small().on_click(move |_, _, cx| cx.open_url(&upload))),
         ),
+      &c,
     );
     let notifications = page_section(
       tr(l, "serverNotifications"),
@@ -72,10 +73,12 @@ impl Workspace {
           &c,
         )),
       ),
+      &c,
     );
     let secret = page_section(
       tr(l, "sharedSecret"),
       v_flex().gap_3().child(div().child(tr(l, "sharedSecretHelp"))).child(text_link("manage-shared-secret", tr(l, "manage"), info.clone(), &c)),
+      &c,
     );
     let additional = page_section(
       tr(l, "additionalInformation"),
@@ -84,6 +87,7 @@ impl Workspace {
         .child(text_link("public-app-store", tr(l, "viewOnAppStore"), format!("https://apps.apple.com/app/id{}", app.id), &c))
         .child(text_link("manage-app-access", tr(l, "manageAppAccess"), "https://appstoreconnect.apple.com/access/users", &c))
         .child(text_link("remove-app", tr(l, "removeApp"), info, &c)),
+      &c,
     );
     [encryption, notifications, secret, additional].map(IntoElement::into_any_element).into()
   }

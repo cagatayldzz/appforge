@@ -62,6 +62,7 @@ impl Workspace {
           }))
           .child(store_link("manage-age-ratings", tr(l, "manageAgeRatings"), store_info(app))),
       ),
+      &c,
     )
   }
 }

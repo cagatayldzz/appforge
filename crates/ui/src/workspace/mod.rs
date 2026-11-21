@@ -251,6 +251,8 @@ pub struct Workspace {
   pub has_key: HashMap<Provider, bool>,
   pub show_settings: bool,
   pub settings_page: SettingsPage,
+  /// The provider whose saved key is being replaced.
+  pub editing_key: Option<Provider>,
   /// The main area shows every app as a grid instead of one app.
   pub show_all_apps: bool,
   /// The filters of the customer reviews page.
@@ -436,6 +438,7 @@ impl Workspace {
       has_key: HashMap::new(),
       show_settings: false,
       settings_page: SettingsPage::General,
+      editing_key: None,
       show_all_apps: false,
       review_status: Default::default(),
       review_rating: None,

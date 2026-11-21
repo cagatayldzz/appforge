@@ -631,5 +631,15 @@
   "writtenReviewRatings": "Yazılı yorumların puanları",
   "outOfFive": "5 üzerinden",
   "reportReview": "App Store Connect’te bildir",
-  "ageRatingTerritoryCount": "{} · {} ülke veya bölge"
+  "ageRatingTerritoryCount": "{} · {} ülke veya bölge",
+  "declareExemptEncryption": "Yalnızca muaf şifreleme kullanıyor",
+  "declareNonExemptEncryption": "Muaf olmayan şifreleme kullanıyor",
+  "exportBuilds": "Build'ler",
+  "exportBuildsHelp": "Bir build'in ihracat uyumluluğu sorusunu buradan yanıtlayın. Onayladığınızda App Store Connect'e gönderilir.",
+  "buildEncryptionExempt": "Yalnızca muaf şifreleme",
+  "buildEncryptionNonExempt": "Muaf olmayan şifreleme",
+  "buildEncryptionUnanswered": "Yanıtlanmadı",
+  "noBuildsToDeclare": "Bu sürümün henüz build'i yok.",
+  "complianceUnavailableWith": "Beyanlar App Store Connect'ten okunamadı: {}",
+  "replaceKey": "Değiştir"
 }

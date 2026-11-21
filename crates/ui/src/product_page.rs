@@ -3,7 +3,7 @@
 use crate::{
   i18n::{tr, trf},
   localization::locale_name,
-  theme::colors,
+  theme::{colors, FONT_SIZE_SM},
   widgets::{card, page_section, pair, section},
   workspace::{Load, Workspace},
 };
@@ -64,10 +64,11 @@ fn display_name(value: &str) -> String {
 
 /// A label over its value (or a dash), the look of every display-only detail.
 pub(crate) fn info_field(l: appforge_storage::Language, c: &crate::theme::Colors, key: &'static str, value: &str) -> Div {
-  v_flex()
-    .gap_1()
-    .child(div().font_weight(FontWeight::MEDIUM).child(tr(l, key)))
-    .child(div().text_color(c.text_secondary).child(if value.is_empty() { "—".into() } else { SharedString::from(value.to_owned()) }))
+  v_flex().gap_0p5().child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, key))).child(div().child(if value.is_empty() {
+    "—".into()
+  } else {
+    SharedString::from(value.to_owned())
+  }))
 }
 
 impl Workspace {
@@ -303,14 +304,14 @@ impl Workspace {
           .on_click(move |_, _, cx| cx.open_url(url))
           .into_any_element()
       }
-      Some(true) => div().text_color(c.text_secondary).child(tr(l, "customLicenseAgreement")).into_any_element(),
-      None => div().text_color(c.text_secondary).child("—").into_any_element(),
+      Some(true) => div().child(tr(l, "customLicenseAgreement")).into_any_element(),
+      None => div().child("—").into_any_element(),
     };
     let edit_url = store_info(app);
     v_flex()
-      .gap_1()
+      .gap_0p5()
       .child(
-        h_flex().gap_3().child(div().font_weight(FontWeight::MEDIUM).child(tr(l, "licenseAgreement"))).child(
+        h_flex().gap_3().child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(tr(l, "licenseAgreement"))).child(
           div().id("edit-license").cursor_pointer().text_color(c.accent).child(tr(l, "edit")).on_click(move |_, _, cx| cx.open_url(&edit_url)),
         ),
       )
@@ -345,6 +346,7 @@ impl Workspace {
       .child(page_section(
         tr(l, "generalInformation"),
         general.child(categories).child(h_flex().child(store_link("manage-general-info", tr(l, "manageCategoriesAndRights"), store_info(app)))),
+        &c,
       ))
       .child(age_ratings)
       .children(self.render_information_extras(app, cx))

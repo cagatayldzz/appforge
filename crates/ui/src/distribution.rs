@@ -50,6 +50,7 @@ pub(crate) struct DistributionRest {
 pub(crate) enum Change {
   Create(String),
   Build(String, String),
+  BuildEncryption(String, bool),
   ReleaseType(String, bool),
   Schedule(String),
   EnablePhased(String),
@@ -67,6 +68,8 @@ impl Change {
     match self {
       Self::Create(_) => "createIosVersion",
       Self::Build(_, _) => "selectBuild",
+      Self::BuildEncryption(_, false) => "declareExemptEncryption",
+      Self::BuildEncryption(_, true) => "declareNonExemptEncryption",
       Self::ReleaseType(_, false) => "manualRelease",
       Self::ReleaseType(_, true) => "releaseAfterApproval",
       Self::Schedule(_) => "scheduleRelease",
@@ -86,6 +89,7 @@ impl Change {
     match self {
       Self::Create(app) => client.create_ios_version(app, input),
       Self::Build(version, build) => client.select_version_build(version, build),
+      Self::BuildEncryption(build, uses) => client.set_build_encryption(build, *uses),
       Self::ReleaseType(version, automatic) => client.set_release_type(version, None, *automatic),
       Self::Schedule(version) => client.set_release_type(version, Some(input), false),
       Self::EnablePhased(version) => client.enable_phased_release(version),

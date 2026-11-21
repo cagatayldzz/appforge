@@ -161,6 +161,8 @@ pub struct GeneralInformation {
   pub custom_license: Option<bool>,
   /// The export compliance (encryption) declarations of the app; `None` when Apple could not be asked.
   pub encryption: Option<Vec<EncryptionDeclaration>>,
+  /// Why the declarations could not be read, when they could not.
+  pub encryption_error: Option<String>,
 }
 
 /// One export compliance declaration: `state` is `CREATED`, `IN_REVIEW`, `APPROVED`, `REJECTED`, `INVALID` or `EXPIRED`.

@@ -1,7 +1,8 @@
-//! Pages App Store Connect owns because the API has no endpoint for them, and the rejection notice of the Distribution page.
+//! The App Compliance page and the rejection notice of the Distribution page.
 
 use crate::{
-  i18n::tr,
+  distribution::Change,
+  i18n::{tr, trf},
   product_page::store_link,
   theme::colors,
   widgets::{section, state_badge},
@@ -9,7 +10,8 @@ use crate::{
 };
 use appforge_appstore::{App as StoreApp, AGE_LEVEL_KEYS};
 use gpui_kit::{
-  component::{alert::Alert, h_flex, v_flex, Icon, IconName},
+  component::{alert::Alert, h_flex, skeleton::Skeleton, v_flex, Disableable as _, Icon, IconName},
+  prelude::FluentBuilder as _,
   *,
 };
 
@@ -30,7 +32,11 @@ impl Workspace {
 
     // Export compliance: the declarations the API returns.
     let encryption = match general.and_then(|general| general.encryption.as_ref()) {
-      None => note(tr(l, "complianceUnavailable")).into_any_element(),
+      None => note(match general.and_then(|general| general.encryption_error.as_ref()) {
+        Some(error) => trf(l, "complianceUnavailableWith", &[error]),
+        None => tr(l, "complianceUnavailable"),
+      })
+      .into_any_element(),
       Some(items) if items.is_empty() => note(tr(l, "complianceNoEncryption")).into_any_element(),
       Some(items) => v_flex()
         .gap_2()
@@ -57,7 +63,11 @@ impl Workspace {
         }))
         .into_any_element(),
     };
-    let export = section(tr(l, "complianceExport"), v_flex().gap_3().child(div().text_sm().child(tr(l, "complianceExportHelp"))).child(encryption));
+    let builds = self.export_builds(&c, cx);
+    let export = section(
+      tr(l, "complianceExport"),
+      v_flex().gap_3().child(div().text_sm().child(tr(l, "complianceExportHelp"))).child(encryption).child(builds),
+    );
 
     // Medical devices and the Vietnam license: whether they apply follows from what the app already declares.
     let categories: Vec<&str> = general.map(|general| general.categories.iter().map(String::as_str).collect()).unwrap_or_default();
@@ -124,5 +134,45 @@ impl Workspace {
         )
         .into_any_element(),
     )
+  }
+}
+impl Workspace {
+  /// The builds of the open version with their export compliance answer, which App Store Connect asks for before a build can be
+  /// submitted. The answer is written through the API.
+  fn export_builds(&self, c: &crate::theme::Colors, cx: &mut Context<Self>) -> Div {
+    let l = self.settings.language;
+    let note = |text: SharedString| div().text_sm().text_color(c.text_secondary).child(text);
+    let heading = v_flex().gap_0p5().child(div().font_weight(FontWeight::MEDIUM).child(tr(l, "exportBuilds"))).child(note(tr(l, "exportBuildsHelp")));
+    let Some(Load::Ready(data)) = self.active_data().map(|data| &data.distribution) else {
+      return v_flex().gap_2().child(heading).child(Skeleton::new().h_8().w_full());
+    };
+    let builds: Vec<_> = data.builds.iter().filter(|build| !build.expired && !build.internal_only).take(5).collect();
+    if builds.is_empty() {
+      return v_flex().gap_2().child(heading).child(note(tr(l, "noBuildsToDeclare")));
+    }
+    v_flex().gap_2().child(heading).children(builds.into_iter().map(|build| {
+      let answer = match build.uses_non_exempt_encryption {
+        Some(false) => tr(l, "buildEncryptionExempt"),
+        Some(true) => tr(l, "buildEncryptionNonExempt"),
+        None => tr(l, "buildEncryptionUnanswered"),
+      };
+      let mut option = |uses: bool| {
+        let id = SharedString::from(format!("encryption-{}-{uses}", build.id));
+        self
+          .distribution_button(id, Change::BuildEncryption(build.id.clone(), uses), cx)
+          .when(build.uses_non_exempt_encryption == Some(uses), |button| button.disabled(true))
+      };
+      h_flex()
+        .id(SharedString::from(format!("export-build-{}", build.id)))
+        .gap_3()
+        .items_center()
+        .flex_wrap()
+        .child(div().w_16().font_weight(FontWeight::SEMIBOLD).child(SharedString::from(build.number.clone())))
+        .child(state_badge(&build.state, c))
+        .child(note(answer))
+        .child(div().flex_1())
+        .child(option(false))
+        .child(option(true))
+    }))
   }
 }

@@ -631,5 +631,15 @@
   "writtenReviewRatings": "Ratings from written reviews",
   "outOfFive": "out of 5",
   "reportReview": "Report in App Store Connect",
-  "ageRatingTerritoryCount": "{} · {} countries or regions"
+  "ageRatingTerritoryCount": "{} · {} countries or regions",
+  "declareExemptEncryption": "Uses only exempt encryption",
+  "declareNonExemptEncryption": "Uses non-exempt encryption",
+  "exportBuilds": "Builds",
+  "exportBuildsHelp": "Answer the export compliance question of a build here. It is sent to App Store Connect when you confirm.",
+  "buildEncryptionExempt": "Exempt encryption only",
+  "buildEncryptionNonExempt": "Non-exempt encryption",
+  "buildEncryptionUnanswered": "Not answered",
+  "noBuildsToDeclare": "This version has no builds yet.",
+  "complianceUnavailableWith": "The declarations could not be read from App Store Connect: {}",
+  "replaceKey": "Replace"
 }

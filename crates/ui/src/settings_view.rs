@@ -24,6 +24,9 @@ use gpui_kit::{
 /// How wide the fields in Settings get.
 const FIELD_WIDTH: f32 = 360.;
 
+/// What stands in the field of a saved key: a fixed mask, so it says nothing about the key itself.
+const SAVED_KEY_MASK: &str = "••••••••••••••••••••••••";
+
 impl Workspace {
   /// One AI provider: its name with whether it is in use, then its model and key, each under its label.
   fn provider_section(&mut self, provider: Provider, cx: &mut Context<Self>) -> impl IntoElement {
@@ -51,41 +54,84 @@ impl Workspace {
         .on_click(cx.listener(move |this, _, window, cx| this.set_provider(provider, window, cx)))
         .into_any_element()
     };
-    let mut key_row = h_flex().gap_2().items_center().child(div().w(px(FIELD_WIDTH)).child(Input::new(key_input))).child(
-      Button::new(SharedString::from(format!("save-{}", provider.label())))
-        .label(tr(l, "save"))
-        .primary()
-        .on_click(cx.listener(move |this, _, window, cx| this.save_ai(provider, window, cx))),
-    );
-    if has_key {
-      key_row = key_row.child(
-        Button::new(SharedString::from(format!("remove-{}", provider.label())))
-          .label(tr(l, "removeKey"))
-          .ghost()
-          .on_click(cx.listener(move |this, _, window, cx| this.remove_key(provider, window, cx))),
-      );
-    }
+    let editing = self.editing_key == Some(provider);
+    let key_row = if has_key && !editing {
+      // A saved key is never read back from the Keychain; the field only shows that one is there.
+      h_flex()
+        .w_full()
+        .gap_2()
+        .items_center()
+        .child(
+          h_flex()
+            .id(SharedString::from(format!("saved-key-{}", provider.label())))
+            .flex_1()
+            .min_w_0()
+            .h_8()
+            .px_3()
+            .gap_2()
+            .items_center()
+            .justify_between()
+            .rounded_md()
+            .border_1()
+            .border_color(c.border)
+            .bg(c.surface_alt)
+            .text_color(c.text_secondary)
+            .child(div().truncate().child(SAVED_KEY_MASK))
+            .child(Icon::new(IconName::Check).small().text_color(c.success)),
+        )
+        .child(
+          Button::new(SharedString::from(format!("replace-{}", provider.label())))
+            .label(tr(l, "replaceKey"))
+            .outline()
+            .on_click(cx.listener(move |this, _, window, cx| this.start_key_edit(provider, window, cx))),
+        )
+        .child(
+          Button::new(SharedString::from(format!("remove-{}", provider.label())))
+            .label(tr(l, "removeKey"))
+            .ghost()
+            .on_click(cx.listener(move |this, _, window, cx| this.remove_key(provider, window, cx))),
+        )
+    } else {
+      h_flex()
+        .w_full()
+        .gap_2()
+        .items_center()
+        .child(div().flex_1().min_w_0().child(Input::new(key_input)))
+        .child(
+          Button::new(SharedString::from(format!("save-{}", provider.label())))
+            .label(tr(l, "save"))
+            .primary()
+            .on_click(cx.listener(move |this, _, window, cx| this.save_ai(provider, window, cx))),
+        )
+        .children(has_key.then(|| {
+          Button::new(SharedString::from(format!("cancel-key-{}", provider.label()))).label(tr(l, "cancel")).ghost().on_click(cx.listener(
+            move |this, _, _, cx| {
+              this.editing_key = None;
+              cx.notify();
+            },
+          ))
+        }))
+    };
     let field = |label: SharedString, control: AnyElement, hint: Option<SharedString>| {
       v_flex()
+        .w_full()
         .gap_1p5()
-        .child(div().font_weight(FontWeight::MEDIUM).child(label))
+        .child(div().text_size(FONT_SIZE_SM).font_weight(FontWeight::MEDIUM).text_color(c.text_secondary).child(label))
         .child(control)
         .children(hint.map(|hint| div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(hint)))
     };
     v_flex()
       .w_full()
-      .gap_3()
+      .gap_4()
+      .p_5()
+      .rounded_lg()
+      .border_1()
+      .border_color(if active { c.success } else { c.border })
       .child(
         h_flex().w_full().h_8().justify_between().items_center().child(div().font_weight(FontWeight::SEMIBOLD).child(provider.label())).child(state),
       )
-      .child(Separator::horizontal())
-      .child(
-        v_flex()
-          .gap_4()
-          .pt_1()
-          .child(field(tr(l, "model"), div().w(px(FIELD_WIDTH)).max_w_full().child(Select::new(model_select)).into_any_element(), Some(price_hint)))
-          .child(field(tr(l, "apiKey"), key_row.into_any_element(), Some(status))),
-      )
+      .child(field(tr(l, "model"), div().w_full().child(Select::new(model_select)).into_any_element(), Some(price_hint)))
+      .child(field(tr(l, "apiKey"), key_row.into_any_element(), Some(status)))
   }
 
   /// What the AI features have used so far, with a button that clears the totals after a confirmation.

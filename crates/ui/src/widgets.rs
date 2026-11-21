@@ -172,9 +172,17 @@ pub fn section(title: impl Into<SharedString>, body: impl IntoElement) -> Div {
     .child(div().w_full().pt_1().child(body))
 }
 
-/// A section as App Store Connect's own pages draw it: a large heading and the body, without a rule.
-pub fn page_section(title: impl Into<SharedString>, body: impl IntoElement) -> Div {
-  v_flex().w_full().gap_3().child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(title.into())).child(div().w_full().child(body))
+/// A section of a long page as one calm card: a title in the interface font, then the body. Text sizes and colors come from the theme.
+pub fn page_section(title: impl Into<SharedString>, body: impl IntoElement, c: &Colors) -> Div {
+  v_flex()
+    .w_full()
+    .gap_4()
+    .p_5()
+    .rounded_lg()
+    .border_1()
+    .border_color(c.border)
+    .child(div().text_size(FONT_SIZE).font_weight(FontWeight::SEMIBOLD).child(title.into()))
+    .child(div().w_full().child(body))
 }
 
 /// A plain text link that opens a page in the browser, as App Store Connect shows its links.
