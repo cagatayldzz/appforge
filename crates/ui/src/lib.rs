@@ -14,6 +14,7 @@ mod finding_fix;
 mod forms;
 mod guide_art;
 mod guidelines;
+mod history;
 pub mod i18n;
 mod information_sections;
 mod listing_ai;

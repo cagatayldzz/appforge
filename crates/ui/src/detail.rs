@@ -64,6 +64,7 @@ impl Workspace {
           DetailTab::Information => self.render_information(&app, cx).into_any_element(),
           DetailTab::Compliance => self.render_compliance(&app, cx).into_any_element(),
           DetailTab::Submissions => self.render_review_submissions(&app, cx),
+          DetailTab::History => self.render_history(cx),
           DetailTab::Review => self.render_review(wide, cx).into_any_element(),
           DetailTab::Privacy => self.render_privacy(&app, wide, cx).into_any_element(),
           DetailTab::Analysis => self.render_analysis(wide, cx).into_any_element(),

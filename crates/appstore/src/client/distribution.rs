@@ -10,6 +10,8 @@ pub struct StoreVersion {
   pub state: String,
   pub release_type: String,
   pub release_date: String,
+  /// When the version was created, which App Store Connect's History lists as "Prepare for Submission".
+  pub created: String,
 }
 
 #[derive(Debug)]
@@ -55,6 +57,7 @@ impl Client {
         state: state_of(item, &["appVersionState", "appStoreState"]),
         release_type: text(item, "releaseType"),
         release_date: text(item, "earliestReleaseDate"),
+        created: text(item, "createdDate"),
       })
       .collect();
 

@@ -63,6 +63,7 @@ pub enum DetailTab {
   Distribution,
   /// The submissions sent to App Review, listed under App Review in the sidebar.
   Submissions,
+  History,
   CustomerReviews,
   Pricing,
   Review,
@@ -71,12 +72,13 @@ pub enum DetailTab {
 }
 
 impl DetailTab {
-  pub const ALL: [DetailTab; 10] = [
+  pub const ALL: [DetailTab; 11] = [
     Self::Distribution,
     Self::ProductPage,
     Self::Information,
     Self::Compliance,
     Self::Submissions,
+    Self::History,
     Self::Review,
     Self::Privacy,
     Self::CustomerReviews,
@@ -93,6 +95,7 @@ impl DetailTab {
       Self::Information => "appInformation",
       Self::Compliance => "appCompliance",
       Self::Submissions => "appReview",
+      Self::History => "iosHistory",
       Self::Review => "appReview",
       Self::Privacy => "appPrivacy",
       Self::Analysis => "analysis",

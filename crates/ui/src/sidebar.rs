@@ -242,7 +242,7 @@ impl Workspace {
         let danger = c.danger;
         item.suffix(move |_, _| div().size_2().flex_none().rounded_full().bg(danger))
       }),
-      self.store_item("History", "activity/ios/versions", false, cx),
+      self.page_link(tr(l, "history"), self.tab == DetailTab::History, None, DetailTab::History, cx),
     ];
     let trust = [DetailTab::Privacy, DetailTab::CustomerReviews].map(|tab| self.page_item(tab, cx)).to_vec();
     let monetization = vec![self.page_item(DetailTab::Pricing, cx)];
@@ -320,17 +320,6 @@ impl Workspace {
     self.page_link(tr(l, tab.label()), self.tab == tab, status, tab, cx)
   }
 
-  /// A row for a page only App Store Connect has: it opens in the browser, with Apple's "New" badge when Apple shows one.
-  fn store_item(&self, label: &'static str, path: &'static str, new: bool, cx: &mut Context<Self>) -> SidebarMenuItem {
-    let c = colors(cx);
-    let url = self.selected.as_ref().map(|id| format!("https://appstoreconnect.apple.com/apps/{id}/distribution/{path}"));
-    SidebarMenuItem::new(label).when(new, |item| item.suffix(new_badge(&c, tr(self.settings.language, "newBadge")))).on_click(move |_, _, cx| {
-      if let Some(url) = &url {
-        cx.open_url(url);
-      }
-    })
-  }
-
   /// A row that opens `tab`.
   fn page_link(&self, label: SharedString, active: bool, attention: Option<bool>, tab: DetailTab, cx: &mut Context<Self>) -> SidebarMenuItem {
     let l = self.settings.language;
@@ -373,7 +362,7 @@ impl Workspace {
           || data.distribution_task.is_some()
           || media_locale.and_then(|locale| data.product_assets.get(locale)).is_some_and(|entry| entry.task.is_some())
       }
-      DetailTab::Distribution | DetailTab::Submissions => data.snapshot_task.is_some() || data.distribution_task.is_some(),
+      DetailTab::Distribution | DetailTab::Submissions | DetailTab::History => data.snapshot_task.is_some() || data.distribution_task.is_some(),
       _ => data.snapshot_task.is_some(),
     });
     let reload = Button::new("reload-snapshot")
@@ -391,7 +380,9 @@ impl Workspace {
           this.load_product_assets(true, window, cx);
           this.refresh_distribution(true, window, cx);
         }
-        DetailTab::Distribution | DetailTab::Submissions if this.ready_snapshot().is_some() => this.refresh_distribution(true, window, cx),
+        DetailTab::Distribution | DetailTab::Submissions | DetailTab::History if this.ready_snapshot().is_some() => {
+          this.refresh_distribution(true, window, cx)
+        }
         tab => this.refresh_snapshot(Some(tab), window, cx),
       }));
     let save = self.save_control(cx);

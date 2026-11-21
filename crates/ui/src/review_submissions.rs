@@ -15,7 +15,7 @@ use gpui_kit::{
 };
 
 /// "2026-11-08T10:53:35.538Z" in the local time zone as "Nov 8 at 1:53 PM"; the text itself when it is not a date.
-fn submitted_at(value: &str) -> String {
+pub(crate) fn submitted_at(value: &str) -> String {
   match DateTime::parse_from_rfc3339(value) {
     Ok(date) => date.with_timezone(&Local).format("%b, %-d at %-I:%M %p").to_string(),
     Err(_) => value.to_owned(),
