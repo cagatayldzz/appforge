@@ -213,9 +213,6 @@ impl Workspace {
                 Button::new(SharedString::from(format!("missing-{label}"))).small().outline().label(tr(l, tab.label())).on_click(cx.listener(
                   move |this, _, window, cx| {
                     this.jump_to(tab, window, cx);
-                    if label == "appPreviewsAndScreenshots" {
-                      this.product_tab = 1;
-                    }
                   },
                 )),
               )

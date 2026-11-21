@@ -2,23 +2,34 @@
 
 use crate::{
   i18n::{tr, trf},
-  theme::colors,
-  widgets::{section, state_badge},
+  theme::{colors, Colors},
+  widgets::state_color,
   workspace::{Load, Workspace},
 };
 use appforge_appstore::{App as StoreApp, ReviewSubmission};
 use chrono::{DateTime, Local};
 use gpui_kit::{
-  component::{alert::Alert, h_flex, spinner::Spinner, v_flex},
+  component::{alert::Alert, h_flex, separator::Separator, spinner::Spinner, v_flex},
   *,
 };
 
 /// "2026-11-08T10:53:35.538Z" in the local time zone as "Nov 8 at 1:53 PM"; the text itself when it is not a date.
 fn submitted_at(value: &str) -> String {
   match DateTime::parse_from_rfc3339(value) {
-    Ok(date) => date.with_timezone(&Local).format("%b %-d at %-I:%M %p").to_string(),
+    Ok(date) => date.with_timezone(&Local).format("%b, %-d at %-I:%M %p").to_string(),
     Err(_) => value.to_owned(),
   }
+}
+
+/// The status as App Store Connect words it: a red dot for unresolved issues, a grey one for a submission that was removed.
+fn status(submission: &ReviewSubmission, c: &Colors) -> Div {
+  let (color, label) = if submission.removed {
+    (c.text_secondary, "Removed".to_owned())
+  } else {
+    let label = submission.state.split('_').map(|word| word[..1].to_uppercase() + &word[1..].to_lowercase()).collect::<Vec<_>>().join(" ");
+    (if submission.state == "UNRESOLVED_ISSUES" { c.danger } else { state_color(&submission.state, c) }, label)
+  };
+  h_flex().gap_1p5().items_center().child(div().size_2().rounded_full().bg(color)).child(div().child(label))
 }
 
 impl Workspace {
@@ -73,21 +84,27 @@ impl Workspace {
           .child(cell(versions.into()))
           .child(cell(submission.submitted_by.clone().into()))
           .child(cell(items))
-          .child(div().flex_1().min_w_0().child(state_badge(&submission.state, &c))),
+          .child(div().flex_1().min_w_0().child(status(submission, &c))),
       );
     }
     let empty = data.submissions.iter().all(|item| item.date.is_empty());
+    let body = if empty {
+      div().text_color(c.text_secondary).child(tr(l, "nothingWasSubmitted")).into_any_element()
+    } else {
+      table.border_t_1().border_color(c.border).into_any_element()
+    };
+    // Spaced as in App Store Connect: the intro, a line, then the Submissions heading with its text and the table.
     v_flex()
       .gap_6()
-      .child(div().text_sm().text_color(c.text_secondary).child(tr(l, "appReviewIntro")))
-      .child(section(
-        tr(l, "submissions"),
-        v_flex().gap_3().child(div().text_sm().text_color(c.text_secondary).child(tr(l, "submissionsHelp"))).child(if empty {
-          div().text_color(c.text_secondary).child(tr(l, "nothingWasSubmitted")).into_any_element()
-        } else {
-          table.into_any_element()
-        }),
-      ))
+      .child(div().text_color(c.text_secondary).child(tr(l, "appReviewIntro")))
+      .child(Separator::horizontal())
+      .child(
+        v_flex()
+          .gap_3()
+          .child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(tr(l, "submissions")))
+          .child(div().text_sm().text_color(c.text_secondary).child(tr(l, "submissionsHelp")))
+          .child(div().pt_2().child(body)),
+      )
       .into_any_element()
   }
 }

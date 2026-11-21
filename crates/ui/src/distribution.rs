@@ -31,6 +31,21 @@ fn short_date(value: &str) -> String {
   value.replace('T', " ").chars().take(16).collect()
 }
 
+/// What `Workspace::distribution_parts` returns: the versions card, the rest when the app has a version, and the primary action
+/// (adding the version for review) when there is one.
+pub(crate) struct DistributionParts {
+  pub versions: Div,
+  pub rest: Option<DistributionRest>,
+  pub action: Option<Button>,
+}
+
+pub(crate) struct DistributionRest {
+  pub banner: Div,
+  pub builds: Div,
+  pub submissions: Div,
+  pub release: Div,
+}
+
 #[derive(Clone)]
 pub(crate) enum Change {
   Create(String),
@@ -288,14 +303,29 @@ impl Workspace {
     )
   }
 
+  /// The Distribution page on its own: the next step, the builds and submissions beside the release and the versions.
   pub(crate) fn render_distribution(&self, wide: bool, cx: &mut Context<Self>) -> AnyElement {
+    match self.distribution_parts(cx) {
+      Err(message) => message,
+      Ok(DistributionParts { versions, rest: None, .. }) => v_flex().gap_4().child(versions).into_any_element(),
+      Ok(DistributionParts { versions, rest: Some(rest), .. }) => {
+        let submission = v_flex().gap_4().child(rest.builds).child(rest.submissions);
+        let releases = v_flex().gap_4().child(rest.release).child(versions);
+        v_flex().gap_4().child(rest.banner).child(page_columns(wide, submission, releases)).into_any_element()
+      }
+    }
+  }
+
+  /// The pieces of the Distribution data, so the version page can lay them out as App Store Connect does. `Err` is the loading or
+  /// failure message to show instead.
+  pub(crate) fn distribution_parts(&self, cx: &mut Context<Self>) -> Result<DistributionParts, AnyElement> {
     let l = self.settings.language;
     let data = match self.active_data().map(|data| &data.distribution) {
       Some(Load::Ready(data)) => data,
-      Some(Load::Failed(message)) => return Alert::error("distribution-error", message.clone()).into_any_element(),
-      _ => return h_flex().gap_2().child(Spinner::new()).child(tr(l, "loadingFromAppStore")).into_any_element(),
+      Some(Load::Failed(message)) => return Err(Alert::error("distribution-error", message.clone()).into_any_element()),
+      _ => return Err(h_flex().gap_2().child(Spinner::new()).child(tr(l, "loadingFromAppStore")).into_any_element()),
     };
-    let Some(snapshot) = self.ready_snapshot() else { return div().into_any_element() };
+    let Some(snapshot) = self.ready_snapshot() else { return Err(div().into_any_element()) };
     let version = snapshot.version.as_ref();
     let c = colors(cx);
     let can_create = version.is_none_or(|version| {
@@ -322,7 +352,7 @@ impl Workspace {
       &c,
     );
     let Some(version) = version else {
-      return v_flex().gap_4().child(versions).into_any_element();
+      return Ok(DistributionParts { versions, rest: None, action: None });
     };
     let editable = version.is_editable();
     let id = &version.id;
@@ -392,7 +422,7 @@ impl Workspace {
       review = review.child(div().px_3().py_2().text_color(c.text_secondary).child(tr(l, "nothingWasSubmittedFor")));
     }
     review = review.children(self.expand_toggle("reviews", submissions.len(), cx));
-    let review = card(tr(l, "appReview"), None, None, review, &c);
+    let submissions = card(tr(l, "appReview"), None, None, review, &c);
 
     // Release -------------------------------------------------------------------------------------------------
     let current = data.versions.iter().find(|item| item.id == *id);
@@ -454,12 +484,16 @@ impl Workspace {
     } else {
       (tr(l, "thisVersionIsLive"), c.success)
     };
-    let action = can_draft.then(|| {
-      self
-        .distribution_button("review-draft", Change::Draft(snapshot.app.id.clone(), id.clone(), draft), cx)
-        .primary()
-        .when(data.selected_build.is_none(), |button| button.disabled(true).tooltip(tr(l, "nextSelectABuild")))
-    });
+    let mut action = || {
+      can_draft.then(|| {
+        self
+          .distribution_button("review-draft", Change::Draft(snapshot.app.id.clone(), id.clone(), draft.clone()), cx)
+          .primary()
+          .when(data.selected_build.is_none(), |button| button.disabled(true).tooltip(tr(l, "nextSelectABuild")))
+      })
+    };
+    let banner_action = action();
+    let header_action = action();
     let banner = v_flex()
       .w_full()
       .gap_3()
@@ -489,10 +523,8 @@ impl Workspace {
               .child(div().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(trf(l, "version", &[&version.version_string])))
               .child(state_badge(&version.state, &c)),
           )
-          .children(action),
+          .children(banner_action),
       );
-    let submission = v_flex().gap_4().child(builds).child(review);
-    let releases = v_flex().gap_4().child(release).child(versions);
-    v_flex().gap_4().child(banner).child(page_columns(wide, submission, releases)).into_any_element()
+    Ok(DistributionParts { versions, rest: Some(DistributionRest { banner, builds, submissions, release }), action: header_action })
   }
 }

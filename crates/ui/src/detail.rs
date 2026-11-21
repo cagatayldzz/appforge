@@ -90,7 +90,10 @@ impl Workspace {
       _ => tr(l, self.tab.label()),
     };
     let title = div().text_xl().font_weight(FontWeight::SEMIBOLD).child(title);
-    let heading = h_flex().py_4().gap_3().flex_wrap().items_center().justify_between().child(title).children(self.form_history_button(cx));
+    // The version page puts adding the version for review in the heading, as App Store Connect does.
+    let review_action = if self.tab == DetailTab::ProductPage { self.distribution_parts(cx).ok().and_then(|parts| parts.action) } else { None };
+    let actions = h_flex().gap_2().items_center().children(self.form_history_button(cx)).children(review_action);
+    let heading = h_flex().py_4().gap_3().flex_wrap().items_center().justify_between().child(title).child(actions);
     let content = v_flex().pt_6().pb_6().gap_6().child(body);
     let max_width = match self.tab {
       DetailTab::ProductPage | DetailTab::CustomerReviews => rems(90.),
@@ -185,39 +188,55 @@ impl Workspace {
     v_flex().gap_6().child(tabs).child(body)
   }
 
-  /// The version page, as in App Store Connect: Product Page Information (listing texts and media), the review information
-  /// and the builds, submissions and release of the open version.
+  /// The version page as App Store Connect lays it out, one page that scrolls: the notices, Product Page Information (with its
+  /// listing language and the media), Build, App Review Information and App Store Version Release.
   fn render_product(&mut self, app: &App, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
-    let tabs = TabBar::new("product-tabs")
-      .underline()
-      .selected_index(self.product_tab)
-      .children([
-        Tab::new().label(tr(l, "listingTexts")),
-        Tab::new().label(tr(l, "mediaTab")),
-        Tab::new().label(tr(l, "appReviewInformation")),
-        Tab::new().label(tr(l, "buildsAndRelease")),
-      ])
-      .on_click(cx.listener(|this, index, window, cx| {
-        this.product_tab = *index;
-        this.ensure_app_page(window, cx);
-        cx.notify();
-      }));
-    let body = match self.product_tab {
-      0 => self.render_listing(cx).into_any_element(),
-      1 => self.render_product_page(app, cx).into_any_element(),
-      2 => self.render_review(wide, cx).into_any_element(),
-      _ => self.render_distribution(wide, cx),
+    let c = colors(cx);
+    let heading = |title: SharedString, right: Option<AnyElement>| {
+      h_flex().w_full().gap_3().items_center().justify_between().child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(title)).children(right)
     };
-    // The rejection notice comes first, as in App Store Connect, whichever tab is open.
+    let rule = || div().w_full().h_px().bg(c.border);
+    // The rejection notice comes first, as in App Store Connect.
     let rejection = self.rejection_notice(app, cx);
-    v_flex().gap_6().children(rejection).child(tabs).child(body)
+    let picker = self.locale_picker(cx).map(IntoElement::into_any_element);
+    let listing = self.render_listing(cx);
+    let media = self.render_product_page(app, cx);
+    let review = self.render_review(wide, cx);
+    let parts = self.distribution_parts(cx);
+    let mut page = v_flex().gap_6().children(rejection);
+    page = page.child(
+      v_flex()
+        .gap_3()
+        .child(heading(tr(l, "productPageInformation"), picker))
+        .child(div().text_sm().text_color(c.text_secondary).child(tr(l, "productPageHelp"))),
+    );
+    page = page.child(listing).child(section(tr(l, "mediaTab"), media));
+    match parts {
+      Err(message) => page = page.child(rule()).child(message),
+      Ok(parts) => {
+        if let Some(rest) = parts.rest {
+          page = page
+            .child(rule())
+            .child(v_flex().gap_3().child(heading(tr(l, "builds"), None)).child(rest.builds))
+            .child(rule())
+            .child(v_flex().gap_3().child(heading(tr(l, "appReviewInformation"), None)).child(review))
+            .child(rule())
+            .child(v_flex().gap_3().child(heading(tr(l, "appStoreVersionRelease"), None)).child(rest.release))
+            .child(rule())
+            .child(v_flex().gap_3().child(heading(tr(l, "appReview"), None)).child(rest.submissions));
+        } else {
+          page = page.child(rule()).child(v_flex().gap_3().child(heading(tr(l, "appReviewInformation"), None)).child(review));
+        }
+        page = page.child(parts.versions);
+      }
+    }
+    page
   }
 
   fn render_listing(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
     let version = self.ready_snapshot().and_then(|snapshot| snapshot.version.as_ref());
-    let picker = self.compact_locale_picker(cx);
     let theme = cx.theme().clone();
     let forms = &self.forms;
     // The fields in the order of App Store Connect, without headings of our own.
@@ -261,7 +280,7 @@ impl Workspace {
     } else {
       page = page.child(div().text_sm().text_color(theme.muted_foreground).child(tr(l, "thisAppHasNo")));
     }
-    v_flex().gap_6().children(picker).child(page)
+    v_flex().gap_6().child(page)
   }
 
   fn render_review(&mut self, wide: bool, cx: &mut Context<Self>) -> impl IntoElement {

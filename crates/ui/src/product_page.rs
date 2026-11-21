@@ -146,7 +146,7 @@ impl Workspace {
     let entry = locale.and_then(|locale| self.active_data()?.product_assets.get(locale));
     let loading = entry.is_some_and(|entry| entry.task.is_some());
     let mut page = v_flex().gap_4().child(
-      h_flex().gap_3().flex_wrap().items_center().justify_between().children(self.locale_picker(cx)).child(
+      h_flex().gap_3().flex_wrap().items_center().justify_end().child(
         h_flex().gap_2().flex_wrap().child(store_link("manage-product-media", tr(l, "manageProductPage"), store_version(app))).child(
           Button::new("reload-product-media")
             .label(tr(l, "reload"))

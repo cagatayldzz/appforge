@@ -22,6 +22,12 @@ use gpui_kit::{
   *,
 };
 
+/// Apple's dark "New" pill beside a page.
+fn new_badge(c: &crate::theme::Colors, label: SharedString) -> impl Fn(&mut Window, &mut App) -> Div + 'static {
+  let (background, text) = (c.control_border, c.text);
+  move |_, _| div().px_2().rounded_full().bg(background).text_color(text).text_size(FONT_SIZE_SM).child(label.clone())
+}
+
 impl Workspace {
   /// The strip on the far left: one avatar per app, and Settings at the bottom.
   pub(crate) fn render_rail(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -223,27 +229,72 @@ impl Workspace {
     let version_chip = self.version_chip(cx);
     // Without a version there is no version page to open; the Product Page row stays as the way in.
     let version = if version_chip.is_some() { Vec::new() } else { vec![self.page_item(DetailTab::ProductPage, cx)] };
+    // A red dot beside App Review while Apple's last answer for this version is a rejection, as in App Store Connect.
+    let rejected = matches!(
+      self.active_data().map(|data| &data.distribution),
+      Some(crate::workspace::Load::Ready(data)) if data.submissions.iter().any(|item| item.includes_version && item.state == "UNRESOLVED_ISSUES")
+    );
     let general = vec![
       self.page_item(DetailTab::Information, cx),
-      self.page_item(DetailTab::Compliance, cx),
+      self.page_item(DetailTab::Compliance, cx).suffix(new_badge(&c, tr(self.settings.language, "newBadge"))),
       // App Review is the list of submissions, as in App Store Connect; the review contact and notes are on the version page.
-      self.page_link(tr(l, "appReview"), self.tab == DetailTab::Submissions, None, DetailTab::Submissions, None, cx),
+      self.page_link(tr(l, "appReview"), self.tab == DetailTab::Submissions, None, DetailTab::Submissions, cx).when(rejected, |item| {
+        let danger = c.danger;
+        item.suffix(move |_, _| div().size_2().flex_none().rounded_full().bg(danger))
+      }),
+      self.store_item("History", "activity/ios/versions", false, cx),
     ];
     let trust = [DetailTab::Privacy, DetailTab::Accessibility, DetailTab::CustomerReviews].map(|tab| self.page_item(tab, cx)).to_vec();
+    // The pages that only App Store Connect offers: rows that open them in the browser, grouped as Apple groups them.
+    let growth = vec![
+      self.store_item("In-App Events", "events", false, cx),
+      self.store_item("Custom Product Pages", "productpages", true, cx),
+      self.store_item("Asset Library", "asset-library", true, cx),
+      self.store_item("Product Page Optimization", "optimization", true, cx),
+      self.store_item("Promo Codes", "promo_codes/generate", false, cx),
+      self.store_item("Game Center", "gamecenter", false, cx),
+    ];
+    let monetization = vec![
+      self.store_item("Pricing and Availability", "pricing", false, cx),
+      self.store_item("In-App Purchases", "iaps", false, cx),
+      self.store_item("Subscriptions", "subscriptions", true, cx),
+    ];
+    let featuring = vec![self.store_item("Nominations", "nominations", false, cx)];
+    let add_platform = self.selected.clone().map(|id| {
+      div()
+        .id("add-platform")
+        .mx_2()
+        .mt_2()
+        .px_2()
+        .text_size(FONT_SIZE_SM)
+        .cursor_pointer()
+        .text_color(c.accent)
+        .child(tr(l, "addPlatform"))
+        .on_click(move |_, _, cx| cx.open_url(&format!("https://appstoreconnect.apple.com/apps/{id}/distribution")))
+        .into_any_element()
+    });
     let mut menu = |id: &'static str, items: Vec<SidebarMenuItem>| {
       div().pl_2().child(SidebarMenu::new().gap_0p5().children(items).render(id, window, cx)).into_any_element()
     };
-    vec![
-      group_title(tr(l, "sidebarIosApp")),
-      version_chip.unwrap_or_else(|| menu("pages-version", version)),
-      divider(),
-      group_title(tr(l, "general")),
-      menu("pages-general", general),
-      divider(),
-      group_title(tr(l, "sidebarAppStore")),
-      group_label(tr(l, "sidebarTrustAndSafety")),
-      menu("pages-trust", trust),
-    ]
+    vec![group_title(tr(l, "sidebarIosApp")), version_chip.unwrap_or_else(|| menu("pages-version", version))]
+      .into_iter()
+      .chain(add_platform)
+      .chain([
+        divider(),
+        group_title(tr(l, "general")),
+        menu("pages-general", general),
+        divider(),
+        group_title(tr(l, "sidebarAppStore")),
+        group_label(tr(l, "sidebarTrustAndSafety")),
+        menu("pages-trust", trust),
+        group_label(tr(l, "sidebarGrowthAndMarketing")),
+        menu("pages-growth", growth),
+        group_label(tr(l, "sidebarMonetization")),
+        menu("pages-monetization", monetization),
+        group_label(tr(l, "sidebarFeaturing")),
+        menu("pages-featuring", featuring),
+      ])
+      .collect()
   }
 
   /// The version under "iOS App", the way App Store Connect shows it: a grey chip with where the version stands at Apple. It opens the version page.
@@ -270,7 +321,6 @@ impl Workspace {
         .child(div().min_w_0().truncate().child(label))
         .on_click(cx.listener(|this, _, window, cx| {
           this.tab = DetailTab::ProductPage;
-          this.product_tab = 0;
           this.back_tab = None;
           this.ensure_app_page(window, cx);
           cx.notify();
@@ -283,19 +333,22 @@ impl Workspace {
   fn page_item(&self, tab: DetailTab, cx: &mut Context<Self>) -> SidebarMenuItem {
     let l = self.settings.language;
     let status = self.page_needs_attention(tab, cx);
-    self.page_link(tr(l, tab.label()), self.tab == tab, status, tab, None, cx)
+    self.page_link(tr(l, tab.label()), self.tab == tab, status, tab, cx)
   }
 
-  /// A row that opens `tab` (and, on the version page, one of its tabs).
-  fn page_link(
-    &self,
-    label: SharedString,
-    active: bool,
-    attention: Option<bool>,
-    tab: DetailTab,
-    sub: Option<usize>,
-    cx: &mut Context<Self>,
-  ) -> SidebarMenuItem {
+  /// A row for a page only App Store Connect has: it opens in the browser, with Apple's "New" badge when Apple shows one.
+  fn store_item(&self, label: &'static str, path: &'static str, new: bool, cx: &mut Context<Self>) -> SidebarMenuItem {
+    let c = colors(cx);
+    let url = self.selected.as_ref().map(|id| format!("https://appstoreconnect.apple.com/apps/{id}/distribution/{path}"));
+    SidebarMenuItem::new(label).when(new, |item| item.suffix(new_badge(&c, tr(self.settings.language, "newBadge")))).on_click(move |_, _, cx| {
+      if let Some(url) = &url {
+        cx.open_url(url);
+      }
+    })
+  }
+
+  /// A row that opens `tab`.
+  fn page_link(&self, label: SharedString, active: bool, attention: Option<bool>, tab: DetailTab, cx: &mut Context<Self>) -> SidebarMenuItem {
     let l = self.settings.language;
     let c = colors(cx);
     let workspace = cx.entity();
@@ -317,9 +370,6 @@ impl Workspace {
       .on_click(move |_, window, cx| {
         workspace.update(cx, |this, cx| {
           this.tab = tab;
-          if let Some(sub) = sub {
-            this.product_tab = sub;
-          }
           this.back_tab = None;
           this.ensure_app_page(window, cx);
           cx.notify();
@@ -333,8 +383,10 @@ impl Workspace {
     let media_locale = self.product_localization();
     let busy = self.active_data().is_some_and(|data| match self.effective_tab() {
       DetailTab::CustomerReviews => data.reviews_task.is_some(),
-      DetailTab::ProductPage if self.product_tab == 1 => {
-        media_locale.and_then(|locale| data.product_assets.get(locale)).is_some_and(|entry| entry.task.is_some())
+      DetailTab::ProductPage => {
+        data.snapshot_task.is_some()
+          || data.distribution_task.is_some()
+          || media_locale.and_then(|locale| data.product_assets.get(locale)).is_some_and(|entry| entry.task.is_some())
       }
       DetailTab::Distribution | DetailTab::Submissions => data.snapshot_task.is_some() || data.distribution_task.is_some(),
       _ => data.snapshot_task.is_some(),
@@ -343,14 +395,16 @@ impl Workspace {
       .icon(Icon::new(IconName::RefreshCw))
       .label(tr(l, "reload"))
       .loading(busy)
-      .disabled(
-        busy || self.saving || self.store_write_busy || (self.tab == DetailTab::ProductPage && self.product_tab == 1 && media_locale.is_none()),
-      )
+      .disabled(busy || self.saving || self.store_write_busy || false)
       .outline()
       .small()
       .on_click(cx.listener(|this, _, window, cx| match this.effective_tab() {
         DetailTab::CustomerReviews => this.refresh_customer_reviews(true, window, cx),
-        DetailTab::ProductPage if this.product_tab == 1 => this.load_product_assets(true, window, cx),
+        DetailTab::ProductPage if this.ready_snapshot().is_some() => {
+          this.refresh_snapshot(Some(DetailTab::ProductPage), window, cx);
+          this.load_product_assets(true, window, cx);
+          this.refresh_distribution(true, window, cx);
+        }
         DetailTab::Distribution | DetailTab::Submissions if this.ready_snapshot().is_some() => this.refresh_distribution(true, window, cx),
         tab => this.refresh_snapshot(Some(tab), window, cx),
       }));

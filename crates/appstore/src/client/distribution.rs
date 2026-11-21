@@ -40,6 +40,8 @@ pub struct ReviewSubmission {
   /// The versions in the submission, such as `1.0`, and who submitted it (empty when Apple does not say).
   pub versions: Vec<String>,
   pub submitted_by: String,
+  /// Every item of the submission was removed from it, which App Store Connect shows as "Removed".
+  pub removed: bool,
 }
 
 impl Client {
@@ -92,8 +94,10 @@ impl Client {
         linked == Some(id)
       };
       let mut version_ids: Vec<&str> = linked.into_iter().collect();
+      let mut removed_items = 0;
       for entry in item["relationships"]["items"]["data"].as_array().into_iter().flatten() {
         let version = entry["id"].as_str().and_then(|id| included_by("reviewSubmissionItems", id));
+        removed_items += usize::from(version.is_some_and(|item| item["attributes"]["state"] == "REMOVED"));
         version_ids.extend(version.and_then(|item| item["relationships"]["appStoreVersion"]["data"]["id"].as_str()));
       }
       let mut versions: Vec<String> = Vec::new();
@@ -116,6 +120,7 @@ impl Client {
         includes_version,
         versions,
         submitted_by,
+        removed: count > 0 && removed_items == count,
       });
     }
     Ok(distribution)

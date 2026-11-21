@@ -9,6 +9,7 @@ const HISTORY_DIALOG_WIDTH: Pixels = px(700.0);
 
 const INFORMATION: &[&str] = &["appName", "subtitle"];
 const LISTING: &[&str] = &["description", "keywords", "promotionalText", "supportUrl", "marketingUrl", "whatsNewInThis"];
+const REVIEW: &[&str] = &["signInRequiredTo", "firstName", "lastName", "phone", "email", "demoUserName", "notes"];
 const PRIVACY_LINKS: &[&str] = &["privacyPolicyUrl", "privacyChoicesUrl"];
 const PRIVACY_ANSWERS: &[&str] = &[
   "iAnsweredAppPrivacy",
@@ -51,7 +52,7 @@ impl HistoryDraft {
     }
     let applied = |label: &str| match tab {
       DetailTab::Information => info && INFORMATION.contains(&label),
-      DetailTab::ProductPage => listing && LISTING.contains(&label),
+      DetailTab::ProductPage => (listing && LISTING.contains(&label)) || (review && REVIEW.contains(&label)),
       DetailTab::Privacy => (info && PRIVACY_LINKS.contains(&label)) || (privacy && PRIVACY_ANSWERS.contains(&label)),
       DetailTab::Review => review,
       _ => false,
@@ -234,7 +235,7 @@ impl Workspace {
   }
 
   fn fill_history_draft(&mut self, values: &HistoryValues, password: &str, window: &mut Window, cx: &mut Context<Self>) {
-    let is_review = self.effective_tab() == DetailTab::Review;
+    let is_review = matches!(self.effective_tab(), DetailTab::Review | DetailTab::ProductPage);
     let forms = &mut self.forms;
     for (key, field) in [
       ("appName", &forms.name),

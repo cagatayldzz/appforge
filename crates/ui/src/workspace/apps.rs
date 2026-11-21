@@ -103,27 +103,18 @@ impl Workspace {
   /// The page whose data and Save the screen works on: the version page is several pages in one (as in App Store Connect), and
   /// its tabs save, reload and keep history like the pages they stand for.
   pub(crate) fn effective_tab(&self) -> DetailTab {
-    match (self.tab, self.product_tab) {
-      (DetailTab::ProductPage, 2) => DetailTab::Review,
-      (DetailTab::ProductPage, 3) => DetailTab::Distribution,
-      (tab, _) => tab,
-    }
+    self.tab
   }
 
   /// Opens a page. Review and Distribution are tabs of the version page, which also holds the Product Page.
   pub(crate) fn jump_to(&mut self, tab: DetailTab, window: &mut Window, cx: &mut Context<Self>) {
-    let (tab, sub) = match tab {
-      DetailTab::ProductPage => (DetailTab::ProductPage, Some(0)),
-      DetailTab::Review => (DetailTab::ProductPage, Some(2)),
-      DetailTab::Distribution => (DetailTab::ProductPage, Some(3)),
-      tab => (tab, None),
+    let tab = match tab {
+      DetailTab::Review | DetailTab::Distribution => DetailTab::ProductPage,
+      tab => tab,
     };
     if self.tab != tab {
       self.back_tab = Some(self.tab);
       self.tab = tab;
-    }
-    if let Some(sub) = sub {
-      self.product_tab = sub;
     }
     self.ensure_app_page(window, cx);
     cx.notify();
@@ -168,7 +159,7 @@ impl Workspace {
     if self.tab != DetailTab::CustomerReviews && self.active_data().is_some_and(|data| matches!(data.snapshot, Load::Idle)) {
       self.load_snapshot(window, cx);
     }
-    if self.tab == DetailTab::ProductPage && self.product_tab == 1 {
+    if self.tab == DetailTab::ProductPage {
       self.load_product_assets(false, window, cx);
     }
     if matches!(self.tab, DetailTab::ProductPage | DetailTab::Distribution | DetailTab::Submissions | DetailTab::Analysis)

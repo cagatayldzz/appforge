@@ -127,27 +127,10 @@ impl Workspace {
             plan.listing = Some((edited, original.clone()));
           }
         }
+        // The version page holds the review information too, and one Save covers both.
+        self.plan_review(&mut plan, snapshot, cx);
       }
-      DetailTab::Review => {
-        if let Some(version) = &snapshot.version {
-          let original = snapshot.review_detail.clone().unwrap_or_default();
-          plan.boolean("signInRequiredTo", original.demo_account_required, forms.demo_required);
-          let edited = ReviewDetail {
-            id: original.id.clone(),
-            contact_first_name: plan.text("firstName", &original.contact_first_name, input(&forms.first_name)),
-            contact_last_name: plan.text("lastName", &original.contact_last_name, input(&forms.last_name)),
-            contact_phone: plan.text("phone", &original.contact_phone, input(&forms.phone)),
-            contact_email: plan.text("email", &original.contact_email, input(&forms.email)),
-            demo_account_required: forms.demo_required,
-            demo_account_name: plan.text("demoUserName", &original.demo_account_name, input(&forms.demo_name)),
-            demo_account_password: plan.text_with_mask("demoPassword", &original.demo_account_password, input(&forms.demo_password), true),
-            notes: plan.text("notes", &original.notes, area(&forms.notes)),
-          };
-          if edited != original {
-            plan.review = Some((version.id.clone(), edited));
-          }
-        }
-      }
+      DetailTab::Review => self.plan_review(&mut plan, snapshot, cx),
       DetailTab::Privacy => {
         let original = self.privacy_declaration();
         let mut edited = self.privacy_draft(cx);
@@ -171,6 +154,30 @@ impl Workspace {
       _ => {}
     }
     plan
+  }
+
+  fn plan_review(&self, plan: &mut SavePlan, snapshot: &AppSnapshot, cx: &App) {
+    let forms = &self.forms;
+    let input = |field| read_input(field, cx);
+    let area = |field| read_area(field, cx);
+    if let Some(version) = &snapshot.version {
+      let original = snapshot.review_detail.clone().unwrap_or_default();
+      plan.boolean("signInRequiredTo", original.demo_account_required, forms.demo_required);
+      let edited = ReviewDetail {
+        id: original.id.clone(),
+        contact_first_name: plan.text("firstName", &original.contact_first_name, input(&forms.first_name)),
+        contact_last_name: plan.text("lastName", &original.contact_last_name, input(&forms.last_name)),
+        contact_phone: plan.text("phone", &original.contact_phone, input(&forms.phone)),
+        contact_email: plan.text("email", &original.contact_email, input(&forms.email)),
+        demo_account_required: forms.demo_required,
+        demo_account_name: plan.text("demoUserName", &original.demo_account_name, input(&forms.demo_name)),
+        demo_account_password: plan.text_with_mask("demoPassword", &original.demo_account_password, input(&forms.demo_password), true),
+        notes: plan.text("notes", &original.notes, area(&forms.notes)),
+      };
+      if edited != original {
+        plan.review = Some((version.id.clone(), edited));
+      }
+    }
   }
 
   pub(crate) fn confirm_save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
