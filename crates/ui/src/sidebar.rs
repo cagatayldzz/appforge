@@ -228,7 +228,27 @@ impl Workspace {
     let divider = || div().mx_2().mt_2().h_px().bg(c.border).into_any_element();
     let version_chip = self.version_chip(cx);
     // Without a version there is no version page to open; the Product Page row stays as the way in.
-    let version = if version_chip.is_some() { Vec::new() } else { vec![self.page_item(DetailTab::ProductPage, cx)] };
+    // While the version loads, a placeholder of the chip's size stands in, so the row does not change shape when it arrives.
+    let loading = version_chip.is_none()
+      && self.active_data().is_none_or(|data| matches!(data.snapshot, crate::workspace::Load::Idle | crate::workspace::Load::Loading));
+    let version = if version_chip.is_some() || loading { Vec::new() } else { vec![self.page_item(DetailTab::ProductPage, cx)] };
+    let version_chip = version_chip.or_else(|| {
+      loading.then(|| {
+        h_flex()
+          .mx_2()
+          .mt_1()
+          .px_2()
+          .py_1p5()
+          .gap_2()
+          .items_center()
+          .rounded_md()
+          .bg(c.hover)
+          .text_size(FONT_SIZE_SM)
+          .child(Skeleton::new().size_2().rounded_full().flex_none())
+          .child(Skeleton::new().h_3().w_24())
+          .into_any_element()
+      })
+    });
     // A red dot beside App Review while Apple's last answer for this version is a rejection, as in App Store Connect.
     let rejected = matches!(
       self.active_data().map(|data| &data.distribution),
