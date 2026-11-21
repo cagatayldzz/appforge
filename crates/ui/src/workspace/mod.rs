@@ -60,11 +60,11 @@ pub enum DetailTab {
   Information,
   /// Pages that App Store Connect owns (the API has no endpoint for them): a short explanation and a link.
   Compliance,
-  Accessibility,
   Distribution,
   /// The submissions sent to App Review, listed under App Review in the sidebar.
   Submissions,
   CustomerReviews,
+  Pricing,
   Review,
   Privacy,
   Analysis,
@@ -79,8 +79,8 @@ impl DetailTab {
     Self::Submissions,
     Self::Review,
     Self::Privacy,
-    Self::Accessibility,
     Self::CustomerReviews,
+    Self::Pricing,
     Self::Analysis,
   ];
 
@@ -89,10 +89,10 @@ impl DetailTab {
       Self::ProductPage => "productPageInformation",
       Self::Distribution => "distribution",
       Self::CustomerReviews => "ratingsAndReviews",
+      Self::Pricing => "pricingAndAvailability",
       Self::Information => "appInformation",
       Self::Compliance => "appCompliance",
       Self::Submissions => "appReview",
-      Self::Accessibility => "appAccessibility",
       Self::Review => "appReview",
       Self::Privacy => "appPrivacy",
       Self::Analysis => "analysis",
@@ -196,6 +196,8 @@ pub(crate) struct AppData {
   pub review_versions: Option<Vec<(String, String)>>,
   pub review_territories: std::collections::BTreeSet<String>,
   pub reviews_task: Option<Task<()>>,
+  pub pricing: Load<appforge_appstore::Pricing>,
+  pub pricing_task: Option<Task<()>>,
 }
 
 pub struct Workspace {

@@ -244,22 +244,8 @@ impl Workspace {
       }),
       self.store_item("History", "activity/ios/versions", false, cx),
     ];
-    let trust = [DetailTab::Privacy, DetailTab::Accessibility, DetailTab::CustomerReviews].map(|tab| self.page_item(tab, cx)).to_vec();
-    // The pages that only App Store Connect offers: rows that open them in the browser, grouped as Apple groups them.
-    let growth = vec![
-      self.store_item("In-App Events", "events", false, cx),
-      self.store_item("Custom Product Pages", "productpages", true, cx),
-      self.store_item("Asset Library", "asset-library", true, cx),
-      self.store_item("Product Page Optimization", "optimization", true, cx),
-      self.store_item("Promo Codes", "promo_codes/generate", false, cx),
-      self.store_item("Game Center", "gamecenter", false, cx),
-    ];
-    let monetization = vec![
-      self.store_item("Pricing and Availability", "pricing", false, cx),
-      self.store_item("In-App Purchases", "iaps", false, cx),
-      self.store_item("Subscriptions", "subscriptions", true, cx),
-    ];
-    let featuring = vec![self.store_item("Nominations", "nominations", false, cx)];
+    let trust = [DetailTab::Privacy, DetailTab::CustomerReviews].map(|tab| self.page_item(tab, cx)).to_vec();
+    let monetization = vec![self.page_item(DetailTab::Pricing, cx)];
     let add_platform = self.selected.clone().map(|id| {
       div()
         .id("add-platform")
@@ -289,12 +275,8 @@ impl Workspace {
         group_title(tr(l, "sidebarAppStore")),
         group_label(tr(l, "sidebarTrustAndSafety")),
         menu("pages-trust", trust),
-        group_label(tr(l, "sidebarGrowthAndMarketing")),
-        menu("pages-growth", growth),
         group_label(tr(l, "sidebarMonetization")),
         menu("pages-monetization", monetization),
-        group_label(tr(l, "sidebarFeaturing")),
-        menu("pages-featuring", featuring),
       ])
       .collect()
   }
@@ -385,6 +367,7 @@ impl Workspace {
     let media_locale = self.product_localization();
     let busy = self.active_data().is_some_and(|data| match self.effective_tab() {
       DetailTab::CustomerReviews => data.reviews_task.is_some(),
+      DetailTab::Pricing => data.pricing_task.is_some(),
       DetailTab::ProductPage => {
         data.snapshot_task.is_some()
           || data.distribution_task.is_some()
@@ -402,6 +385,7 @@ impl Workspace {
       .small()
       .on_click(cx.listener(|this, _, window, cx| match this.effective_tab() {
         DetailTab::CustomerReviews => this.refresh_customer_reviews(true, window, cx),
+        DetailTab::Pricing => this.refresh_pricing(true, window, cx),
         DetailTab::ProductPage if this.ready_snapshot().is_some() => {
           this.refresh_snapshot(Some(DetailTab::ProductPage), window, cx);
           this.load_product_assets(true, window, cx);

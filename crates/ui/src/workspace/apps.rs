@@ -153,6 +153,9 @@ impl Workspace {
   }
 
   pub(crate) fn ensure_app_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    if self.tab == DetailTab::Pricing && self.active_data().is_some_and(|data| matches!(data.pricing, Load::Idle)) {
+      self.load_pricing(window, cx);
+    }
     if self.tab == DetailTab::CustomerReviews && self.active_data().is_some_and(|data| matches!(data.reviews, Load::Idle)) {
       self.load_customer_reviews(window, cx);
     }

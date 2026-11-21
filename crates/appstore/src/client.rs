@@ -2,6 +2,7 @@
 
 pub(crate) mod age_rating;
 pub(crate) mod distribution;
+pub(crate) mod pricing;
 pub(crate) mod product_page;
 pub(crate) mod reviews;
 

@@ -60,9 +60,9 @@ impl Workspace {
           DetailTab::ProductPage => self.render_product(&app, wide, cx).into_any_element(),
           DetailTab::Distribution => self.render_distribution(wide, cx),
           DetailTab::CustomerReviews => self.render_customer_reviews(cx),
+          DetailTab::Pricing => self.render_pricing(cx),
           DetailTab::Information => self.render_information(&app, cx).into_any_element(),
           DetailTab::Compliance => self.render_compliance(&app, cx).into_any_element(),
-          DetailTab::Accessibility => self.render_store_only(&app, "accessibility", "appAccessibilityHelp", cx).into_any_element(),
           DetailTab::Submissions => self.render_review_submissions(&app, cx),
           DetailTab::Review => self.render_review(wide, cx).into_any_element(),
           DetailTab::Privacy => self.render_privacy(&app, wide, cx).into_any_element(),
@@ -95,7 +95,7 @@ impl Workspace {
     let heading = h_flex().py_4().gap_3().flex_wrap().items_center().justify_between().child(title).child(actions);
     let content = v_flex().pt_6().pb_6().gap_6().child(body);
     let max_width = match self.tab {
-      DetailTab::ProductPage | DetailTab::CustomerReviews => rems(90.),
+      DetailTab::ProductPage | DetailTab::CustomerReviews | DetailTab::Pricing => rems(90.),
       _ if wide => rems(86.),
       _ => rems(60.),
     };

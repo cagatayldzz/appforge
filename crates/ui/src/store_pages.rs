@@ -14,18 +14,6 @@ use gpui_kit::{
 };
 
 impl Workspace {
-  /// A short explanation and a link to the page in App Store Connect.
-  pub(crate) fn render_store_only(&self, app: &StoreApp, page: &'static str, help: &'static str, cx: &mut Context<Self>) -> impl IntoElement {
-    let _ = cx;
-    let l = self.settings.language;
-    let url = format!("https://appstoreconnect.apple.com/apps/{}/distribution/{page}", app.id);
-    v_flex().gap_4().child(Alert::info(SharedString::from(format!("store-only-{page}")), tr(l, help))).child(h_flex().child(store_link(
-      page,
-      tr(l, "openInAppStoreConnect"),
-      url,
-    )))
-  }
-
   /// App Compliance: what App Store Connect lists on its page. The export compliance declarations come from the API; whether the
   /// medical device and Vietnam game license declarations apply follows from the categories and age rating answers. The other
   /// declarations have no API, so each shows Apple's explanation and a link to where it is answered.

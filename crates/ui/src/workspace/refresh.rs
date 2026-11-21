@@ -8,6 +8,7 @@ pub(crate) enum Refresh {
   Distribution,
   ProductMedia,
   Reviews,
+  Pricing,
 }
 
 impl Refresh {
@@ -17,6 +18,7 @@ impl Refresh {
       Self::Distribution => "refreshDistributionData",
       Self::ProductMedia => "refreshProductMedia",
       Self::Reviews => "refreshCustomerReviews",
+      Self::Pricing => "refreshPricing",
     }
   }
 

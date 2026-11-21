@@ -19,6 +19,7 @@ mod information_sections;
 mod listing_ai;
 mod localization;
 mod login;
+mod pricing;
 mod privacy_preview;
 mod product_page;
 mod review_submissions;
