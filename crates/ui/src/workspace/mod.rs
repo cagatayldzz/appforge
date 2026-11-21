@@ -175,6 +175,7 @@ pub(crate) struct Tasks {
   pub(crate) form_history: Option<Task<()>>,
   pub(crate) ai: Option<Task<()>>,
   pub(crate) ai_dialog: Option<Task<()>>,
+  pub(crate) ai_restore: Option<Task<()>>,
   pub(crate) playbook: Option<Task<()>>,
   pub(crate) guidelines: Option<Task<()>>,
   pub(crate) window: Option<Task<()>>,

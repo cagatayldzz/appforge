@@ -54,7 +54,7 @@ impl Workspace {
     let model = self.settings.ai.model(provider).to_owned();
     let used = model.clone();
     let require_project = folder.is_some();
-    let cache = self.analysis_cache(require_project);
+    let cache = self.analysis_cache();
     let declaration = self.privacy_declaration();
     let secrets = self.secrets.clone();
     let playbook = self.playbook.clone();
@@ -174,6 +174,7 @@ impl Workspace {
   pub(super) fn reset_ai_analysis(&mut self, window: &mut Window, cx: &mut App) {
     self.tasks.ai = None;
     self.tasks.ai_dialog = None;
+    self.tasks.ai_restore = None;
     self.ai = AiState::Idle;
     window.remove_notification::<AiAnalysisNotice>(cx);
   }

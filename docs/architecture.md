@@ -116,4 +116,4 @@ Compare before updating the baseline and review the resulting Git diff for exact
 
 Confirmed form saves are recorded in the private local `form-history.git` repository in the data directory. Historical demo passwords are stored in Keychain.
 
-The `ai-reviews/` data subdirectory keeps the latest successful AI analysis per account, app, version, interface language and analysis mode. It contains findings and run metadata.
+The `ai-reviews/` data subdirectory keeps every successful AI analysis, one file per run, per account, app, version and interface language. The newest one is shown on the Analysis page when the app opens. It contains findings and run metadata.

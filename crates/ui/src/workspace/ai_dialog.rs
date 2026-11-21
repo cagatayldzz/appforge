@@ -17,8 +17,8 @@ struct ReviewScope {
 }
 
 impl ReviewScope {
-  fn cache(&self, data_dir: &std::path::Path, project: bool) -> AiCache {
-    AiCache::new(data_dir, &self.issuer, &self.app, self.version.as_deref(), self.language, project)
+  fn cache(&self, data_dir: &std::path::Path) -> AiCache {
+    AiCache::new(data_dir, &self.issuer, &self.app, self.version.as_deref(), self.language)
   }
 }
 
@@ -31,8 +31,34 @@ impl Workspace {
     Some(ReviewScope { issuer, app, version, language: self.settings.language, folder })
   }
 
-  pub(super) fn analysis_cache(&self, project: bool) -> Option<AiCache> {
-    Some(self.review_scope()?.cache(&self.data_dir, project))
+  pub(super) fn analysis_cache(&self) -> Option<AiCache> {
+    Some(self.review_scope()?.cache(&self.data_dir))
+  }
+
+  /// Shows the latest saved AI analysis of the open version, so it is still there after a restart.
+  pub(super) fn restore_saved_analysis(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    if !matches!(self.ai, AiState::Idle) || self.tasks.ai_restore.is_some() {
+      return;
+    }
+    let Some(scope) = self.review_scope() else { return };
+    let cache = scope.cache(&self.data_dir);
+    self.tasks.ai_restore = Some(cx.spawn_in(window, async move |this, cx| {
+      let result = cx.background_spawn(async move { cache.latest() }).await;
+      this
+        .update_in(cx, |this, window, cx| {
+          this.tasks.ai_restore = None;
+          if this.review_scope().as_ref() != Some(&scope) || !matches!(this.ai, AiState::Idle) {
+            return;
+          }
+          match result {
+            Ok(Some(entry)) => this.ai = AiState::Done(entry.review),
+            Ok(None) => {}
+            Err(error) => Self::warning(window, cx, trf(this.settings.language, "analysisCacheReadFailed", &[&error.to_string()])),
+          }
+          cx.notify();
+        })
+        .ok();
+    }));
   }
 
   pub(crate) fn confirm_ai(&mut self, require_project: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -40,9 +66,9 @@ impl Workspace {
       return;
     }
     let Some(scope) = self.review_scope() else { return };
-    let cache = scope.cache(&self.data_dir, require_project || scope.folder.is_some());
+    let cache = scope.cache(&self.data_dir);
     self.tasks.ai_dialog = Some(cx.spawn_in(window, async move |this, cx| {
-      let result = cx.background_spawn(async move { cache.load().map_err(|error| error.to_string()) }).await;
+      let result = cx.background_spawn(async move { cache.latest().map_err(|error| error.to_string()) }).await;
       this
         .update_in(cx, |this, window, cx| {
           this.tasks.ai_dialog = None;

@@ -274,9 +274,9 @@ impl Workspace {
     let c = colors(cx);
     let l = self.settings.language;
     let hint: SharedString = if has_key { trf(l, "sendsTheListingText", &[provider.label()]) } else { trf(l, "addAApiKeyIn", &[provider.label()]) };
-    let run = h_flex()
-      .gap_3()
-      .items_center()
+    let run = v_flex()
+      .gap_2()
+      .items_start()
       .child(
         Button::new("run-ai")
           .icon(Icon::new(IconName::Bot))
@@ -285,7 +285,7 @@ impl Workspace {
           .loading(matches!(self.ai, AiState::Running(_)) || self.tasks.ai_dialog.is_some())
           .on_click(cx.listener(|this, _, window, cx| this.confirm_ai(false, window, cx))),
       )
-      .child(div().flex_1().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(hint));
+      .child(div().w_full().min_w_0().text_size(FONT_SIZE_SM).text_color(c.text_secondary).child(hint));
     let result = match &self.ai {
       AiState::Idle => v_flex(),
       AiState::Running(message) => {

@@ -237,6 +237,7 @@ impl Workspace {
               data.snapshot = Load::Ready(snapshot);
               if active {
                 this.fill_snapshot_forms(window, cx);
+                this.restore_saved_analysis(window, cx);
                 if matches!(from, Some(DetailTab::Distribution)) {
                   this.refresh_distribution(true, window, cx);
                 }
