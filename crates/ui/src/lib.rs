@@ -15,6 +15,7 @@ mod forms;
 mod guide_art;
 mod guidelines;
 pub mod i18n;
+mod information_sections;
 mod listing_ai;
 mod localization;
 mod login;

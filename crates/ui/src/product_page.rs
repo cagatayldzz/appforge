@@ -4,7 +4,7 @@ use crate::{
   i18n::{tr, trf},
   localization::locale_name,
   theme::colors,
-  widgets::{card, pair, section},
+  widgets::{card, page_section, pair, section},
   workspace::{Load, Workspace},
 };
 use appforge_appstore::{App as StoreApp, ProductAsset};
@@ -341,20 +341,12 @@ impl Workspace {
     }
     let age_ratings = self.render_age_ratings_section(app, cx);
     v_flex()
-      .gap_5()
-      .child(section(
+      .gap_6()
+      .child(page_section(
         tr(l, "generalInformation"),
         general.child(categories).child(h_flex().child(store_link("manage-general-info", tr(l, "manageCategoriesAndRights"), store_info(app)))),
       ))
       .child(age_ratings)
-      .child(section(
-        tr(l, "additionalInformation"),
-        h_flex()
-          .gap_2()
-          .flex_wrap()
-          .child(store_link("public-app-store", tr(l, "viewOnAppStore"), format!("https://apps.apple.com/app/id{}", app.id)))
-          .child(store_link("manage-app-access", tr(l, "manageAppAccess"), "https://appstoreconnect.apple.com/access/users".into()))
-          .child(store_link("app-removal-settings", tr(l, "openAppRemovalSettings"), store_info(app))),
-      ))
+      .children(self.render_information_extras(app, cx))
   }
 }

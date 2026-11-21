@@ -4,8 +4,8 @@ use crate::{
   i18n::{tr, trf},
   theme::colors,
   widgets::{
-    area_field, area_field_with_action, centered_with_width, page_columns, page_columns_with_primary, pair, required, required_mark, section,
-    text_field, text_field_with_action, url_field,
+    area_field, area_field_with_action, centered_with_width, page_columns, page_columns_with_primary, page_section, pair, required, required_mark,
+    section, text_field, text_field_with_action, url_field,
   },
   workspace::{DetailTab, Load, Workspace},
 };
@@ -21,7 +21,6 @@ use gpui_kit::{
     scroll::ScrollableElement as _,
     skeleton::Skeleton,
     switch::Switch,
-    tab::{Tab, TabBar},
     v_flex, ActiveTheme, Disableable as _, Icon, IconName, Sizable as _,
   },
   *,
@@ -162,30 +161,31 @@ impl Workspace {
     Some(h_flex().gap_2().flex_wrap().items_center().child(div().text_sm().text_color(c.text_secondary).child(label)).child(self.locale_picker(cx)?))
   }
 
+  /// App Information as App Store Connect lays it out, one page that scrolls: the intro, the compliance notice, Localizable Information,
+  /// then what `render_general` lists.
   fn render_information(&mut self, app: &App, cx: &mut Context<Self>) -> impl IntoElement {
     let l = self.settings.language;
+    let c = colors(cx);
     let picker = self.compact_locale_picker(cx);
     let forms = &self.forms;
     let general = self.render_general(app, cx);
-    let basics = section(
+    let notice = v_flex().gap_2().child(Alert::info("regulatory-notice", tr(l, "regulatoryNotice"))).child(
+      div()
+        .id("go-to-compliance")
+        .cursor_pointer()
+        .text_size(crate::theme::FONT_SIZE_SM)
+        .text_color(c.accent)
+        .child(tr(l, "goToAppCompliance"))
+        .on_click(cx.listener(|this, _, window, cx| this.jump_to(DetailTab::Compliance, window, cx))),
+    );
+    let basics = page_section(
       tr(l, "basics"),
-      pair(
+      v_flex().gap_4().children(picker).child(pair(
         text_field_with_action(required(tr(l, "appName")), &forms.name, NAME_LIMIT, self.field_generate_button(ListingField::Name, cx), cx),
         text_field_with_action(tr(l, "subtitle"), &forms.subtitle, SUBTITLE_LIMIT, self.field_generate_button(ListingField::Subtitle, cx), cx),
-      ),
+      )),
     );
-    // The fields to fill and the details that are only shown are two tabs, so the form stays short.
-    let tabs = TabBar::new("information-tabs")
-      .underline()
-      .selected_index(self.information_tab)
-      .children([Tab::new().label(tr(l, "fieldsToFill")), Tab::new().label(tr(l, "displayOnly"))])
-      .on_click(cx.listener(|this, index, _, cx| {
-        this.information_tab = *index;
-        cx.notify();
-      }));
-    let body =
-      if self.information_tab == 0 { v_flex().gap_6().children(picker).child(basics).into_any_element() } else { general.into_any_element() };
-    v_flex().gap_6().child(tabs).child(body)
+    v_flex().gap_6().child(div().text_color(c.text_secondary).child(tr(l, "appInformationHelp"))).child(notice).child(basics).child(general)
   }
 
   /// The version page as App Store Connect lays it out, one page that scrolls: the notices, Product Page Information (with its

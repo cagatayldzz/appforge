@@ -4,7 +4,7 @@ use crate::{
   i18n::{tr, trf},
   product_page::{info_field, store_info, store_link},
   theme::colors,
-  widgets::section,
+  widgets::page_section,
   workspace::Workspace,
 };
 use appforge_appstore::App as StoreApp;
@@ -45,7 +45,7 @@ impl Workspace {
     if info.is_none_or(|info| info.ratings.is_empty() && info.territory_ratings.is_empty() && info.territory_ratings_error.is_none()) {
       ratings = ratings.child(tr(l, "noAgeRatings"));
     }
-    section(
+    page_section(
       tr(l, "ageRatings"),
       v_flex().gap_3().child(ratings).child(territories).children(info.map(|info| field("ageSuitabilityUrl", &info.age_suitability_url))).child(
         h_flex()

@@ -231,7 +231,6 @@ pub struct Workspace {
   pub(crate) back_tab: Option<DetailTab>,
   pub(crate) analysis_tab: crate::analysis::AnalysisTab,
   /// The open part of App Information: 0 the fields to fill, 1 the display-only details.
-  pub(crate) information_tab: usize,
   /// The open part of Product Page Information: 0 the listing texts, 1 the media.
   /// Findings whose open or closed state was flipped by a click (keys of `finding_row`).
   pub(crate) toggled_findings: std::collections::HashSet<String>,
@@ -419,7 +418,6 @@ impl Workspace {
       distribution_expanded: Default::default(),
       back_tab: None,
       analysis_tab: Default::default(),
-      information_tab: 0,
       toggled_findings: Default::default(),
       playbook,
       guidelines: Arc::new(Guidelines::default()),

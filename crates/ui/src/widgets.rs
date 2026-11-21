@@ -172,6 +172,17 @@ pub fn section(title: impl Into<SharedString>, body: impl IntoElement) -> Div {
     .child(div().w_full().pt_1().child(body))
 }
 
+/// A section as App Store Connect's own pages draw it: a large heading and the body, without a rule.
+pub fn page_section(title: impl Into<SharedString>, body: impl IntoElement) -> Div {
+  v_flex().w_full().gap_3().child(div().text_xl().font_weight(FontWeight::SEMIBOLD).child(title.into())).child(div().w_full().child(body))
+}
+
+/// A plain text link that opens a page in the browser, as App Store Connect shows its links.
+pub fn text_link(id: &'static str, label: impl Into<SharedString>, url: impl Into<String>, c: &Colors) -> Stateful<Div> {
+  let url = url.into();
+  div().id(id).cursor_pointer().text_color(c.accent).child(label.into()).on_click(move |_, _, cx| cx.open_url(&url))
+}
+
 /// A bordered group: a title with an optional hint on the left and an optional action on the right, then the body.
 pub fn card(title: impl Into<SharedString>, hint: Option<SharedString>, action: Option<AnyElement>, body: impl IntoElement, c: &Colors) -> Div {
   v_flex()
