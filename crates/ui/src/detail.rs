@@ -222,13 +222,10 @@ impl Workspace {
             .child(rule())
             .child(v_flex().gap_3().child(heading(tr(l, "appReviewInformation"), None)).child(review))
             .child(rule())
-            .child(v_flex().gap_3().child(heading(tr(l, "appStoreVersionRelease"), None)).child(rest.release))
-            .child(rule())
-            .child(v_flex().gap_3().child(heading(tr(l, "appReview"), None)).child(rest.submissions));
+            .child(v_flex().gap_3().child(heading(tr(l, "appStoreVersionRelease"), None)).child(rest.release));
         } else {
           page = page.child(rule()).child(v_flex().gap_3().child(heading(tr(l, "appReviewInformation"), None)).child(review));
         }
-        page = page.child(parts.versions);
       }
     }
     page

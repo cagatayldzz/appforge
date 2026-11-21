@@ -273,12 +273,14 @@ impl Workspace {
         .on_click(move |_, _, cx| cx.open_url(&format!("https://appstoreconnect.apple.com/apps/{id}/distribution")))
         .into_any_element()
     });
+    let create_version = self.create_version_link(cx);
     let mut menu = |id: &'static str, items: Vec<SidebarMenuItem>| {
       div().pl_2().child(SidebarMenu::new().gap_0p5().children(items).render(id, window, cx)).into_any_element()
     };
     vec![group_title(tr(l, "sidebarIosApp")), version_chip.unwrap_or_else(|| menu("pages-version", version))]
       .into_iter()
       .chain(add_platform)
+      .chain(create_version)
       .chain([
         divider(),
         group_title(tr(l, "general")),

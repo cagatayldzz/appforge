@@ -1,6 +1,7 @@
 //! The App Review page: the submissions sent to App Review, as App Store Connect lists them under App Review.
 
 use crate::{
+  distribution::Change,
   i18n::{tr, trf},
   theme::{colors, Colors},
   widgets::state_color,
@@ -84,7 +85,16 @@ impl Workspace {
           .child(cell(versions.into()))
           .child(cell(submission.submitted_by.clone().into()))
           .child(cell(items))
-          .child(div().flex_1().min_w_0().child(status(submission, &c))),
+          .child(div().flex_1().min_w_0().child(status(submission, &c)))
+          .children((!submission.removed && matches!(submission.state.as_str(), "WAITING_FOR_REVIEW" | "IN_REVIEW" | "UNRESOLVED_ISSUES")).then(
+            || {
+              self.distribution_button(
+                SharedString::from(format!("withdraw-{}", submission.id)),
+                Change::Cancel(submission.id.clone(), submission.item_count),
+                cx,
+              )
+            },
+          )),
       );
     }
     let empty = data.submissions.iter().all(|item| item.date.is_empty());

@@ -224,7 +224,7 @@ impl Workspace {
       .on_click(cx.listener(move |this, _, window, cx| this.confirm_distribution_change(change.clone(), window, cx)))
   }
 
-  fn confirm_distribution_change(&self, change: Change, window: &mut Window, cx: &mut Context<Self>) {
+  pub(crate) fn confirm_distribution_change(&self, change: Change, window: &mut Window, cx: &mut Context<Self>) {
     let Some(snapshot) = self.ready_snapshot() else { return };
     let l = self.settings.language;
     let target: SharedString = match &snapshot.version {
@@ -275,6 +275,32 @@ impl Workspace {
         )
         .footer(footer)
     });
+  }
+
+  /// "Add iOS version" under the platform in the sidebar, when the app has no version still in progress.
+  pub(crate) fn create_version_link(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+    let snapshot = self.ready_snapshot()?;
+    let can_create = snapshot.version.as_ref().is_none_or(|version| {
+      matches!(version.state.as_str(), "READY_FOR_SALE" | "READY_FOR_DISTRIBUTION" | "REMOVED_FROM_SALE" | "DEVELOPER_REMOVED_FROM_SALE")
+    });
+    if !can_create {
+      return None;
+    }
+    let change = Change::Create(snapshot.app.id.clone());
+    let c = colors(cx);
+    Some(
+      div()
+        .id("create-ios-version")
+        .mx_2()
+        .mt_2()
+        .px_2()
+        .text_size(FONT_SIZE_SM)
+        .cursor_pointer()
+        .text_color(c.accent)
+        .child(tr(self.settings.language, "createIosVersion"))
+        .on_click(cx.listener(move |this, _, window, cx| this.confirm_distribution_change(change.clone(), window, cx)))
+        .into_any_element(),
+    )
   }
 
   /// One row of a list: content on the left, an action on the right.
@@ -484,7 +510,13 @@ impl Workspace {
     } else {
       (tr(l, "thisVersionIsLive"), c.success)
     };
+    // A draft that already holds the version is sent with "Submit"; otherwise the version is added to a draft first.
+    let ready_draft = data.submissions.iter().find(|item| item.includes_version && item.state == "READY_FOR_REVIEW");
     let mut action = || {
+      if let Some(draft) = ready_draft.filter(|_| editable) {
+        let button = self.distribution_button("review-submit", Change::Submit(draft.id.clone(), draft.item_count), cx).primary();
+        return Some(button);
+      }
       can_draft.then(|| {
         self
           .distribution_button("review-draft", Change::Draft(snapshot.app.id.clone(), id.clone(), draft.clone()), cx)
